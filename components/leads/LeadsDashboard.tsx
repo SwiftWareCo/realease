@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useState } from 'react';
 import {
   CheckCircle2,
@@ -196,26 +197,23 @@ export function LeadsDashboard() {
           <div className='flex items-center justify-between'>
             <CardTitle>All Leads</CardTitle>
             <div className='flex items-center gap-2'>
-              <div className='flex items-center gap-1 border rounded-md p-1'>
-                <Button
-                  variant={viewMode === 'kanban' ? 'default' : 'ghost'}
-                  size='sm'
-                  onClick={() => setViewMode('kanban')}
-                  className='h-8'
-                >
-                  <LayoutGrid className='h-4 w-4 mr-1' />
-                  Kanban
-                </Button>
-                <Button
-                  variant={viewMode === 'table' ? 'default' : 'ghost'}
-                  size='sm'
-                  onClick={() => setViewMode('table')}
-                  className='h-8'
-                >
-                  <Table2 className='h-4 w-4 mr-1' />
-                  Table
-                </Button>
-              </div>
+              <Tabs
+                value={viewMode}
+                onValueChange={(value) =>
+                  setViewMode(value as 'table' | 'kanban')
+                }
+              >
+                <TabsList>
+                  <TabsTrigger value='kanban'>
+                    <LayoutGrid className='h-4 w-4 mr-1' />
+                    Kanban
+                  </TabsTrigger>
+                  <TabsTrigger value='table'>
+                    <Table2 className='h-4 w-4 mr-1' />
+                    Table
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
               {viewMode === 'table' && (
                 <Select
                   value={statusFilter}

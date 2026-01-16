@@ -6,6 +6,7 @@ import { ThemeProvider } from './providers/ThemeProvider';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { Toaster } from 'sonner';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 
 const openSans = Open_Sans({
   variable: '--font-sans',
@@ -45,13 +46,13 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <ConvexClientProvider>
-            <div className='flex h-screen overflow-hidden'>
+            <SidebarProvider>
               <Sidebar />
-              <div className='flex flex-1 flex-col overflow-hidden'>
+              <SidebarInset>
                 <TopBar />
                 <main className='flex-1 overflow-y-auto'>{children}</main>
-              </div>
-            </div>
+              </SidebarInset>
+            </SidebarProvider>
             <Toaster richColors position='top-right' />
           </ConvexClientProvider>
         </ThemeProvider>
