@@ -1,5 +1,5 @@
-import { defineTable } from "convex/server";
-import { v } from "convex/values";
+import { defineTable } from 'convex/server';
+import { v } from 'convex/values';
 
 export const leadsTable = defineTable({
   name: v.string(),
@@ -7,12 +7,27 @@ export const leadsTable = defineTable({
   email: v.optional(v.string()),
   property_address: v.optional(v.string()),
   timeline: v.optional(v.string()),
-  intent: v.union(v.literal("buyer"), v.literal("seller"), v.literal("investor")),
+  intent: v.union(
+    v.literal('buyer'),
+    v.literal('seller'),
+    v.literal('investor')
+  ),
   source: v.string(), // "sms_link_open_house", "qr_code_123", etc.
   urgency_score: v.number(),
-  status: v.union(v.literal("new"), v.literal("contacted"), v.literal("qualified")),
+  status: v.union(
+    v.literal('new'),
+    v.literal('contacted'),
+    v.literal('qualified')
+  ),
   ai_suggestion: v.optional(v.string()),
+  notes: v.optional(v.string()), // Free-form context from lead capture form
+  conversion_prediction: v.optional(v.string()), // AI prediction: "Within 7 days", "Within 30 days", etc.
+  last_message_sentiment: v.optional(
+    v.union(v.literal('positive'), v.literal('neutral'), v.literal('negative'))
+  ),
+  last_message_content: v.optional(v.string()),
+  message_count: v.number(), // Track number of messages exchanged
   created_at: v.number(),
 })
-  .index("by_status", ["status"])
-  .index("by_source", ["source"]);
+  .index('by_status', ['status'])
+  .index('by_source', ['source']);

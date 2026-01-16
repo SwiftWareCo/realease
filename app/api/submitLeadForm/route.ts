@@ -14,6 +14,7 @@ export async function POST(request: Request) {
       email: body.email,
       property_address: body.property_address,
       timeline: body.timeline,
+      notes: body.notes,
       source: body.source,
     });
 

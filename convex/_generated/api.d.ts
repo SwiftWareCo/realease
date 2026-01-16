@@ -12,6 +12,7 @@ import type * as demo_demo from "../demo/demo.js";
 import type * as leads_actions from "../leads/actions.js";
 import type * as leads_mutations from "../leads/mutations.js";
 import type * as leads_queries from "../leads/queries.js";
+import type * as openrouter from "../openrouter.js";
 import type * as twilio_twilio from "../twilio/twilio.js";
 
 import type {
@@ -25,6 +26,7 @@ declare const fullApi: ApiFromModules<{
   "leads/actions": typeof leads_actions;
   "leads/mutations": typeof leads_mutations;
   "leads/queries": typeof leads_queries;
+  openrouter: typeof openrouter;
   "twilio/twilio": typeof twilio_twilio;
 }>;
 

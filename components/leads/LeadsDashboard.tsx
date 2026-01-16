@@ -32,6 +32,9 @@ import {
   MapPin,
   LayoutGrid,
   Table2,
+  AlertCircle,
+  TrendingUp,
+  MessageSquare,
 } from 'lucide-react';
 import { LeadsKanbanBoard } from './LeadsKanbanBoard';
 
@@ -120,6 +123,50 @@ export function LeadsDashboard() {
     return 'text-gray-600 dark:text-gray-400';
   };
 
+  const getSentimentBadge = (sentiment?: string) => {
+    if (!sentiment) return null;
+    switch (sentiment) {
+      case 'positive':
+        return (
+          <Badge
+            variant='outline'
+            className='border-green-300 text-green-700 dark:text-green-300'
+          >
+            Positive
+          </Badge>
+        );
+      case 'negative':
+        return (
+          <Badge
+            variant='outline'
+            className='border-red-300 text-red-700 dark:text-red-300'
+          >
+            Negative
+          </Badge>
+        );
+      default:
+        return (
+          <Badge
+            variant='outline'
+            className='border-gray-300 text-gray-700 dark:text-gray-300'
+          >
+            Neutral
+          </Badge>
+        );
+    }
+  };
+
+  const calculateHoursSinceCreated = (createdAt: number) => {
+    const hours = Math.floor((Date.now() - createdAt) / (1000 * 60 * 60));
+    return hours;
+  };
+
+  // Separate priority leads (urgency >= 75)
+  const priorityLeads =
+    allLeads?.filter((lead: Doc<'leads'>) => lead.urgency_score >= 75) || [];
+  const regularLeadsList =
+    leads?.filter((lead: Doc<'leads'>) => lead.urgency_score < 75) || [];
+
   if (allLeads === undefined) {
     return (
       <Card>
@@ -141,6 +188,127 @@ export function LeadsDashboard() {
 
   return (
     <div className='space-y-6'>
+      {/* Priority Leads Section */}
+      {priorityLeads.length > 0 && (
+        <Card className='border-red-500 border-2 bg-red-50 dark:bg-red-950/20'>
+          <CardHeader>
+            <CardTitle className='flex items-center text-red-800 dark:text-red-300'>
+              <AlertCircle className='w-5 h-5 mr-2' />
+              🔥 Money-Critical Actions ({priorityLeads.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            {priorityLeads.map((lead: Doc<'leads'>) => (
+              <Card
+                key={lead._id}
+                className='hover:shadow-lg transition-shadow'
+              >
+                <CardContent className='p-4'>
+                  <div className='flex items-start justify-between gap-4'>
+                    <div className='flex-1 space-y-3'>
+                      <div className='flex items-center space-x-2 flex-wrap'>
+                        <h3 className='font-bold text-lg'>{lead.name}</h3>
+                        <Badge
+                          variant={
+                            lead.urgency_score >= 75 ? 'destructive' : 'default'
+                          }
+                        >
+                          {lead.urgency_score}% Urgency
+                        </Badge>
+                        {getIntentBadge(lead.intent)}
+                        {lead.notes && (
+                          <MessageSquare className='w-4 h-4 text-blue-500' />
+                        )}
+                        {getSentimentBadge(lead.last_message_sentiment)}
+                      </div>
+                      <div className='flex items-center text-sm text-gray-600 dark:text-gray-400 space-x-4 flex-wrap'>
+                        <span className='flex items-center'>
+                          <Phone className='w-4 h-4 mr-1' />
+                          {lead.phone}
+                        </span>
+                        {lead.property_address && (
+                          <span className='flex items-center'>
+                            <MapPin className='w-4 h-4 mr-1' />
+                            {lead.property_address.split(',')[0]}
+                          </span>
+                        )}
+                        <span className='flex items-center'>
+                          <Clock className='w-4 h-4 mr-1' />
+                          {calculateHoursSinceCreated(lead.created_at)}h ago
+                        </span>
+                      </div>
+                      {lead.notes && (
+                        <div className='p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded'>
+                          <p className='text-sm font-medium text-yellow-900 dark:text-yellow-200'>
+                            📝 Notes:
+                          </p>
+                          <p className='text-sm text-yellow-800 dark:text-yellow-300 italic'>
+                            {lead.notes}
+                          </p>
+                        </div>
+                      )}
+                      {lead.conversion_prediction && (
+                        <div className='p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800'>
+                          <p className='text-sm font-medium text-blue-900 dark:text-blue-200 flex items-center mb-1'>
+                            <TrendingUp className='w-4 h-4 mr-2' />
+                            AI Prediction: {lead.conversion_prediction}
+                          </p>
+                          {lead.ai_suggestion && (
+                            <p className='text-sm text-blue-700 dark:text-blue-300 font-medium'>
+                              💡 {lead.ai_suggestion}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      {lead.last_message_content && (
+                        <div
+                          className={`p-2 rounded text-xs ${
+                            lead.last_message_sentiment === 'positive'
+                              ? 'bg-green-100 dark:bg-green-950/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800'
+                              : lead.last_message_sentiment === 'negative'
+                              ? 'bg-red-100 dark:bg-red-950/20 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
+                          }`}
+                        >
+                          💬 Latest reply: &quot;{lead.last_message_content}
+                          &quot; → {lead.last_message_sentiment || 'neutral'}
+                        </div>
+                      )}
+                    </div>
+                    <div className='flex gap-1'>
+                      {lead.status !== 'contacted' && (
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          onClick={() =>
+                            handleStatusUpdate(lead._id, 'contacted')
+                          }
+                        >
+                          <Clock className='h-3 w-3 mr-1' />
+                          Contact
+                        </Button>
+                      )}
+                      {lead.status !== 'qualified' && (
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          onClick={() =>
+                            handleStatusUpdate(lead._id, 'qualified')
+                          }
+                        >
+                          <CheckCircle2 className='h-3 w-3 mr-1' />
+                          Qualify
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats Cards */}
       <div className='grid gap-4 md:grid-cols-4'>
         <Card>
@@ -254,16 +422,25 @@ export function LeadsDashboard() {
                     <TableHead>Source</TableHead>
                     <TableHead>Urgency</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>AI Insights</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {leads?.map((lead: Doc<'leads'>) => (
+                  {regularLeadsList?.map((lead: Doc<'leads'>) => (
                     <TableRow key={lead._id}>
                       <TableCell>
                         <div className='flex items-center gap-2'>
                           <User className='h-4 w-4 text-muted-foreground' />
-                          <span className='font-medium'>{lead.name}</span>
+                          <div className='flex flex-col'>
+                            <span className='font-medium'>{lead.name}</span>
+                            {lead.notes && (
+                              <span className='text-xs text-muted-foreground flex items-center gap-1'>
+                                <MessageSquare className='w-3 h-3' />
+                                Has notes
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -294,7 +471,12 @@ export function LeadsDashboard() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>{getIntentBadge(lead.intent)}</TableCell>
+                      <TableCell>
+                        <div className='flex flex-col gap-1'>
+                          {getIntentBadge(lead.intent)}
+                          {getSentimentBadge(lead.last_message_sentiment)}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <span className='text-sm text-muted-foreground'>
                           {lead.source}
@@ -306,6 +488,20 @@ export function LeadsDashboard() {
                         </span>
                       </TableCell>
                       <TableCell>{getStatusBadge(lead.status)}</TableCell>
+                      <TableCell>
+                        <div className='flex flex-col gap-1 max-w-[200px]'>
+                          {lead.conversion_prediction && (
+                            <span className='text-xs text-blue-600 dark:text-blue-400'>
+                              {lead.conversion_prediction}
+                            </span>
+                          )}
+                          {lead.ai_suggestion && (
+                            <span className='text-xs text-muted-foreground truncate'>
+                              {lead.ai_suggestion}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className='flex gap-1'>
                           {lead.status !== 'contacted' && (
@@ -344,14 +540,14 @@ export function LeadsDashboard() {
       </Card>
 
       {/* AI Suggestions */}
-      {leads && leads.length > 0 && (
+      {allLeads && allLeads.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>AI Suggestions</CardTitle>
           </CardHeader>
           <CardContent>
             <div className='space-y-3'>
-              {leads
+              {allLeads
                 .filter(
                   (lead: Doc<'leads'>) =>
                     lead.ai_suggestion && lead.status === 'new'
@@ -363,10 +559,23 @@ export function LeadsDashboard() {
                     className='flex items-start gap-3 p-3 bg-muted rounded-lg'
                   >
                     <div className='flex-1'>
-                      <p className='text-sm font-medium'>{lead.name}</p>
+                      <div className='flex items-center gap-2 mb-1'>
+                        <p className='text-sm font-medium'>{lead.name}</p>
+                        {getSentimentBadge(lead.last_message_sentiment)}
+                        {lead.conversion_prediction && (
+                          <Badge variant='outline' className='text-xs'>
+                            {lead.conversion_prediction}
+                          </Badge>
+                        )}
+                      </div>
                       <p className='text-sm text-muted-foreground mt-1'>
-                        {lead.ai_suggestion}
+                        💡 {lead.ai_suggestion}
                       </p>
+                      {lead.notes && (
+                        <p className='text-xs text-muted-foreground mt-2 italic'>
+                          📝 {lead.notes}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}

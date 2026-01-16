@@ -12,6 +12,11 @@ export const insertLead = internalMutation({
     source: v.string(),
     urgency_score: v.number(),
     ai_suggestion: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    conversion_prediction: v.optional(v.string()),
+    last_message_sentiment: v.optional(v.union(v.literal("positive"), v.literal("neutral"), v.literal("negative"))),
+    last_message_content: v.optional(v.string()),
+    message_count: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const leadId = await ctx.db.insert("leads", {
@@ -25,6 +30,11 @@ export const insertLead = internalMutation({
       urgency_score: args.urgency_score,
       status: "new",
       ai_suggestion: args.ai_suggestion,
+      notes: args.notes,
+      conversion_prediction: args.conversion_prediction,
+      last_message_sentiment: args.last_message_sentiment,
+      last_message_content: args.last_message_content,
+      message_count: args.message_count ?? 0,
       created_at: Date.now(),
     });
     return leadId;

@@ -21,7 +21,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { User, Phone, Mail, MapPin, GripVertical } from 'lucide-react';
+import { User, Phone, Mail, MapPin, GripVertical, MessageSquare, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 
 const statuses = [
@@ -92,6 +92,30 @@ function LeadCard({ lead }: LeadCardProps) {
     return 'text-gray-600 dark:text-gray-400';
   };
 
+  const getSentimentBadge = (sentiment?: string) => {
+    if (!sentiment) return null;
+    switch (sentiment) {
+      case 'positive':
+        return (
+          <Badge variant='outline' className='border-green-300 text-green-700 dark:text-green-300 text-xs'>
+            +
+          </Badge>
+        );
+      case 'negative':
+        return (
+          <Badge variant='outline' className='border-red-300 text-red-700 dark:text-red-300 text-xs'>
+            -
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant='outline' className='border-gray-300 text-gray-700 dark:text-gray-300 text-xs'>
+            ~
+          </Badge>
+        );
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -105,10 +129,16 @@ function LeadCard({ lead }: LeadCardProps) {
           <GripVertical className='h-4 w-4 text-muted-foreground shrink-0' />
           <User className='h-4 w-4 text-muted-foreground shrink-0' />
           <span className='font-medium text-sm truncate'>{lead.name}</span>
+          {lead.notes && (
+            <MessageSquare className='h-3 w-3 text-blue-500 shrink-0' />
+          )}
         </div>
-        <span className={`text-xs font-semibold ${getUrgencyColor(lead.urgency_score)} shrink-0`}>
-          {lead.urgency_score}
-        </span>
+        <div className='flex flex-col items-end gap-1 shrink-0'>
+          <span className={`text-xs font-semibold ${getUrgencyColor(lead.urgency_score)}`}>
+            {lead.urgency_score}
+          </span>
+          {getSentimentBadge(lead.last_message_sentiment)}
+        </div>
       </div>
 
       <div className='space-y-1.5 text-xs'>
@@ -132,17 +162,31 @@ function LeadCard({ lead }: LeadCardProps) {
         )}
       </div>
 
+      {lead.notes && (
+        <div className='mt-2 pt-2 border-t'>
+          <div className='flex items-start gap-1'>
+            <MessageSquare className='h-3 w-3 text-blue-500 shrink-0 mt-0.5' />
+            <p className='text-xs text-muted-foreground line-clamp-2 italic'>
+              {lead.notes}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className='flex items-center justify-between mt-2 pt-2 border-t'>
         {getIntentBadge(lead.intent)}
-        <span className='text-xs text-muted-foreground truncate'>
-          {lead.source}
-        </span>
+        {lead.conversion_prediction && (
+          <Badge variant='outline' className='text-xs border-blue-300 text-blue-700 dark:text-blue-300'>
+            <TrendingUp className='h-3 w-3 mr-1' />
+            {lead.conversion_prediction}
+          </Badge>
+        )}
       </div>
 
       {lead.ai_suggestion && (
         <div className='mt-2 pt-2 border-t'>
           <p className='text-xs text-muted-foreground line-clamp-2'>
-            {lead.ai_suggestion}
+            💡 {lead.ai_suggestion}
           </p>
         </div>
       )}

@@ -11,11 +11,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 
 interface LeadCaptureFormProps {
-  formId: string;
+  formId?: string;
 }
 
 export function LeadCaptureForm({ formId }: LeadCaptureFormProps) {
@@ -29,6 +30,7 @@ export function LeadCaptureForm({ formId }: LeadCaptureFormProps) {
     email: '',
     property_address: '',
     timeline: '',
+    notes: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,7 +49,7 @@ export function LeadCaptureForm({ formId }: LeadCaptureFormProps) {
 
       if (response.ok) {
         toast.success('Form submitted successfully!');
-        router.push(`/lead/${formId}/success`);
+        router.push('/lead/success');
       } else {
         const errorData = await response.json().catch(() => ({}));
         toast.error(
@@ -125,6 +127,23 @@ export function LeadCaptureForm({ formId }: LeadCaptureFormProps) {
               <SelectItem value='just_browsing'>Just browsing</SelectItem>
             </SelectContent>
           </Select>
+
+          <div className='space-y-2'>
+            <Label htmlFor='notes'>Additional Details (Optional)</Label>
+            <textarea
+              id='notes'
+              placeholder='Tell us more: Move-in timeline? Budget? # of bedrooms?'
+              value={formData.notes}
+              onChange={(e) =>
+                setFormData({ ...formData, notes: e.target.value })
+              }
+              rows={3}
+              className='file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] resize-none'
+            />
+            <p className='text-xs text-muted-foreground'>
+              Realtors use this to prepare better
+            </p>
+          </div>
 
           <Button type='submit' className='w-full' disabled={loading}>
             {loading ? 'Sending...' : 'Get My Valuation →'}

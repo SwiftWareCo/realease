@@ -107,8 +107,13 @@ realty/
 
 ### Environment Variables
 
-- Convex URL: `NEXT_PUBLIC_CONVEX_URL` (required)
-- Store in `.env.local` (not committed)
+- **Next.js Environment Variables** (stored in `.env.local`):
+  - `NEXT_PUBLIC_CONVEX_URL` (required) - Convex deployment URL
+- **Convex Environment Variables** (must be set in Convex Dashboard):
+  - `OPENROUTER_API_KEY` (required for AI lead analysis) - Set in Convex Dashboard → Settings → Environment Variables
+  - Any other environment variables used by Convex functions must be added to the Convex Dashboard, not `.env.local`
+
+**Important**: Convex functions run in the Convex cloud, not in your Next.js app. Environment variables used by Convex actions/mutations must be configured in the Convex Dashboard, not in `.env.local`.
 
 ## Common Patterns
 
