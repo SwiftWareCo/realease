@@ -10,8 +10,7 @@ export const submitLeadForm = action({
     email: v.optional(v.string()),
     property_address: v.optional(v.string()),
     timeline: v.optional(v.string()),
-    form_id: v.string(),
-    source: v.optional(v.string()), // Track SMS vs QR vs manual
+    source: v.optional(v.string()), // Track SMS vs QR vs manual (e.g., "sms_link_seller_form", "qr_code_buyer")
   },
   handler: async (
     ctx,
@@ -25,10 +24,12 @@ export const submitLeadForm = action({
     };
     const urgency_score = urgencyMap[args.timeline || ''] || 50;
 
-    // Determine intent
-    const intent = args.form_id.includes('seller')
+    // Determine intent from source field (which contains form type info)
+    // Default to 'investor' if source doesn't indicate seller/buyer
+    const source = args.source || 'unknown';
+    const intent = source.includes('seller')
       ? 'seller'
-      : args.form_id.includes('buyer')
+      : source.includes('buyer')
       ? 'buyer'
       : 'investor';
 
@@ -42,7 +43,7 @@ export const submitLeadForm = action({
         property_address: args.property_address,
         timeline: args.timeline,
         intent,
-        source: args.source || `form_${args.form_id}`,
+        source,
         urgency_score,
         ai_suggestion: `Send recent comps for ${
           args.property_address?.split(',')[0] || 'property'
