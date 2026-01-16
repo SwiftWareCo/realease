@@ -1,11 +1,11 @@
-export default function DashboardPage() {
+import { LeadsDashboard } from "@/components/leads/LeadsDashboard";
+
+export default async function DashboardPage() {
+
   return (
     <div className="p-8">
-      <h1 className="text-3xl font-bold mb-4">Dashboard</h1>
-      <p className="text-muted-foreground">
-        Welcome to your dashboard. This is where you can manage your real estate
-        listings and properties.
-      </p>
+      <h1 className="text-3xl font-bold mb-6">Leads Dashboard</h1>
+      <LeadsDashboard />
     </div>
   );
 }

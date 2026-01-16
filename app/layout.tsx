@@ -4,6 +4,8 @@ import './globals.css';
 import { ConvexClientProvider } from './providers/ConvexClientProvider';
 import { ThemeProvider } from './providers/ThemeProvider';
 import { Sidebar } from './components/Sidebar';
+import { TopBar } from './components/TopBar';
+import { Toaster } from 'sonner';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -39,8 +41,12 @@ export default function RootLayout({
           <ConvexClientProvider>
             <div className='flex h-screen overflow-hidden'>
               <Sidebar />
-              <main className='flex-1 overflow-y-auto'>{children}</main>
+              <div className='flex flex-1 flex-col overflow-hidden'>
+                <TopBar />
+                <main className='flex-1 overflow-y-auto'>{children}</main>
+              </div>
             </div>
+            <Toaster richColors position='top-right' />
           </ConvexClientProvider>
         </ThemeProvider>
       </body>

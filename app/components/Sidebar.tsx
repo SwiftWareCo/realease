@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard } from 'lucide-react';
+import { LayoutDashboard, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -10,6 +10,11 @@ const navigation = [
     name: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    name: 'Lead Forms',
+    href: '/lead-forms',
+    icon: FileText,
   },
 ];
 

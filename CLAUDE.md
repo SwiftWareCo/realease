@@ -29,7 +29,9 @@ realty/
 │   ├── page.tsx           # Home page
 │   ├── globals.css        # Global styles
 │   ├── components/        # React components (including shadcn)
-│   │   └── ui/           # shadcn/ui components
+│   │   ├── ui/           # shadcn/ui components
+│   │   ├── leads/        # Lead-related components
+│   │   └── demo/         # Demo components
 │   ├── providers/         # React context providers
 │   │   ├── ConvexClientProvider.tsx
 │   │   └── ThemeProvider.tsx
@@ -69,11 +71,17 @@ realty/
 ### Convex Integration
 
 - Convex functions are in `/convex` directory
-- Use `query` for read operations
-- Use `mutation` for write operations
-- Use `action` for external API calls or complex operations
+- Use `query` for read operations (deterministic, reactive, cached)
+- Use `mutation` for write operations (deterministic, fast, reactive)
+- Use `action` for external API calls, scheduling, or complex operations (non-deterministic, can call mutations/queries)
+- **Important**: Actions can schedule (`ctx.scheduler`), mutations cannot
 - Always validate arguments with Convex validators (`v`)
 - Import types from `convex/_generated/api`
+- **File structure**: Convex maps file paths to API paths:
+  - `convex/leads/queries.ts` → `api.leads.queries.*`
+  - `convex/leads/mutations.ts` → `api.leads.mutations.*`
+  - `convex/leads/actions.ts` → `api.leads.actions.*`
+- Run `npx convex dev` to regenerate API types after adding new files
 
 ### UI Components
 
@@ -147,6 +155,8 @@ export const myQuery = query({
 
 ### Running the Project
 
+**⚠️ IMPORTANT: Always use `pnpm` (not npm or yarn)**
+
 ```bash
 # Install dependencies
 pnpm install
@@ -155,6 +165,7 @@ pnpm install
 pnpm dev
 
 # Start Convex dev server (in separate terminal)
+# This regenerates API types and deploys functions
 npx convex dev
 ```
 
@@ -168,19 +179,26 @@ pnpm start
 ### Linting
 
 ```bash
-pnpm lint
+# Type checking
+pnpm run lint:types
+
+# ESLint
+pnpm run lint:eslint
 ```
 
 ## Important Notes
 
 1. **⚠️ MANDATORY: Always check this file first** before making any changes or starting work
-2. **Use shadcn/ui components** - don't create custom UI components unless absolutely necessary
-3. **Dark mode support** - ensure all components work in both light and dark modes
-4. **Follow SRP** - create new files when functionality grows
-5. **Type safety** - leverage TypeScript and Convex's generated types
-6. **Client vs Server** - be mindful of 'use client' boundaries
-7. **Convex functions** - must be in `/convex` directory to be deployed
-8. **Sidebar navigation** - add new routes to the sidebar component
+2. **Use `pnpm` exclusively** - never use `npm` or `yarn` commands
+3. **Use shadcn/ui components** - don't create custom UI components unless absolutely necessary
+4. **Dark mode support** - ensure all components work in both light and dark modes
+5. **Follow SRP** - create new files when functionality grows
+6. **Type safety** - leverage TypeScript and Convex's generated types
+7. **Client vs Server** - be mindful of 'use client' boundaries
+8. **Convex functions** - must be in `/convex` directory to be deployed
+9. **Convex API regeneration** - run `npx convex dev` after adding new Convex files
+10. **Sidebar navigation** - add new routes to the sidebar component
+11. **Drag-and-drop** - Uses `@dnd-kit` for Kanban board interactions
 
 ## File Naming Conventions
 
@@ -188,6 +206,36 @@ pnpm lint
 - Utilities: camelCase (e.g., `formatDate.ts`)
 - Convex functions: camelCase (e.g., `getUserProfile.ts`)
 - Constants: UPPER_SNAKE_CASE (e.g., `API_ENDPOINTS.ts`)
+
+## Implementation Details
+
+### Leads Management
+
+- **Kanban Board**: Drag-and-drop interface using `@dnd-kit` for status management
+- **Table View**: Traditional table view with filtering
+- **Status Flow**: New → Contacted → Qualified
+- **Real-time Updates**: Convex queries provide reactive updates
+
+### Convex Function Organization
+
+```
+convex/leads/
+  ├── lead.schema.ts    # Schema definition (exported table)
+  ├── queries.ts        # Read operations (getAllLeads, etc.)
+  ├── mutations.ts      # Write operations (updateLeadStatus, insertLead)
+  └── actions.ts        # Complex operations (submitLeadForm with scheduling)
+```
+
+### Actions vs Mutations
+
+- **Actions** (`actions.ts`): Use when you need to:
+  - Schedule future work (`ctx.scheduler.runAfter`)
+  - Call external APIs
+  - Orchestrate multiple operations
+- **Mutations** (`mutations.ts`): Use for simple database writes
+  - Direct database operations only
+  - Fast and reactive
+  - Cannot schedule or call external APIs
 
 ## Next Steps
 
@@ -198,3 +246,4 @@ When working on this project:
 3. Maintain SRP - split files when needed
 4. Test Convex functions locally with `npx convex dev`
 5. Use TypeScript types from `convex/_generated/api`
+6. Always use `pnpm` for package management

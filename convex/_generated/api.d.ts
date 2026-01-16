@@ -8,7 +8,11 @@
  * @module
  */
 
-import type * as functions from "../functions.js";
+import type * as demo_demo from "../demo/demo.js";
+import type * as leads_actions from "../leads/actions.js";
+import type * as leads_mutations from "../leads/mutations.js";
+import type * as leads_queries from "../leads/queries.js";
+import type * as twilio_twilio from "../twilio/twilio.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +21,11 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  functions: typeof functions;
+  "demo/demo": typeof demo_demo;
+  "leads/actions": typeof leads_actions;
+  "leads/mutations": typeof leads_mutations;
+  "leads/queries": typeof leads_queries;
+  "twilio/twilio": typeof twilio_twilio;
 }>;
 
 /**
