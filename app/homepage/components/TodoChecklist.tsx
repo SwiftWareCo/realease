@@ -81,7 +81,7 @@ export function TodoChecklist() {
     // Skeleton while loading from localStorage
     if (!mounted) {
         return (
-            <Card>
+            <Card className='h-full flex flex-col'>
                 <CardHeader className='pb-3'>
                     <CardTitle className='text-lg font-semibold flex items-center gap-2'>
                         <ListTodo className='size-5 text-primary' aria-hidden='true' />
@@ -100,7 +100,7 @@ export function TodoChecklist() {
     }
 
     return (
-        <Card className='relative overflow-hidden'>
+        <Card className='relative overflow-hidden h-full flex flex-col'>
             <CardHeader className='pb-3'>
                 <div className='flex items-center justify-between'>
                     <CardTitle className='text-lg font-semibold flex items-center gap-2'>
@@ -115,7 +115,7 @@ export function TodoChecklist() {
                 </div>
             </CardHeader>
 
-            <CardContent className='space-y-4'>
+            <CardContent className='flex-1 flex flex-col space-y-4'>
                 {/* Add new todo */}
                 <div className='flex gap-2'>
                     <Input
@@ -137,10 +137,10 @@ export function TodoChecklist() {
                     </Button>
                 </div>
 
-                {/* Todo list */}
-                <div className='space-y-2 max-h-64 overflow-y-auto'>
+                {/* Todo list - flex-1 to fill remaining space */}
+                <div className='flex-1 space-y-2 overflow-y-auto'>
                     {todos.length === 0 ? (
-                        <div className='flex flex-col items-center justify-center py-8 text-muted-foreground'>
+                        <div className='flex flex-col items-center justify-center h-full text-muted-foreground'>
                             <CheckSquare className='size-10 opacity-40 mb-2' aria-hidden='true' />
                             <p className='text-sm'>No tasks yet</p>
                             <p className='text-xs mt-1'>Add your first task above</p>
@@ -150,8 +150,8 @@ export function TodoChecklist() {
                             <div
                                 key={todo.id}
                                 className={`group flex items-center gap-3 p-3 rounded-lg border transition-all ${todo.completed
-                                        ? 'bg-muted/30 border-muted'
-                                        : 'bg-card border-border hover:border-primary/30 hover:shadow-sm'
+                                    ? 'bg-muted/30 border-muted'
+                                    : 'bg-card border-border hover:border-primary/30 hover:shadow-sm'
                                     }`}
                             >
                                 <button
@@ -168,8 +168,8 @@ export function TodoChecklist() {
 
                                 <span
                                     className={`flex-1 text-sm transition-all ${todo.completed
-                                            ? 'line-through text-muted-foreground'
-                                            : 'text-foreground'
+                                        ? 'line-through text-muted-foreground'
+                                        : 'text-foreground'
                                         }`}
                                 >
                                     {todo.text}

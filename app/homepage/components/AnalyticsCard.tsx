@@ -67,7 +67,7 @@ export function AnalyticsCard() {
     ];
 
     return (
-        <Card className='relative overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/20'>
+        <Card className='relative overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/20 h-full flex flex-col'>
             {/* Animated gradient border effect */}
             <div
                 className='absolute inset-0 rounded-xl opacity-30'

@@ -71,7 +71,7 @@ const typeStyles = {
 
 export function TodaysTasks() {
     return (
-        <Card className='relative overflow-hidden'>
+        <Card className='relative overflow-hidden h-full flex flex-col'>
             {/* Decorative side accent */}
             <div
                 className='absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary via-accent to-primary/50'

@@ -1,5 +1,6 @@
 import { WelcomeHeader } from './homepage/components/WelcomeHeader';
 import { LiveClock } from './homepage/components/LiveClock';
+import { RevenueGoal } from './homepage/components/RevenueGoal';
 import { QuoteOfTheDay } from './homepage/components/QuoteOfTheDay';
 import { AnalyticsCard } from './homepage/components/AnalyticsCard';
 import { TodaysTasks } from './homepage/components/TodaysTasks';
@@ -11,24 +12,26 @@ export default function Home() {
       <WelcomeHeader />
 
       {/* Main Grid Layout - 4 columns on xl, 2 on md, 1 on mobile */}
-      <div className='grid gap-4 md:gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-4'>
-        {/* Clock */}
-        <div className='xl:col-span-1'>
+      {/* Using items-stretch to align bottoms */}
+      <div className='grid gap-4 md:gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-4 items-stretch'>
+        {/* Column 1: Clock + Revenue Goal */}
+        <div className='flex flex-col gap-4 md:gap-5'>
           <LiveClock />
+          <RevenueGoal />
         </div>
 
-        {/* Analytics */}
-        <div className='xl:col-span-1'>
+        {/* Column 2: Analytics */}
+        <div className='flex flex-col'>
           <AnalyticsCard />
         </div>
 
-        {/* Today's Schedule */}
-        <div className='xl:col-span-1'>
+        {/* Column 3: Today's Schedule */}
+        <div className='flex flex-col'>
           <TodaysTasks />
         </div>
 
-        {/* To-Do Checklist */}
-        <div className='xl:col-span-1'>
+        {/* Column 4: To-Do Checklist */}
+        <div className='flex flex-col'>
           <TodoChecklist />
         </div>
       </div>
