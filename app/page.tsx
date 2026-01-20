@@ -1,29 +1,42 @@
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { LayoutDashboard } from 'lucide-react';
+import { WelcomeHeader } from './homepage/components/WelcomeHeader';
+import { LiveClock } from './homepage/components/LiveClock';
+import { QuoteOfTheDay } from './homepage/components/QuoteOfTheDay';
+import { AnalyticsCard } from './homepage/components/AnalyticsCard';
+import { TodaysTasks } from './homepage/components/TodaysTasks';
+import { TodoChecklist } from './homepage/components/TodoChecklist';
 
 export default function Home() {
   return (
-    <div className="flex min-h-full items-center justify-center p-8">
-      <main className="flex w-full max-w-2xl flex-col items-center gap-8 text-center">
-        <div className="flex flex-col items-center gap-4">
-          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-            Welcome to Realty
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-muted-foreground">
-            Your modern real estate management platform. Manage properties,
-            listings, and more from one convenient dashboard.
-          </p>
+    <div className='p-6 md:p-8 max-w-7xl mx-auto'>
+      <WelcomeHeader />
+
+      {/* Main Grid Layout - 4 columns on xl, 2 on md, 1 on mobile */}
+      <div className='grid gap-4 md:gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-4'>
+        {/* Clock */}
+        <div className='xl:col-span-1'>
+          <LiveClock />
         </div>
-        <div className="flex flex-col gap-4 sm:flex-row">
-          <Button asChild size="lg">
-            <Link href="/dashboard">
-              <LayoutDashboard className="mr-2 size-5" />
-              Go to Dashboard
-            </Link>
-          </Button>
+
+        {/* Analytics */}
+        <div className='xl:col-span-1'>
+          <AnalyticsCard />
         </div>
-      </main>
+
+        {/* Today's Schedule */}
+        <div className='xl:col-span-1'>
+          <TodaysTasks />
+        </div>
+
+        {/* To-Do Checklist */}
+        <div className='xl:col-span-1'>
+          <TodoChecklist />
+        </div>
+      </div>
+
+      {/* Quote of the Day - Full width below */}
+      <div className='mt-5'>
+        <QuoteOfTheDay />
+      </div>
     </div>
   );
 }

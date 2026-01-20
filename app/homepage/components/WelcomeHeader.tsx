@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 
 export function WelcomeHeader() {
     const [mounted, setMounted] = useState(false);
@@ -17,18 +18,22 @@ export function WelcomeHeader() {
         return 'Good Evening';
     };
 
-    const getCurrentDate = () => {
+    // Motivational message instead of redundant date
+    const getMotivationalMessage = () => {
         if (!mounted) return '';
-        return new Date().toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-        });
+        const messages = [
+            'Ready to close some deals today?',
+            'Make today count!',
+            'Your success starts now.',
+            'Let\'s make it happen!',
+            'Time to shine!',
+        ];
+        const hour = new Date().getHours();
+        return messages[hour % messages.length];
     };
 
     return (
-        <div className='relative mb-8'>
+        <div className='relative mb-6'>
             {/* Decorative background blobs */}
             <div
                 className='absolute -top-20 -left-20 size-60 rounded-full bg-primary/5 blur-3xl'
@@ -39,19 +44,22 @@ export function WelcomeHeader() {
                 aria-hidden='true'
             />
 
-            <div className='relative'>
-                <h1 className='text-4xl md:text-5xl font-bold tracking-tight'>
-                    <span className='bg-gradient-to-r from-primary via-primary/80 to-accent bg-clip-text text-transparent'>
-                        {getTimeBasedGreeting()}
-                    </span>
-                </h1>
-                <p className='mt-2 text-lg text-muted-foreground'>
-                    {mounted ? getCurrentDate() : <span className='invisible'>Loading...</span>}
-                </p>
+            <div className='relative flex items-center justify-between flex-wrap gap-4'>
+                <div>
+                    <h1 className='text-3xl md:text-4xl font-bold tracking-tight'>
+                        <span className='bg-gradient-to-r from-primary via-primary/80 to-accent bg-clip-text text-transparent'>
+                            {getTimeBasedGreeting()}
+                        </span>
+                    </h1>
+                    <p className='mt-1 text-sm text-muted-foreground flex items-center gap-1.5'>
+                        <Sparkles className='size-3.5' aria-hidden='true' />
+                        {mounted ? getMotivationalMessage() : <span className='invisible'>Loading...</span>}
+                    </p>
+                </div>
 
                 {/* Decorative line */}
                 <div
-                    className='mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-primary to-accent'
+                    className='hidden md:block h-1 w-16 rounded-full bg-gradient-to-r from-primary to-accent'
                     aria-hidden='true'
                 />
             </div>

@@ -60,16 +60,23 @@ export function QuoteOfTheDay() {
         <Card className='relative overflow-hidden bg-gradient-to-br from-accent/20 via-background to-secondary/10 border-accent/30'>
             {/* Decorative quote icon */}
             <div className='absolute top-4 right-4 opacity-10' aria-hidden='true'>
-                <Quote className='size-16 text-primary' />
+                <Quote className='size-12 text-primary' />
             </div>
 
-            <CardContent className='relative p-6'>
+            <CardContent className='relative p-5'>
+                {/* Label */}
+                <div className='mb-4'>
+                    <span className='text-xs font-semibold uppercase tracking-widest text-primary/70'>
+                        Quote of the Day
+                    </span>
+                </div>
+
                 <div
                     className={`transition-opacity duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'
                         }`}
                 >
-                    <blockquote className='space-y-4'>
-                        <p className='font-serif text-lg leading-relaxed text-foreground italic'>
+                    <blockquote className='space-y-3'>
+                        <p className='font-serif text-base leading-relaxed text-foreground italic'>
                             &ldquo;{currentQuote.text}&rdquo;
                         </p>
                         <footer className='flex items-center gap-2'>
@@ -79,13 +86,6 @@ export function QuoteOfTheDay() {
                             </cite>
                         </footer>
                     </blockquote>
-                </div>
-
-                {/* Label */}
-                <div className='absolute top-4 left-4'>
-                    <span className='text-xs font-semibold uppercase tracking-widest text-primary/70'>
-                        Quote of the Day
-                    </span>
                 </div>
             </CardContent>
         </Card>
