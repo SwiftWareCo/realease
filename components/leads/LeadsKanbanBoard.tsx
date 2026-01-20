@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { User, Phone, Mail, MapPin, GripVertical, MessageSquare, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
+import { LeadProfileModal } from './LeadProfileModal';
 
 const statuses = [
   { id: 'new', label: 'New', color: 'bg-blue-500' },
@@ -34,9 +35,10 @@ type Status = 'new' | 'contacted' | 'qualified';
 
 interface LeadCardProps {
   lead: Doc<'leads'>;
+  onOpenProfile: (leadId: Id<'leads'>) => void;
 }
 
-function LeadCard({ lead }: LeadCardProps) {
+function LeadCard({ lead, onOpenProfile }: LeadCardProps) {
   const {
     attributes,
     listeners,
@@ -120,15 +122,28 @@ function LeadCard({ lead }: LeadCardProps) {
     <div
       ref={setNodeRef}
       style={style}
-      className='bg-card border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing'
-      {...attributes}
-      {...listeners}
+      className='bg-card border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow'
     >
       <div className='flex items-start justify-between gap-2 mb-2'>
         <div className='flex items-center gap-2 flex-1 min-w-0'>
-          <GripVertical className='h-4 w-4 text-muted-foreground shrink-0' />
+          <div
+            className='cursor-grab active:cursor-grabbing'
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className='h-4 w-4 text-muted-foreground shrink-0' />
+          </div>
           <User className='h-4 w-4 text-muted-foreground shrink-0' />
-          <span className='font-medium text-sm truncate'>{lead.name}</span>
+          <button
+            type="button"
+            className='font-medium text-sm truncate hover:underline hover:text-primary text-left'
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              onOpenProfile(lead._id);
+            }}
+          >
+            {lead.name}
+          </button>
           {lead.notes && (
             <MessageSquare className='h-3 w-3 text-blue-500 shrink-0' />
           )}
@@ -199,9 +214,10 @@ interface StatusColumnProps {
   leads: Doc<'leads'>[];
   label: string;
   color: string;
+  onOpenProfile: (leadId: Id<'leads'>) => void;
 }
 
-function StatusColumn({ status, leads, label, color }: StatusColumnProps) {
+function StatusColumn({ status, leads, label, color, onOpenProfile }: StatusColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: status,
   });
@@ -219,9 +235,8 @@ function StatusColumn({ status, leads, label, color }: StatusColumnProps) {
         </CardHeader>
         <CardContent
           ref={setNodeRef}
-          className={`flex-1 overflow-y-auto transition-colors ${
-            isOver ? 'bg-muted/50' : ''
-          }`}
+          className={`flex-1 overflow-y-auto transition-colors ${isOver ? 'bg-muted/50' : ''
+            }`}
         >
           <SortableContext
             items={leads.map((l) => l._id)}
@@ -233,7 +248,7 @@ function StatusColumn({ status, leads, label, color }: StatusColumnProps) {
                   Drop leads here
                 </div>
               ) : (
-                leads.map((lead) => <LeadCard key={lead._id} lead={lead} />)
+                leads.map((lead) => <LeadCard key={lead._id} lead={lead} onOpenProfile={onOpenProfile} />)
               )}
             </div>
           </SortableContext>
@@ -247,6 +262,7 @@ export function LeadsKanbanBoard() {
   const allLeads = useQuery(api.leads.queries.getAllLeads);
   const updateStatus = useMutation(api.leads.mutations.updateLeadStatus);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<Id<'leads'> | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -286,6 +302,10 @@ export function LeadsKanbanBoard() {
     await updateStatus({ id: leadId, status: newStatus });
   };
 
+  const handleOpenProfile = (leadId: Id<'leads'>) => {
+    setSelectedLeadId(leadId);
+  };
+
   const activeLead = allLeads?.find((l) => l._id === activeId);
 
   if (allLeads === undefined) {
@@ -299,35 +319,47 @@ export function LeadsKanbanBoard() {
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-4 h-[calc(100vh-300px)]'>
-        {statuses.map((status) => (
-          <StatusColumn
-            key={status.id}
-            status={status.id}
-            leads={leadsByStatus[status.id]}
-            label={status.label}
-            color={status.color}
-          />
-        ))}
-      </div>
-      <DragOverlay>
-        {activeLead ? (
-          <div className='bg-card border rounded-lg p-3 shadow-lg rotate-3 opacity-90 w-64'>
-            <div className='flex items-center gap-2 mb-2'>
-              <User className='h-4 w-4 text-muted-foreground' />
-              <span className='font-medium text-sm'>{activeLead.name}</span>
+    <>
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className='grid grid-cols-1 md:grid-cols-3 gap-4 h-[calc(100vh-300px)]'>
+          {statuses.map((status) => (
+            <StatusColumn
+              key={status.id}
+              status={status.id}
+              leads={leadsByStatus[status.id]}
+              label={status.label}
+              color={status.color}
+              onOpenProfile={handleOpenProfile}
+            />
+          ))}
+        </div>
+        <DragOverlay>
+          {activeLead ? (
+            <div className='bg-card border rounded-lg p-3 shadow-lg rotate-3 opacity-90 w-64'>
+              <div className='flex items-center gap-2 mb-2'>
+                <User className='h-4 w-4 text-muted-foreground' />
+                <span className='font-medium text-sm'>{activeLead.name}</span>
+              </div>
+              <div className='text-xs text-muted-foreground'>
+                {activeLead.phone}
+              </div>
             </div>
-            <div className='text-xs text-muted-foreground'>
-              {activeLead.phone}
-            </div>
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {/* Lead Profile Modal */}
+      {selectedLeadId && (
+        <LeadProfileModal
+          open={!!selectedLeadId}
+          onOpenChange={(open) => !open && setSelectedLeadId(null)}
+          leadId={selectedLeadId}
+        />
+      )}
+    </>
   );
 }
