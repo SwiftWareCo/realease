@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -13,7 +13,7 @@ import {
     ResponsiveContainer,
     Cell,
 } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Minus, Trophy, Crown, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Interface for lead source ROI data
@@ -24,18 +24,12 @@ export interface LeadSourceROI {
     activeLeads: number;
     conversionRate: number;
     trend: 'up' | 'down' | 'stable';
+    highestCommission?: number;
+    avgCommission?: number;
 }
 
 // Mock data based on typical lead sources
 const mockROIData: LeadSourceROI[] = [
-    {
-        source: 'Website',
-        totalLeads: 145,
-        qualifiedLeads: 38,
-        activeLeads: 24,
-        conversionRate: 26.2,
-        trend: 'up',
-    },
     {
         source: 'Referral',
         totalLeads: 67,
@@ -43,14 +37,18 @@ const mockROIData: LeadSourceROI[] = [
         activeLeads: 15,
         conversionRate: 41.8,
         trend: 'up',
+        highestCommission: 24500,
+        avgCommission: 8200,
     },
     {
-        source: 'Zillow',
-        totalLeads: 89,
-        qualifiedLeads: 15,
-        activeLeads: 8,
-        conversionRate: 16.9,
-        trend: 'down',
+        source: 'Website',
+        totalLeads: 145,
+        qualifiedLeads: 38,
+        activeLeads: 24,
+        conversionRate: 26.2,
+        trend: 'up',
+        highestCommission: 18000,
+        avgCommission: 6100,
     },
     {
         source: 'Open House',
@@ -59,6 +57,8 @@ const mockROIData: LeadSourceROI[] = [
         activeLeads: 9,
         conversionRate: 35.3,
         trend: 'stable',
+        highestCommission: 15000,
+        avgCommission: 7500,
     },
     {
         source: 'Social Media',
@@ -67,6 +67,18 @@ const mockROIData: LeadSourceROI[] = [
         activeLeads: 5,
         conversionRate: 21.2,
         trend: 'up',
+        highestCommission: 12000,
+        avgCommission: 4800,
+    },
+    {
+        source: 'Zillow',
+        totalLeads: 89,
+        qualifiedLeads: 15,
+        activeLeads: 8,
+        conversionRate: 16.9,
+        trend: 'down',
+        highestCommission: 9500,
+        avgCommission: 3200,
     },
 ];
 
@@ -103,6 +115,18 @@ export function LeadSourceROICard({
         );
     }, [data]);
 
+    const highestSingleCommission = useMemo(() => {
+        return data.reduce((prev, current) =>
+            (prev.highestCommission || 0) > (current.highestCommission || 0) ? prev : current
+        );
+    }, [data]);
+
+    const mostVolume = useMemo(() => {
+        return data.reduce((prev, current) =>
+            prev.totalLeads > current.totalLeads ? prev : current
+        );
+    }, [data]);
+
     if (isLoading) {
         return <LeadSourceROICardSkeleton />;
     }
@@ -112,93 +136,125 @@ export function LeadSourceROICard({
     }
 
     return (
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-chart-3 via-chart-1 to-chart-2 opacity-0 transition-opacity group-hover:opacity-100" />
-            <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                        <DollarSign className="size-4 text-muted-foreground" />
-                        Lead Source ROI
-                    </CardTitle>
-                    <Badge
-                        variant="outline"
-                        className="border-chart-2/30 bg-chart-2/10 text-xs font-normal text-chart-2"
-                    >
-                        Top: {topPerformer.source}
-                    </Badge>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {/* Chart */}
-                <div className="h-[140px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                            data={chartData}
-                            layout="vertical"
-                            margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-                        >
-                            <XAxis
-                                type="number"
-                                domain={[0, 50]}
-                                tickFormatter={(value) => `${value}%`}
-                                tick={{ fontSize: 10 }}
-                                axisLine={false}
-                                tickLine={false}
-                            />
-                            <YAxis
-                                type="category"
-                                dataKey="name"
-                                width={70}
-                                tick={{ fontSize: 10 }}
-                                axisLine={false}
-                                tickLine={false}
-                            />
-                            <Tooltip
-                                content={({ active, payload }) => {
-                                    if (active && payload && payload.length) {
-                                        const data = payload[0].payload;
-                                        return (
-                                            <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md">
-                                                <p className="font-medium">{data.name}</p>
-                                                <p className="text-muted-foreground">
-                                                    Conversion: {data.rate.toFixed(1)}%
-                                                </p>
-                                                <p className="text-muted-foreground">
-                                                    Total leads: {data.leads}
-                                                </p>
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                }}
-                            />
-                            <Bar dataKey="rate" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                                {chartData.map((_, index) => (
-                                    <Cell
-                                        key={`cell-${index}`}
-                                        fill={chartColors[index % chartColors.length]}
-                                    />
-                                ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
+        <Card className="group relative overflow-hidden border-0 bg-gradient-to-br from-card via-card to-muted/30 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+            {/* Decorative gradient border */}
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-emerald-500/20 via-transparent to-chart-1/20 opacity-0 transition-opacity group-hover:opacity-100" />
+            <div className="absolute inset-[1px] rounded-xl bg-card" />
+
+            <CardContent className="relative p-0">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 px-5 py-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg">
+                                <DollarSign className="size-5 text-white" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold tracking-tight">Lead Source ROI</h3>
+                                <p className="text-xs text-muted-foreground">Conversion by source</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Quick stats */}
-                <div className="grid grid-cols-3 gap-2 border-t pt-3">
-                    {data.slice(0, 3).map((item) => (
-                        <div key={item.source} className="text-center">
-                            <div className="flex items-center justify-center gap-1">
-                                <span className="text-sm font-semibold tabular-nums">
-                                    {item.conversionRate.toFixed(1)}%
-                                </span>
-                                <TrendIcon trend={item.trend} />
-                            </div>
-                            <p className="truncate text-[10px] text-muted-foreground">
-                                {item.source}
-                            </p>
+                <div className="p-5 space-y-5">
+                    {/* Key insights summary */}
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="rounded-xl bg-gradient-to-br from-amber-500/10 to-yellow-500/10 p-3 text-center">
+                            <Crown className="mx-auto size-4 text-amber-500" />
+                            <p className="mt-1 text-sm font-bold text-foreground">{topPerformer.source}</p>
+                            <p className="text-[10px] text-muted-foreground">Best Converter</p>
                         </div>
-                    ))}
+                        <div className="rounded-xl bg-gradient-to-br from-emerald-500/10 to-green-500/10 p-3 text-center">
+                            <Trophy className="mx-auto size-4 text-emerald-500" />
+                            <p className="mt-1 text-sm font-bold text-foreground">
+                                ${((highestSingleCommission.highestCommission || 0) / 1000).toFixed(1)}k
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">Top Commission</p>
+                        </div>
+                        <div className="rounded-xl bg-gradient-to-br from-blue-500/10 to-cyan-500/10 p-3 text-center">
+                            <Star className="mx-auto size-4 text-blue-500" />
+                            <p className="mt-1 text-sm font-bold text-foreground">{mostVolume.source}</p>
+                            <p className="text-[10px] text-muted-foreground">Most Leads</p>
+                        </div>
+                    </div>
+
+                    {/* Chart with clear label */}
+                    <div>
+                        <p className="mb-2 text-xs font-medium text-muted-foreground">
+                            Conversion Rate by Source (% of leads that convert to qualified)
+                        </p>
+                        <div className="h-[130px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    data={chartData}
+                                    layout="vertical"
+                                    margin={{ top: 0, right: 30, left: 0, bottom: 0 }}
+                                >
+                                    <XAxis
+                                        type="number"
+                                        domain={[0, 50]}
+                                        tickFormatter={(value) => `${value}%`}
+                                        tick={{ fontSize: 10 }}
+                                        axisLine={false}
+                                        tickLine={false}
+                                    />
+                                    <YAxis
+                                        type="category"
+                                        dataKey="name"
+                                        width={70}
+                                        tick={{ fontSize: 10 }}
+                                        axisLine={false}
+                                        tickLine={false}
+                                    />
+                                    <Tooltip
+                                        content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                const d = payload[0].payload;
+                                                return (
+                                                    <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md">
+                                                        <p className="font-semibold">{d.name}</p>
+                                                        <p className="text-muted-foreground">
+                                                            {d.rate.toFixed(1)}% conversion rate
+                                                        </p>
+                                                        <p className="text-muted-foreground">
+                                                            {d.leads} total leads
+                                                        </p>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Bar dataKey="rate" radius={[0, 6, 6, 0]} maxBarSize={18}>
+                                        {chartData.map((_, index) => (
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={chartColors[index % chartColors.length]}
+                                            />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Detail stats row */}
+                    <div className="grid grid-cols-5 gap-1 border-t pt-3">
+                        {data.slice(0, 5).map((item) => (
+                            <div key={item.source} className="text-center">
+                                <div className="flex items-center justify-center gap-0.5">
+                                    <span className="text-xs font-bold tabular-nums">
+                                        {item.conversionRate.toFixed(0)}%
+                                    </span>
+                                    <TrendIcon trend={item.trend} />
+                                </div>
+                                <p className="truncate text-[9px] text-muted-foreground">
+                                    {item.source}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </CardContent>
         </Card>
@@ -207,7 +263,7 @@ export function LeadSourceROICard({
 
 function TrendIcon({ trend }: { trend: 'up' | 'down' | 'stable' }) {
     if (trend === 'up') {
-        return <TrendingUp className="size-3 text-green-500" />;
+        return <TrendingUp className="size-3 text-emerald-500" />;
     }
     if (trend === 'down') {
         return <TrendingDown className="size-3 text-red-500" />;
@@ -217,37 +273,39 @@ function TrendIcon({ trend }: { trend: 'up' | 'down' | 'stable' }) {
 
 function LeadSourceROICardSkeleton() {
     return (
-        <Card>
-            <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                    <Skeleton className="h-5 w-32" />
-                    <Skeleton className="h-5 w-24" />
+        <Card className="overflow-hidden">
+            <div className="bg-muted/30 p-5">
+                <div className="flex items-center gap-3">
+                    <Skeleton className="size-10 rounded-xl" />
+                    <div>
+                        <Skeleton className="h-5 w-28" />
+                        <Skeleton className="mt-1 h-3 w-24" />
+                    </div>
                 </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <Skeleton className="h-[140px] w-full" />
-                <div className="grid grid-cols-3 gap-2 border-t pt-3">
+            </div>
+            <div className="p-5 space-y-5">
+                <div className="grid grid-cols-3 gap-2">
                     {[1, 2, 3].map((i) => (
-                        <div key={i} className="text-center">
-                            <Skeleton className="mx-auto h-5 w-12" />
-                            <Skeleton className="mx-auto mt-1 h-3 w-16" />
-                        </div>
+                        <Skeleton key={i} className="h-16 rounded-xl" />
                     ))}
                 </div>
-            </CardContent>
+                <Skeleton className="h-[130px] w-full" />
+            </div>
         </Card>
     );
 }
 
 function LeadSourceROICardEmpty() {
     return (
-        <Card className="flex flex-col items-center justify-center py-12 text-center">
-            <DollarSign className="mb-4 size-12 text-muted-foreground/30" />
-            <p className="text-sm font-medium text-muted-foreground">
+        <Card className="flex flex-col items-center justify-center py-16 text-center bg-gradient-to-br from-card to-muted/20">
+            <div className="flex size-16 items-center justify-center rounded-2xl bg-muted">
+                <DollarSign className="size-8 text-muted-foreground/50" />
+            </div>
+            <p className="mt-4 font-medium text-muted-foreground">
                 No lead source data
             </p>
-            <p className="mt-1 text-xs text-muted-foreground/70">
-                Add leads with source tags to see ROI metrics
+            <p className="mt-1 text-sm text-muted-foreground/70">
+                Add leads with source tags to track ROI
             </p>
         </Card>
     );

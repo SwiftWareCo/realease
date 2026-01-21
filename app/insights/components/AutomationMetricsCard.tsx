@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -10,82 +10,65 @@ import {
     ResponsiveContainer,
     Tooltip,
     XAxis,
-    YAxis,
 } from 'recharts';
-import { Bot, Zap, Sparkles, MessageSquare, FileSearch, Clock } from 'lucide-react';
+import { Bot, Zap, Sparkles, Clock, Mail, Calendar, TrendingUp, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Interface for automation metrics
-export interface AutomationAction {
-    category: 'lead-analysis' | 'follow-up' | 'scheduling' | 'messaging' | 'other';
-    actionName: string;
-    count: number;
-    lastUsed: Date;
-    timeSavedMinutes?: number;
+// Interface for automation metrics (focused on impact)
+export interface AutomationImpact {
+    hoursSaved: number;
+    leadsContacted: number;
+    followUpsSent: number;
+    appointmentsScheduled: number;
+    responsesGenerated: number;
+    tasksAutomated: number;
 }
 
 export interface AutomationMetrics {
-    totalActions: number;
-    actionsThisMonth: number;
-    previousMonthActions: number;
-    estimatedTimeSaved: number; // hours
-    actionsByCategory: { category: string; count: number }[];
-    topActions: AutomationAction[];
+    impact: AutomationImpact;
+    previousPeriodImpact: AutomationImpact;
+    weeklyImpact: { week: string; hours: number }[];
+    topAutomations: { name: string; impact: string; icon: string }[];
 }
 
 // Mock data for UI demonstration
 const mockMetrics: AutomationMetrics = {
-    totalActions: 1247,
-    actionsThisMonth: 189,
-    previousMonthActions: 156,
-    estimatedTimeSaved: 42.5,
-    actionsByCategory: [
-        { category: 'Lead Analysis', count: 423 },
-        { category: 'Follow-up', count: 312 },
-        { category: 'Scheduling', count: 245 },
-        { category: 'Messaging', count: 187 },
-        { category: 'Other', count: 80 },
+    impact: {
+        hoursSaved: 47.5,
+        leadsContacted: 89,
+        followUpsSent: 156,
+        appointmentsScheduled: 23,
+        responsesGenerated: 312,
+        tasksAutomated: 445,
+    },
+    previousPeriodImpact: {
+        hoursSaved: 38.2,
+        leadsContacted: 72,
+        followUpsSent: 134,
+        appointmentsScheduled: 18,
+        responsesGenerated: 267,
+        tasksAutomated: 389,
+    },
+    weeklyImpact: [
+        { week: 'W1', hours: 6.5 },
+        { week: 'W2', hours: 7.2 },
+        { week: 'W3', hours: 8.1 },
+        { week: 'W4', hours: 9.3 },
+        { week: 'W5', hours: 8.8 },
+        { week: 'W6', hours: 7.6 },
     ],
-    topActions: [
-        {
-            category: 'lead-analysis',
-            actionName: 'Lead Scoring',
-            count: 234,
-            lastUsed: new Date('2026-01-19'),
-            timeSavedMinutes: 15,
-        },
-        {
-            category: 'follow-up',
-            actionName: 'Auto Follow-up',
-            count: 189,
-            lastUsed: new Date('2026-01-20'),
-            timeSavedMinutes: 10,
-        },
-        {
-            category: 'messaging',
-            actionName: 'Smart Responses',
-            count: 156,
-            lastUsed: new Date('2026-01-18'),
-            timeSavedMinutes: 8,
-        },
+    topAutomations: [
+        { name: 'Smart Follow-ups', impact: '23 leads re-engaged', icon: 'mail' },
+        { name: 'Schedule Assistant', impact: '23 appointments booked', icon: 'calendar' },
+        { name: 'Lead Scoring', impact: '15 hot leads identified', icon: 'zap' },
     ],
 };
 
-const categoryIcons = {
-    'lead-analysis': FileSearch,
-    'follow-up': Zap,
-    scheduling: Clock,
-    messaging: MessageSquare,
-    other: Sparkles,
+const impactIcons: Record<string, typeof Mail> = {
+    mail: Mail,
+    calendar: Calendar,
+    zap: Zap,
 };
-
-const chartColors = [
-    'hsl(var(--chart-1))',
-    'hsl(var(--chart-2))',
-    'hsl(var(--chart-3))',
-    'hsl(var(--chart-4))',
-    'hsl(var(--chart-5))',
-];
 
 interface AutomationMetricsCardProps {
     metrics?: AutomationMetrics;
@@ -96,166 +79,136 @@ export function AutomationMetricsCard({
     metrics = mockMetrics,
     isLoading = false,
 }: AutomationMetricsCardProps) {
-    const monthlyChange = useMemo(() => {
-        if (metrics.previousMonthActions === 0) return 0;
+    const hoursSavedChange = useMemo(() => {
+        if (metrics.previousPeriodImpact.hoursSaved === 0) return 0;
         return (
-            ((metrics.actionsThisMonth - metrics.previousMonthActions) /
-                metrics.previousMonthActions) *
+            ((metrics.impact.hoursSaved - metrics.previousPeriodImpact.hoursSaved) /
+                metrics.previousPeriodImpact.hoursSaved) *
             100
         );
-    }, [metrics.actionsThisMonth, metrics.previousMonthActions]);
+    }, [metrics.impact.hoursSaved, metrics.previousPeriodImpact.hoursSaved]);
 
     if (isLoading) {
         return <AutomationMetricsCardSkeleton />;
     }
 
     return (
-        <Card className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg md:col-span-2">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-chart-4 via-chart-5 to-chart-1 opacity-0 transition-opacity group-hover:opacity-100" />
-            <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                        <Bot className="size-4 text-muted-foreground" />
-                        Automation Overview
-                    </CardTitle>
-                    <Badge
-                        variant="outline"
-                        className="border-primary/30 bg-primary/10 text-xs font-normal text-primary"
-                    >
-                        {metrics.actionsThisMonth} this month
-                        {monthlyChange !== 0 && (
-                            <span
-                                className={cn(
-                                    'ml-1',
-                                    monthlyChange > 0 ? 'text-green-600' : 'text-red-600'
-                                )}
-                            >
-                                ({monthlyChange > 0 ? '+' : ''}
-                                {monthlyChange.toFixed(0)}%)
-                            </span>
-                        )}
-                    </Badge>
+        <Card className="group relative overflow-hidden border-0 bg-gradient-to-br from-card via-card to-muted/30 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl md:col-span-2">
+            {/* Decorative gradient border */}
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-chart-4/20 via-transparent to-chart-5/20 opacity-0 transition-opacity group-hover:opacity-100" />
+            <div className="absolute inset-[1px] rounded-xl bg-card" />
+
+            <CardContent className="relative p-0">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-indigo-500/10 to-violet-500/10 px-5 py-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg">
+                                <Bot className="size-5 text-white" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold tracking-tight">Your Automations</h3>
+                                <p className="text-xs text-muted-foreground">Impact on your business</p>
+                            </div>
+                        </div>
+                        <Badge className="gap-1 border-0 bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-sm">
+                            <TrendingUp className="size-3" />
+                            {hoursSavedChange > 0 ? '+' : ''}{hoursSavedChange.toFixed(0)}% efficiency
+                        </Badge>
+                    </div>
                 </div>
-            </CardHeader>
-            <CardContent>
-                <div className="grid gap-6 md:grid-cols-2">
-                    {/* Left side - Stats and chart */}
-                    <div className="space-y-4">
-                        {/* Key metrics */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="rounded-lg border bg-muted/30 p-3">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
-                                        <Zap className="size-4 text-primary" />
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-bold tabular-nums">
-                                            {metrics.totalActions.toLocaleString()}
-                                        </p>
-                                        <p className="text-[10px] text-muted-foreground">
-                                            Total actions
-                                        </p>
-                                    </div>
+
+                <div className="grid gap-6 p-5 md:grid-cols-2">
+                    {/* Left side - Main impact metrics */}
+                    <div className="space-y-5">
+                        {/* Hero metric: Time saved */}
+                        <div className="rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-5">
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <p className="text-5xl font-bold tabular-nums tracking-tight text-primary">
+                                        {metrics.impact.hoursSaved.toFixed(1)}
+                                    </p>
+                                    <p className="mt-1 text-lg font-medium">hours saved this month</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        That&apos;s {Math.round(metrics.impact.hoursSaved / 8)} extra days for closing deals
+                                    </p>
+                                </div>
+                                <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/20">
+                                    <Clock className="size-7 text-primary" />
                                 </div>
                             </div>
-                            <div className="rounded-lg border bg-muted/30 p-3">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex size-8 items-center justify-center rounded-lg bg-green-500/10">
-                                        <Clock className="size-4 text-green-600 dark:text-green-400" />
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-bold tabular-nums">
-                                            {metrics.estimatedTimeSaved.toFixed(1)}h
-                                        </p>
-                                        <p className="text-[10px] text-muted-foreground">
-                                            Time saved
-                                        </p>
-                                    </div>
-                                </div>
+
+                            {/* Mini trend chart */}
+                            <div className="mt-4 h-12">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={metrics.weeklyImpact}>
+                                        <Tooltip
+                                            content={({ active, payload }) => {
+                                                if (active && payload && payload.length) {
+                                                    return (
+                                                        <div className="rounded-lg border bg-popover px-2 py-1 text-xs shadow-md">
+                                                            <span className="font-medium">{payload[0].value}h saved</span>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
+                                        />
+                                        <Bar
+                                            dataKey="hours"
+                                            fill="hsl(var(--primary))"
+                                            radius={[4, 4, 0, 0]}
+                                            opacity={0.7}
+                                        />
+                                    </BarChart>
+                                </ResponsiveContainer>
                             </div>
                         </div>
 
-                        {/* Category breakdown chart */}
-                        <div className="h-[120px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart
-                                    data={metrics.actionsByCategory}
-                                    margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-                                >
-                                    <XAxis
-                                        dataKey="category"
-                                        tick={{ fontSize: 9 }}
-                                        axisLine={false}
-                                        tickLine={false}
-                                        interval={0}
-                                        angle={-20}
-                                        textAnchor="end"
-                                        height={40}
-                                    />
-                                    <Tooltip
-                                        content={({ active, payload }) => {
-                                            if (active && payload && payload.length) {
-                                                const data = payload[0].payload;
-                                                return (
-                                                    <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md">
-                                                        <p className="font-medium">{data.category}</p>
-                                                        <p className="text-muted-foreground">
-                                                            {data.count} actions
-                                                        </p>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        }}
-                                    />
-                                    <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={40}>
-                                        {metrics.actionsByCategory.map((_, index) => (
-                                            <rect
-                                                key={`bar-${index}`}
-                                                fill={chartColors[index % chartColors.length]}
-                                            />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
+                        {/* Impact stats grid */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <ImpactStat
+                                icon={Mail}
+                                value={metrics.impact.followUpsSent}
+                                label="Follow-ups sent"
+                                sublabel="Auto-scheduled"
+                                gradient="from-blue-500 to-cyan-500"
+                            />
+                            <ImpactStat
+                                icon={Calendar}
+                                value={metrics.impact.appointmentsScheduled}
+                                label="Appointments"
+                                sublabel="Auto-booked"
+                                gradient="from-violet-500 to-purple-500"
+                            />
                         </div>
                     </div>
 
-                    {/* Right side - Top actions */}
-                    <div className="space-y-3">
-                        <p className="text-xs font-medium text-muted-foreground">
-                            Most Used Automations
+                    {/* Right side - Top automations by impact */}
+                    <div className="space-y-4">
+                        <p className="text-sm font-medium text-muted-foreground">
+                            Top Performing Automations
                         </p>
-                        <div className="space-y-2">
-                            {metrics.topActions.map((action, index) => {
-                                const Icon =
-                                    categoryIcons[action.category] || Sparkles;
+
+                        <div className="space-y-3">
+                            {metrics.topAutomations.map((automation, index) => {
+                                const Icon = impactIcons[automation.icon] || Sparkles;
                                 return (
                                     <div
-                                        key={action.actionName}
-                                        className="flex items-center gap-3 rounded-lg border p-2.5 transition-colors hover:bg-muted/50"
+                                        key={automation.name}
+                                        className="group/item flex items-center gap-4 rounded-xl border bg-gradient-to-r from-muted/30 to-transparent p-4 transition-all hover:from-muted/50 hover:shadow-sm"
                                     >
-                                        <div
-                                            className="flex size-8 items-center justify-center rounded-lg"
-                                            style={{
-                                                backgroundColor: `color-mix(in oklch, ${chartColors[index]} 15%, transparent)`,
-                                            }}
-                                        >
-                                            <Icon
-                                                className="size-4"
-                                                style={{ color: chartColors[index] }}
-                                            />
+                                        <div className="flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
+                                            <Icon className="size-6 text-primary" />
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="truncate text-sm font-medium">
-                                                {action.actionName}
-                                            </p>
-                                            <p className="text-[10px] text-muted-foreground">
-                                                {action.count} uses · Saves ~{action.timeSavedMinutes}min
-                                                each
-                                            </p>
+                                            <p className="font-semibold">{automation.name}</p>
+                                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                                <CheckCircle className="size-3 text-emerald-500" />
+                                                {automation.impact}
+                                            </div>
                                         </div>
-                                        <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                        <Badge variant="secondary" className="shrink-0">
                                             #{index + 1}
                                         </Badge>
                                     </div>
@@ -263,14 +216,14 @@ export function AutomationMetricsCard({
                             })}
                         </div>
 
-                        {/* Coming soon placeholder */}
-                        <div className="rounded-lg border border-dashed bg-muted/20 p-3 text-center">
-                            <Sparkles className="mx-auto mb-1 size-5 text-muted-foreground/50" />
-                            <p className="text-xs font-medium text-muted-foreground">
-                                More automations coming soon
-                            </p>
-                            <p className="text-[10px] text-muted-foreground/70">
-                                AI-powered features in development
+                        {/* Coming soon teaser */}
+                        <div className="rounded-xl border border-dashed bg-gradient-to-br from-muted/20 to-transparent p-4 text-center">
+                            <div className="mx-auto flex size-10 items-center justify-center rounded-xl bg-muted">
+                                <Sparkles className="size-5 text-muted-foreground" />
+                            </div>
+                            <p className="mt-2 text-sm font-medium">More AI features coming</p>
+                            <p className="text-xs text-muted-foreground">
+                                Smart insights, predictive analytics, and more
                             </p>
                         </div>
                     </div>
@@ -280,32 +233,62 @@ export function AutomationMetricsCard({
     );
 }
 
+function ImpactStat({
+    icon: Icon,
+    value,
+    label,
+    sublabel,
+    gradient,
+}: {
+    icon: typeof Mail;
+    value: number;
+    label: string;
+    sublabel: string;
+    gradient: string;
+}) {
+    return (
+        <div className="rounded-xl border bg-gradient-to-br from-muted/30 to-transparent p-4">
+            <div className="flex items-center gap-3">
+                <div className={cn('flex size-10 items-center justify-center rounded-lg bg-gradient-to-br', gradient)}>
+                    <Icon className="size-5 text-white" />
+                </div>
+                <div>
+                    <p className="text-2xl font-bold tabular-nums">{value}</p>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="text-[10px] text-muted-foreground/70">{sublabel}</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function AutomationMetricsCardSkeleton() {
     return (
-        <Card className="md:col-span-2">
-            <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                    <Skeleton className="h-5 w-40" />
-                    <Skeleton className="h-5 w-32" />
-                </div>
-            </CardHeader>
-            <CardContent>
-                <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <Skeleton className="h-20 w-full" />
-                            <Skeleton className="h-20 w-full" />
-                        </div>
-                        <Skeleton className="h-[120px] w-full" />
-                    </div>
-                    <div className="space-y-3">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-16 w-full" />
-                        <Skeleton className="h-16 w-full" />
-                        <Skeleton className="h-16 w-full" />
+        <Card className="overflow-hidden md:col-span-2">
+            <div className="bg-muted/30 p-5">
+                <div className="flex items-center gap-3">
+                    <Skeleton className="size-10 rounded-xl" />
+                    <div>
+                        <Skeleton className="h-5 w-36" />
+                        <Skeleton className="mt-1 h-3 w-28" />
                     </div>
                 </div>
-            </CardContent>
+            </div>
+            <div className="grid gap-6 p-5 md:grid-cols-2">
+                <div className="space-y-5">
+                    <Skeleton className="h-44 rounded-2xl" />
+                    <div className="grid grid-cols-2 gap-3">
+                        <Skeleton className="h-24 rounded-xl" />
+                        <Skeleton className="h-24 rounded-xl" />
+                    </div>
+                </div>
+                <div className="space-y-4">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-20 rounded-xl" />
+                    <Skeleton className="h-20 rounded-xl" />
+                    <Skeleton className="h-20 rounded-xl" />
+                </div>
+            </div>
         </Card>
     );
 }
