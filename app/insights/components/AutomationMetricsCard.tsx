@@ -5,13 +5,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-    BarChart,
-    Bar,
+    AreaChart,
+    Area,
     ResponsiveContainer,
     Tooltip,
     XAxis,
+    CartesianGrid,
 } from 'recharts';
-import { Bot, Zap, Sparkles, Clock, Mail, Calendar, TrendingUp, CheckCircle } from 'lucide-react';
+import { Bot, Zap, Sparkles, Clock, Mail, Calendar, TrendingUp, CheckCircle, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Interface for automation metrics (focused on impact)
@@ -27,7 +28,7 @@ export interface AutomationImpact {
 export interface AutomationMetrics {
     impact: AutomationImpact;
     previousPeriodImpact: AutomationImpact;
-    weeklyImpact: { week: string; hours: number }[];
+    dailyLeadsContacted: { day: string; leads: number }[];
     topAutomations: { name: string; impact: string; icon: string }[];
 }
 
@@ -49,13 +50,14 @@ const mockMetrics: AutomationMetrics = {
         responsesGenerated: 267,
         tasksAutomated: 389,
     },
-    weeklyImpact: [
-        { week: 'W1', hours: 6.5 },
-        { week: 'W2', hours: 7.2 },
-        { week: 'W3', hours: 8.1 },
-        { week: 'W4', hours: 9.3 },
-        { week: 'W5', hours: 8.8 },
-        { week: 'W6', hours: 7.6 },
+    dailyLeadsContacted: [
+        { day: 'Mon', leads: 12 },
+        { day: 'Tue', leads: 18 },
+        { day: 'Wed', leads: 15 },
+        { day: 'Thu', leads: 22 },
+        { day: 'Fri', leads: 14 },
+        { day: 'Sat', leads: 5 },
+        { day: 'Sun', leads: 3 },
     ],
     topAutomations: [
         { name: 'Smart Follow-ups', impact: '23 leads re-engaged', icon: 'mail' },
@@ -137,30 +139,66 @@ export function AutomationMetricsCard({
                                     <Clock className="size-7 text-primary" />
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Mini trend chart */}
-                            <div className="mt-4 h-12">
+                        {/* Leads contacted chart - meaningful data */}
+                        <div>
+                            <div className="mb-2 flex items-center justify-between">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                    Leads Auto-Contacted This Week
+                                </p>
+                                <span className="text-xs font-bold tabular-nums">{metrics.impact.leadsContacted} total</span>
+                            </div>
+                            <div className="h-[110px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={metrics.weeklyImpact}>
+                                    <AreaChart
+                                        data={metrics.dailyLeadsContacted}
+                                        margin={{ top: 10, right: 15, left: 5, bottom: 5 }}
+                                    >
+                                        <defs>
+                                            <linearGradient id="leadsGradient" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#d1d5db" stopOpacity={0.5} />
+                                                <stop offset="95%" stopColor="#d1d5db" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid
+                                            strokeDasharray="3 3"
+                                            vertical={true}
+                                            horizontal={false}
+                                            stroke="#9ca3af"
+                                            opacity={0.2}
+                                        />
+                                        <XAxis
+                                            dataKey="day"
+                                            tick={{ fontSize: 12, fill: '#9ca3af' }}
+                                            axisLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
+                                            tickLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
+                                            interval={0}
+                                            padding={{ left: 20, right: 20 }}
+                                        />
                                         <Tooltip
                                             content={({ active, payload }) => {
                                                 if (active && payload && payload.length) {
                                                     return (
-                                                        <div className="rounded-lg border bg-popover px-2 py-1 text-xs shadow-md">
-                                                            <span className="font-medium">{payload[0].value}h saved</span>
+                                                        <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md">
+                                                            <p className="font-semibold">{payload[0].payload.day}</p>
+                                                            <p className="text-muted-foreground">
+                                                                {payload[0].value} leads contacted
+                                                            </p>
                                                         </div>
                                                     );
                                                 }
                                                 return null;
                                             }}
                                         />
-                                        <Bar
-                                            dataKey="hours"
-                                            fill="hsl(var(--primary))"
-                                            radius={[4, 4, 0, 0]}
-                                            opacity={0.7}
+                                        <Area
+                                            type="monotone"
+                                            dataKey="leads"
+                                            stroke="#9ca3af"
+                                            strokeWidth={2}
+                                            fill="url(#leadsGradient)"
                                         />
-                                    </BarChart>
+                                    </AreaChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
@@ -276,7 +314,8 @@ function AutomationMetricsCardSkeleton() {
             </div>
             <div className="grid gap-6 p-5 md:grid-cols-2">
                 <div className="space-y-5">
-                    <Skeleton className="h-44 rounded-2xl" />
+                    <Skeleton className="h-36 rounded-2xl" />
+                    <Skeleton className="h-[100px] w-full" />
                     <div className="grid grid-cols-2 gap-3">
                         <Skeleton className="h-24 rounded-xl" />
                         <Skeleton className="h-24 rounded-xl" />

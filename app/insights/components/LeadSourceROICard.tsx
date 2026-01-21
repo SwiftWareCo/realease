@@ -12,8 +12,9 @@ import {
     Tooltip,
     ResponsiveContainer,
     Cell,
+    CartesianGrid,
 } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, Minus, Trophy, Crown, Star } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Minus, Crown, Zap, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Interface for lead source ROI data
@@ -24,8 +25,7 @@ export interface LeadSourceROI {
     activeLeads: number;
     conversionRate: number;
     trend: 'up' | 'down' | 'stable';
-    highestCommission?: number;
-    avgCommission?: number;
+    avgResponseTime?: number; // hours
 }
 
 // Mock data based on typical lead sources
@@ -37,8 +37,7 @@ const mockROIData: LeadSourceROI[] = [
         activeLeads: 15,
         conversionRate: 41.8,
         trend: 'up',
-        highestCommission: 24500,
-        avgCommission: 8200,
+        avgResponseTime: 1.2,
     },
     {
         source: 'Website',
@@ -47,8 +46,7 @@ const mockROIData: LeadSourceROI[] = [
         activeLeads: 24,
         conversionRate: 26.2,
         trend: 'up',
-        highestCommission: 18000,
-        avgCommission: 6100,
+        avgResponseTime: 2.8,
     },
     {
         source: 'Open House',
@@ -57,8 +55,7 @@ const mockROIData: LeadSourceROI[] = [
         activeLeads: 9,
         conversionRate: 35.3,
         trend: 'stable',
-        highestCommission: 15000,
-        avgCommission: 7500,
+        avgResponseTime: 0.5,
     },
     {
         source: 'Social Media',
@@ -67,8 +64,7 @@ const mockROIData: LeadSourceROI[] = [
         activeLeads: 5,
         conversionRate: 21.2,
         trend: 'up',
-        highestCommission: 12000,
-        avgCommission: 4800,
+        avgResponseTime: 3.5,
     },
     {
         source: 'Zillow',
@@ -77,17 +73,8 @@ const mockROIData: LeadSourceROI[] = [
         activeLeads: 8,
         conversionRate: 16.9,
         trend: 'down',
-        highestCommission: 9500,
-        avgCommission: 3200,
+        avgResponseTime: 4.2,
     },
-];
-
-const chartColors = [
-    'hsl(var(--chart-1))',
-    'hsl(var(--chart-2))',
-    'hsl(var(--chart-3))',
-    'hsl(var(--chart-4))',
-    'hsl(var(--chart-5))',
 ];
 
 interface LeadSourceROICardProps {
@@ -109,21 +96,24 @@ export function LeadSourceROICard({
             .sort((a, b) => b.rate - a.rate);
     }, [data]);
 
-    const topPerformer = useMemo(() => {
+    // Best converter (highest conversion rate)
+    const bestConverter = useMemo(() => {
         return data.reduce((prev, current) =>
             prev.conversionRate > current.conversionRate ? prev : current
         );
     }, [data]);
 
-    const highestSingleCommission = useMemo(() => {
-        return data.reduce((prev, current) =>
-            (prev.highestCommission || 0) > (current.highestCommission || 0) ? prev : current
-        );
-    }, [data]);
-
+    // Most volume (most leads)
     const mostVolume = useMemo(() => {
         return data.reduce((prev, current) =>
             prev.totalLeads > current.totalLeads ? prev : current
+        );
+    }, [data]);
+
+    // Fastest response (lowest avg response time)
+    const fastestResponse = useMemo(() => {
+        return data.reduce((prev, current) =>
+            (prev.avgResponseTime || 999) < (current.avgResponseTime || 999) ? prev : current
         );
     }, [data]);
 
@@ -151,61 +141,70 @@ export function LeadSourceROICard({
                             </div>
                             <div>
                                 <h3 className="font-semibold tracking-tight">Lead Source ROI</h3>
-                                <p className="text-xs text-muted-foreground">Conversion by source</p>
+                                <p className="text-xs text-muted-foreground">Performance by source</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div className="p-5 space-y-5">
-                    {/* Key insights summary */}
+                    {/* Key insights summary - 3 different metrics */}
                     <div className="grid grid-cols-3 gap-2">
                         <div className="rounded-xl bg-gradient-to-br from-amber-500/10 to-yellow-500/10 p-3 text-center">
                             <Crown className="mx-auto size-4 text-amber-500" />
-                            <p className="mt-1 text-sm font-bold text-foreground">{topPerformer.source}</p>
+                            <p className="mt-1 text-sm font-bold text-foreground">{bestConverter.source}</p>
                             <p className="text-[10px] text-muted-foreground">Best Converter</p>
-                        </div>
-                        <div className="rounded-xl bg-gradient-to-br from-emerald-500/10 to-green-500/10 p-3 text-center">
-                            <Trophy className="mx-auto size-4 text-emerald-500" />
-                            <p className="mt-1 text-sm font-bold text-foreground">
-                                ${((highestSingleCommission.highestCommission || 0) / 1000).toFixed(1)}k
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">Top Commission</p>
+                            <p className="text-[9px] font-medium text-amber-600">{bestConverter.conversionRate.toFixed(0)}% rate</p>
                         </div>
                         <div className="rounded-xl bg-gradient-to-br from-blue-500/10 to-cyan-500/10 p-3 text-center">
-                            <Star className="mx-auto size-4 text-blue-500" />
+                            <Users className="mx-auto size-4 text-blue-500" />
                             <p className="mt-1 text-sm font-bold text-foreground">{mostVolume.source}</p>
                             <p className="text-[10px] text-muted-foreground">Most Leads</p>
+                            <p className="text-[9px] font-medium text-blue-600">{mostVolume.totalLeads} total</p>
+                        </div>
+                        <div className="rounded-xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 p-3 text-center">
+                            <Zap className="mx-auto size-4 text-violet-500" />
+                            <p className="mt-1 text-sm font-bold text-foreground">{fastestResponse.source}</p>
+                            <p className="text-[10px] text-muted-foreground">Fastest Response</p>
+                            <p className="text-[9px] font-medium text-violet-600">{fastestResponse.avgResponseTime}h avg</p>
                         </div>
                     </div>
 
-                    {/* Chart with clear label */}
+                    {/* Chart with clear label and proper axes */}
                     <div>
                         <p className="mb-2 text-xs font-medium text-muted-foreground">
-                            Conversion Rate by Source (% of leads that convert to qualified)
+                            Conversion Rate by Source (% of leads that become qualified)
                         </p>
-                        <div className="h-[130px] w-full">
+                        <div className="h-[160px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart
                                     data={chartData}
                                     layout="vertical"
-                                    margin={{ top: 0, right: 30, left: 0, bottom: 0 }}
+                                    margin={{ top: 5, right: 35, left: 5, bottom: 5 }}
                                 >
+                                    <CartesianGrid
+                                        strokeDasharray="3 3"
+                                        horizontal={false}
+                                        vertical={true}
+                                        stroke="#9ca3af"
+                                        opacity={0.2}
+                                    />
                                     <XAxis
                                         type="number"
                                         domain={[0, 50]}
+                                        ticks={[0, 10, 20, 30, 40, 50]}
                                         tickFormatter={(value) => `${value}%`}
-                                        tick={{ fontSize: 10 }}
-                                        axisLine={false}
-                                        tickLine={false}
+                                        tick={{ fontSize: 12, fill: '#9ca3af' }}
+                                        axisLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
+                                        tickLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
                                     />
                                     <YAxis
                                         type="category"
                                         dataKey="name"
-                                        width={70}
-                                        tick={{ fontSize: 10 }}
-                                        axisLine={false}
-                                        tickLine={false}
+                                        width={85}
+                                        tick={{ fontSize: 12, fill: '#9ca3af', fontWeight: 600 }}
+                                        axisLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
+                                        tickLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
                                     />
                                     <Tooltip
                                         content={({ active, payload }) => {
@@ -226,11 +225,12 @@ export function LeadSourceROICard({
                                             return null;
                                         }}
                                     />
-                                    <Bar dataKey="rate" radius={[0, 6, 6, 0]} maxBarSize={18}>
-                                        {chartData.map((_, index) => (
+                                    <Bar dataKey="rate" radius={[0, 6, 6, 0]} maxBarSize={20}>
+                                        {chartData.map((entry, index) => (
                                             <Cell
                                                 key={`cell-${index}`}
-                                                fill={chartColors[index % chartColors.length]}
+                                                fill="#d1d5db"
+                                                opacity={1 - index * 0.12}
                                             />
                                         ))}
                                     </Bar>
@@ -286,10 +286,10 @@ function LeadSourceROICardSkeleton() {
             <div className="p-5 space-y-5">
                 <div className="grid grid-cols-3 gap-2">
                     {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-16 rounded-xl" />
+                        <Skeleton key={i} className="h-20 rounded-xl" />
                     ))}
                 </div>
-                <Skeleton className="h-[130px] w-full" />
+                <Skeleton className="h-[150px] w-full" />
             </div>
         </Card>
     );
