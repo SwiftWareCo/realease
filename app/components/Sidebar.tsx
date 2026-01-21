@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FileText } from 'lucide-react';
+import { LayoutDashboard, FileText, TrendingUp } from 'lucide-react';
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -20,6 +20,11 @@ const navigation = [
     name: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    name: 'Insights',
+    href: '/insights',
+    icon: TrendingUp,
   },
   {
     name: 'Lead Forms',
