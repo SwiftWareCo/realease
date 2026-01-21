@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Briefcase, Sparkles } from 'lucide-react';
+import { Building2, Briefcase, Sparkles, TrendingUp } from 'lucide-react';
 import { InsightsSection } from './components/InsightsSection';
 import { MarketReportCard } from './components/MarketReportCard';
 import { NewsArticleCard } from './components/NewsArticleCard';
@@ -12,11 +12,24 @@ export default function InsightsPage() {
     return (
         <div className="space-y-10 p-8">
             {/* Page header */}
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Insights</h1>
-                <p className="mt-1 text-muted-foreground">
-                    Analytics and intelligence to grow your real estate business
-                </p>
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary/5 via-primary/3 to-transparent p-6">
+                {/* Decorative background elements */}
+                <div className="absolute -right-10 -top-10 size-40 rounded-full bg-primary/5 blur-3xl" />
+                <div className="absolute -bottom-20 -left-10 size-60 rounded-full bg-chart-2/5 blur-3xl" />
+
+                <div className="relative flex items-start gap-4">
+                    <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-chart-1 shadow-lg shadow-primary/25">
+                        <TrendingUp className="size-7 text-white" />
+                    </div>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">
+                            Insights
+                        </h1>
+                        <p className="mt-1 text-muted-foreground">
+                            Analytics and intelligence to grow your real estate business
+                        </p>
+                    </div>
+                </div>
             </div>
 
             {/* Your Market section */}

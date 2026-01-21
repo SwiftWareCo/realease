@@ -157,8 +157,8 @@ export function AutomationMetricsCard({
                                     >
                                         <defs>
                                             <linearGradient id="leadsGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#d1d5db" stopOpacity={0.5} />
-                                                <stop offset="95%" stopColor="#d1d5db" stopOpacity={0} />
+                                                <stop offset="5%" stopColor="#c4b5fd" stopOpacity={0.5} />
+                                                <stop offset="95%" stopColor="#c4b5fd" stopOpacity={0} />
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid
@@ -194,7 +194,7 @@ export function AutomationMetricsCard({
                                         <Area
                                             type="monotone"
                                             dataKey="leads"
-                                            stroke="#9ca3af"
+                                            stroke="#a78bfa"
                                             strokeWidth={2}
                                             fill="url(#leadsGradient)"
                                         />

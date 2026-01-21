@@ -229,7 +229,7 @@ export function LeadSourceROICard({
                                         {chartData.map((entry, index) => (
                                             <Cell
                                                 key={`cell-${index}`}
-                                                fill="#d1d5db"
+                                                fill="#c4b5fd"
                                                 opacity={1 - index * 0.12}
                                             />
                                         ))}
