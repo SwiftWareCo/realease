@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useMemo } from 'react';
-import Image from 'next/image';
+import { useMemo } from "react";
+import Image from "next/image";
 import {
     Bed,
     Bath,
@@ -16,16 +16,16 @@ import {
     Flame,
     Tag,
     Sparkles,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
     HoverCard,
     HoverCardContent,
     HoverCardTrigger,
-} from '@/components/ui/hover-card';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import type { ListingStatus, PropertyType } from './ListingsFilter';
+} from "@/components/ui/hover-card";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { ListingStatus, PropertyType } from "./ListingsFilter";
 
 export interface Listing {
     id: string;
@@ -43,12 +43,12 @@ export interface Listing {
     imageUrl: string;
     daysOnMarket: number;
     lastActivity?: {
-        type: 'showing' | 'inquiry' | 'offer' | 'price_change' | 'open_house';
+        type: "showing" | "inquiry" | "offer" | "price_change" | "open_house";
         date: Date;
         description: string;
     };
     upcomingActivity?: {
-        type: 'showing' | 'open_house' | 'inspection' | 'closing';
+        type: "showing" | "open_house" | "inspection" | "closing";
         date: Date;
         description: string;
     };
@@ -56,33 +56,71 @@ export interface Listing {
         views: number;
         inquiries: number;
         showings: number;
-        viewsTrend: 'up' | 'down' | 'stable';
+        viewsTrend: "up" | "down" | "stable";
     };
-    tags: ('hot' | 'price-drop' | 'new' | 'open-house' | 'multiple-offers')[];
+    tags: ("hot" | "price-drop" | "new" | "open-house" | "multiple-offers")[];
     agentNotes?: string;
     listedDate: Date;
 }
 
-const statusConfig: Record<ListingStatus, { label: string; color: string; bgColor: string }> = {
-    active: { label: 'Active', color: 'text-emerald-600', bgColor: 'bg-emerald-500' },
-    pending: { label: 'Pending', color: 'text-amber-600', bgColor: 'bg-amber-500' },
-    sold: { label: 'Sold', color: 'text-violet-600', bgColor: 'bg-violet-500' },
-    'off-market': { label: 'Off Market', color: 'text-gray-600', bgColor: 'bg-gray-500' },
+const statusConfig: Record<
+    ListingStatus,
+    { label: string; color: string; bgColor: string }
+> = {
+    active: {
+        label: "Active",
+        color: "text-emerald-600",
+        bgColor: "bg-emerald-500",
+    },
+    pending: {
+        label: "Pending",
+        color: "text-amber-600",
+        bgColor: "bg-amber-500",
+    },
+    sold: { label: "Sold", color: "text-violet-600", bgColor: "bg-violet-500" },
+    "off-market": {
+        label: "Off Market",
+        color: "text-gray-600",
+        bgColor: "bg-gray-500",
+    },
 };
 
 const propertyTypeLabels: Record<PropertyType, string> = {
-    house: 'House',
-    condo: 'Condo',
-    townhouse: 'Townhouse',
-    'multi-family': 'Multi-family',
+    house: "House",
+    condo: "Condo",
+    townhouse: "Townhouse",
+    "multi-family": "Multi-family",
 };
 
-const tagConfig: Record<string, { label: string; icon: typeof Flame; color: string }> = {
-    hot: { label: 'Hot', icon: Flame, color: 'bg-red-500/10 text-red-500 border-red-500/30' },
-    'price-drop': { label: 'Price Drop', icon: Tag, color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
-    new: { label: 'New', icon: Sparkles, color: 'bg-blue-500/10 text-blue-500 border-blue-500/30' },
-    'open-house': { label: 'Open House', icon: Calendar, color: 'bg-violet-500/10 text-violet-500 border-violet-500/30' },
-    'multiple-offers': { label: 'Multiple Offers', icon: TrendingUp, color: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
+const tagConfig: Record<
+    string,
+    { label: string; icon: typeof Flame; color: string }
+> = {
+    hot: {
+        label: "Hot",
+        icon: Flame,
+        color: "bg-red-500/10 text-red-500 border-red-500/30",
+    },
+    "price-drop": {
+        label: "Price Drop",
+        icon: Tag,
+        color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
+    },
+    new: {
+        label: "New",
+        icon: Sparkles,
+        color: "bg-blue-500/10 text-blue-500 border-blue-500/30",
+    },
+    "open-house": {
+        label: "Open House",
+        icon: Calendar,
+        color: "bg-violet-500/10 text-violet-500 border-violet-500/30",
+    },
+    "multiple-offers": {
+        label: "Multiple Offers",
+        icon: TrendingUp,
+        color: "bg-amber-500/10 text-amber-500 border-amber-500/30",
+    },
 };
 
 interface ListingCardProps {
@@ -98,9 +136,9 @@ export function ListingCard({ listing }: ListingCardProps) {
     }, [listing.price, listing.previousPrice]);
 
     const formatPrice = (price: number) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
+        return new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: "USD",
             maximumFractionDigits: 0,
         }).format(price);
     };
@@ -110,10 +148,13 @@ export function ListingCard({ listing }: ListingCardProps) {
         const diffMs = now.getTime() - date.getTime();
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-        if (diffDays === 0) return 'Today';
-        if (diffDays === 1) return 'Yesterday';
+        if (diffDays === 0) return "Today";
+        if (diffDays === 1) return "Yesterday";
         if (diffDays < 7) return `${diffDays}d ago`;
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return date.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+        });
     };
 
     const formatFutureDate = (date: Date) => {
@@ -121,10 +162,13 @@ export function ListingCard({ listing }: ListingCardProps) {
         const diffMs = date.getTime() - now.getTime();
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-        if (diffDays === 0) return 'Today';
-        if (diffDays === 1) return 'Tomorrow';
+        if (diffDays === 0) return "Today";
+        if (diffDays === 1) return "Tomorrow";
         if (diffDays < 7) return `In ${diffDays}d`;
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return date.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+        });
     };
 
     const status = statusConfig[listing.status];
@@ -153,7 +197,13 @@ export function ListingCard({ listing }: ListingCardProps) {
 
                         {/* Status badge */}
                         <div className="absolute left-3 top-3">
-                            <Badge className={cn('border-0 shadow-sm', status.bgColor, 'text-white')}>
+                            <Badge
+                                className={cn(
+                                    "border-0 shadow-sm",
+                                    status.bgColor,
+                                    "text-white",
+                                )}
+                            >
                                 {status.label}
                             </Badge>
                         </div>
@@ -168,7 +218,10 @@ export function ListingCard({ listing }: ListingCardProps) {
                                         <Badge
                                             key={tag}
                                             variant="outline"
-                                            className={cn('gap-1 border bg-background/90 backdrop-blur-sm text-xs', cfg.color)}
+                                            className={cn(
+                                                "gap-1 border bg-background/90 backdrop-blur-sm text-xs",
+                                                cfg.color,
+                                            )}
                                         >
                                             <Icon className="size-3" />
                                             {cfg.label}
@@ -186,13 +239,30 @@ export function ListingCard({ listing }: ListingCardProps) {
                                         {formatPrice(listing.price)}
                                     </p>
                                     {priceChange && (
-                                        <div className={cn('flex items-center gap-1 text-xs', priceChange.isUp ? 'text-red-400' : 'text-emerald-400')}>
-                                            {priceChange.isUp ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
-                                            <span>{priceChange.isUp ? '+' : ''}{priceChange.percent}%</span>
+                                        <div
+                                            className={cn(
+                                                "flex items-center gap-1 text-xs",
+                                                priceChange.isUp
+                                                    ? "text-red-400"
+                                                    : "text-emerald-400",
+                                            )}
+                                        >
+                                            {priceChange.isUp ? (
+                                                <TrendingUp className="size-3" />
+                                            ) : (
+                                                <TrendingDown className="size-3" />
+                                            )}
+                                            <span>
+                                                {priceChange.isUp ? "+" : ""}
+                                                {priceChange.percent}%
+                                            </span>
                                         </div>
                                     )}
                                 </div>
-                                <Badge variant="secondary" className="bg-white/20 text-white backdrop-blur-sm border-0">
+                                <Badge
+                                    variant="secondary"
+                                    className="bg-white/20 text-white backdrop-blur-sm border-0"
+                                >
                                     {propertyTypeLabels[listing.propertyType]}
                                 </Badge>
                             </div>
@@ -203,27 +273,46 @@ export function ListingCard({ listing }: ListingCardProps) {
                     <div className="p-4 space-y-3">
                         {/* Address */}
                         <div>
-                            <h3 className="font-semibold leading-tight truncate" title={listing.address}>
+                            <h3
+                                className="font-semibold leading-tight truncate"
+                                title={listing.address}
+                            >
                                 {listing.address}
                             </h3>
                             <p className="text-sm text-muted-foreground truncate">
-                                {listing.city}, {listing.state} {listing.zipCode}
+                                {listing.city}, {listing.state}{" "}
+                                {listing.zipCode}
                             </p>
                         </div>
 
                         {/* Property specs */}
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1.5" title={`${listing.beds} bedrooms`}>
+                            <div
+                                className="flex items-center gap-1.5"
+                                title={`${listing.beds} bedrooms`}
+                            >
                                 <Bed className="size-4" />
-                                <span className="tabular-nums">{listing.beds}</span>
+                                <span className="tabular-nums">
+                                    {listing.beds}
+                                </span>
                             </div>
-                            <div className="flex items-center gap-1.5" title={`${listing.baths} bathrooms`}>
+                            <div
+                                className="flex items-center gap-1.5"
+                                title={`${listing.baths} bathrooms`}
+                            >
                                 <Bath className="size-4" />
-                                <span className="tabular-nums">{listing.baths}</span>
+                                <span className="tabular-nums">
+                                    {listing.baths}
+                                </span>
                             </div>
-                            <div className="flex items-center gap-1.5" title={`${listing.sqft.toLocaleString()} sq ft`}>
+                            <div
+                                className="flex items-center gap-1.5"
+                                title={`${listing.sqft.toLocaleString()} sq ft`}
+                            >
                                 <Square className="size-4" />
-                                <span className="tabular-nums">{listing.sqft.toLocaleString()}</span>
+                                <span className="tabular-nums">
+                                    {listing.sqft.toLocaleString()}
+                                </span>
                             </div>
                         </div>
 
@@ -232,20 +321,32 @@ export function ListingCard({ listing }: ListingCardProps) {
                             <div className="flex items-center gap-1.5">
                                 <Clock className="size-3.5" />
                                 {listing.lastActivity ? (
-                                    <span className="truncate max-w-[120px]" title={listing.lastActivity.description}>
+                                    <span
+                                        className="truncate max-w-[120px]"
+                                        title={listing.lastActivity.description}
+                                    >
                                         {formatDate(listing.lastActivity.date)}
                                     </span>
                                 ) : (
-                                    <span>{listing.daysOnMarket}d on market</span>
+                                    <span>
+                                        {listing.daysOnMarket}d on market
+                                    </span>
                                 )}
                             </div>
 
                             {/* Interest indicator */}
                             <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-1" title={`${listing.metrics.views} views`}>
+                                <div
+                                    className="flex items-center gap-1"
+                                    title={`${listing.metrics.views} views`}
+                                >
                                     <Eye className="size-3.5" />
-                                    <span className="tabular-nums">{listing.metrics.views}</span>
-                                    <TrendIndicator trend={listing.metrics.viewsTrend} />
+                                    <span className="tabular-nums">
+                                        {listing.metrics.views}
+                                    </span>
+                                    <TrendIndicator
+                                        trend={listing.metrics.viewsTrend}
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -260,15 +361,21 @@ export function ListingCard({ listing }: ListingCardProps) {
                 className="w-80 p-0 overflow-hidden"
                 sideOffset={8}
             >
-                <ListingHoverContent listing={listing} formatPrice={formatPrice} formatFutureDate={formatFutureDate} />
+                <ListingHoverContent
+                    listing={listing}
+                    formatPrice={formatPrice}
+                    formatFutureDate={formatFutureDate}
+                />
             </HoverCardContent>
         </HoverCard>
     );
 }
 
-function TrendIndicator({ trend }: { trend: 'up' | 'down' | 'stable' }) {
-    if (trend === 'up') return <TrendingUp className="size-3 text-emerald-500" />;
-    if (trend === 'down') return <TrendingDown className="size-3 text-red-500" />;
+function TrendIndicator({ trend }: { trend: "up" | "down" | "stable" }) {
+    if (trend === "up")
+        return <TrendingUp className="size-3 text-emerald-500" />;
+    if (trend === "down")
+        return <TrendingDown className="size-3 text-red-500" />;
     return <Minus className="size-3 text-muted-foreground" />;
 }
 
@@ -278,7 +385,11 @@ interface ListingHoverContentProps {
     formatFutureDate: (date: Date) => string;
 }
 
-function ListingHoverContent({ listing, formatPrice, formatFutureDate }: ListingHoverContentProps) {
+function ListingHoverContent({
+    listing,
+    formatPrice,
+    formatFutureDate,
+}: ListingHoverContentProps) {
     return (
         <div className="space-y-0">
             {/* Header with image */}
@@ -291,12 +402,25 @@ function ListingHoverContent({ listing, formatPrice, formatFutureDate }: Listing
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                 <div className="absolute bottom-3 left-3 right-3">
-                    <p className="text-lg font-semibold text-white truncate">{listing.address}</p>
-                    <p className="text-sm text-white/80">{listing.city}, {listing.state}</p>
+                    <p className="text-lg font-semibold text-white truncate">
+                        {listing.address}
+                    </p>
+                    <p className="text-sm text-white/80">
+                        {listing.city}, {listing.state}
+                    </p>
                 </div>
             </div>
 
             <div className="p-4 space-y-4">
+                <div className="flex items-baseline justify-between">
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Price
+                    </span>
+                    <span className="text-lg font-semibold tabular-nums">
+                        {formatPrice(listing.price)}
+                    </span>
+                </div>
+
                 {/* Metrics grid */}
                 <div className="grid grid-cols-3 gap-3 text-center">
                     <div className="rounded-lg bg-muted/50 p-2">
@@ -304,28 +428,38 @@ function ListingHoverContent({ listing, formatPrice, formatFutureDate }: Listing
                             <Eye className="size-4 text-muted-foreground" />
                             {listing.metrics.views}
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Views</p>
+                        <p className="text-[10px] text-muted-foreground">
+                            Views
+                        </p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-2">
                         <div className="flex items-center justify-center gap-1 text-lg font-bold tabular-nums">
                             <MessageSquare className="size-4 text-muted-foreground" />
                             {listing.metrics.inquiries}
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Inquiries</p>
+                        <p className="text-[10px] text-muted-foreground">
+                            Inquiries
+                        </p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-2">
                         <div className="flex items-center justify-center gap-1 text-lg font-bold tabular-nums">
                             <Calendar className="size-4 text-muted-foreground" />
                             {listing.metrics.showings}
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Showings</p>
+                        <p className="text-[10px] text-muted-foreground">
+                            Showings
+                        </p>
                     </div>
                 </div>
 
                 {/* Days on market */}
                 <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Days on Market</span>
-                    <span className="font-medium tabular-nums">{listing.daysOnMarket}</span>
+                    <span className="text-muted-foreground">
+                        Days on Market
+                    </span>
+                    <span className="font-medium tabular-nums">
+                        {listing.daysOnMarket}
+                    </span>
                 </div>
 
                 {/* Upcoming activity */}
@@ -334,8 +468,14 @@ function ListingHoverContent({ listing, formatPrice, formatFutureDate }: Listing
                         <div className="flex items-center gap-2">
                             <Calendar className="size-4 text-primary" />
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{listing.upcomingActivity.description}</p>
-                                <p className="text-xs text-muted-foreground">{formatFutureDate(listing.upcomingActivity.date)}</p>
+                                <p className="text-sm font-medium truncate">
+                                    {listing.upcomingActivity.description}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    {formatFutureDate(
+                                        listing.upcomingActivity.date,
+                                    )}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -344,7 +484,9 @@ function ListingHoverContent({ listing, formatPrice, formatFutureDate }: Listing
                 {/* Agent notes */}
                 {listing.agentNotes && (
                     <div className="text-xs text-muted-foreground">
-                        <p className="font-medium text-foreground mb-1">Notes</p>
+                        <p className="font-medium text-foreground mb-1">
+                            Notes
+                        </p>
                         <p className="line-clamp-2">{listing.agentNotes}</p>
                     </div>
                 )}
