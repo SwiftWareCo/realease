@@ -132,7 +132,7 @@ export function LeadProfileModal({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto gap-2">
-                <DialogHeader className="border-b pb-2">
+                <DialogHeader className="border-b pb-4">
                     {isLoading ? (
                         <DialogTitle className="sr-only">
                             Loading lead
@@ -278,7 +278,7 @@ export function LeadProfileModal({
                                         No events scheduled
                                     </p>
                                 ) : (
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 max-h-48 overflow-y-auto">
                                         {upcomingEvents.length > 0 && (
                                             <div>
                                                 <p className="text-xs font-medium text-muted-foreground mb-1">
@@ -328,41 +328,39 @@ export function LeadProfileModal({
                                                 <p className="text-xs font-medium text-muted-foreground mb-1 mt-2">
                                                     Past
                                                 </p>
-                                                {pastEvents
-                                                    .slice(0, 3)
-                                                    .map((event) => {
-                                                        const config =
-                                                            eventTypeConfig[
-                                                            event.event_type as keyof typeof eventTypeConfig
-                                                            ];
-                                                        return (
+                                                {pastEvents.map((event) => {
+                                                    const config =
+                                                        eventTypeConfig[
+                                                        event.event_type as keyof typeof eventTypeConfig
+                                                        ];
+                                                    return (
+                                                        <div
+                                                            key={event._id}
+                                                            className="p-2 rounded border hover:bg-accent cursor-pointer transition-colors flex items-center gap-2 opacity-60"
+                                                            onClick={() =>
+                                                                handleEventClick(
+                                                                    event,
+                                                                )
+                                                            }
+                                                        >
                                                             <div
-                                                                key={event._id}
-                                                                className="p-2 rounded border hover:bg-accent cursor-pointer transition-colors flex items-center gap-2 opacity-60"
-                                                                onClick={() =>
-                                                                    handleEventClick(
-                                                                        event,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <div
-                                                                    className={`w-2 h-2 rounded-full ${config?.dotColor ?? "bg-gray-500"}`}
-                                                                />
-                                                                <div className="flex-1 min-w-0">
-                                                                    <span className="text-sm font-medium truncate">
-                                                                        {
-                                                                            event.title
-                                                                        }
-                                                                    </span>
-                                                                    <span className="text-xs text-muted-foreground ml-2">
-                                                                        {formatDate(
-                                                                            event.start_time,
-                                                                        )}
-                                                                    </span>
-                                                                </div>
+                                                                className={`w-2 h-2 rounded-full ${config?.dotColor ?? "bg-gray-500"}`}
+                                                            />
+                                                            <div className="flex-1 min-w-0">
+                                                                <span className="text-sm font-medium truncate">
+                                                                    {
+                                                                        event.title
+                                                                    }
+                                                                </span>
+                                                                <span className="text-xs text-muted-foreground ml-2">
+                                                                    {formatDate(
+                                                                        event.start_time,
+                                                                    )}
+                                                                </span>
                                                             </div>
-                                                        );
-                                                    })}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </div>
