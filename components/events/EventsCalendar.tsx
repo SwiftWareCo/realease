@@ -167,7 +167,6 @@ export function EventsCalendar() {
                 selectedDateEvents={selectedDateEvents}
                 upcomingEvents={upcomingEvents}
                 onBackToOverview={handleBackToOverview}
-                onAddEvent={handleAddEvent}
                 onMarkComplete={handleMarkComplete}
                 onSetReminder={handleOpenReminder}
                 onEdit={(event) => {
