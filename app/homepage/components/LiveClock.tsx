@@ -1,9 +1,27 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 
+function useTime() {
+    const [time, setTime] = useState(() => new Date());
+
+    useEffect(() => {
+        const id = setInterval(() => {
+            setTime(new Date());
+        }, 1000);
+
+        return () => clearInterval(id);
+    }, []);
+
+    return time;
+}
+
 export function LiveClock() {
-    const hours = 10;
-    const minutes = 24;
-    const seconds = 42;
+    const time = useTime();
+    const hours = time.getHours();
+    const minutes = time.getMinutes();
+    const seconds = time.getSeconds();
 
     // Analog clock calculations
     const secondDeg = seconds * 6;
@@ -20,8 +38,11 @@ export function LiveClock() {
     };
 
     const { h, m, s, ampm } = formatTime();
-    const dayOfWeek = "Tuesday";
-    const formattedDate = "Jan 16";
+    const dayOfWeek = time.toLocaleDateString("en-US", { weekday: "long" });
+    const formattedDate = time.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+    });
 
     return (
         <Card className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-accent/10 border-primary/20 dark:border-primary/30 h-full">
