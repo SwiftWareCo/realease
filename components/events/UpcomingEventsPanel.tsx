@@ -13,7 +13,6 @@ import {
     Clock,
     MapPin,
     Pencil,
-    Plus,
     User,
 } from 'lucide-react';
 import { eventTypeConfig, type EnrichedEvent } from './event-types';
@@ -23,7 +22,6 @@ interface UpcomingEventsPanelProps {
     selectedDateEvents: EnrichedEvent[];
     upcomingEvents: EnrichedEvent[] | undefined;
     onBackToOverview: () => void;
-    onAddEvent: () => void;
     onMarkComplete: (eventId: Id<'events'>, completed: boolean) => void;
     onSetReminder: (event: EnrichedEvent) => void;
     onEdit: (event: EnrichedEvent) => void;
@@ -35,7 +33,6 @@ export function UpcomingEventsPanel({
     selectedDateEvents,
     upcomingEvents,
     onBackToOverview,
-    onAddEvent,
     onMarkComplete,
     onSetReminder,
     onEdit,
@@ -53,24 +50,18 @@ export function UpcomingEventsPanel({
         <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 {selectedDate ? (
-                    <>
-                        <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" onClick={onBackToOverview} className="h-8 w-8">
-                                <ArrowLeft className="h-4 w-4" />
-                            </Button>
-                            <CardTitle className="text-lg">
-                                {selectedDate.toLocaleDateString('en-US', {
-                                    weekday: 'short',
-                                    month: 'short',
-                                    day: 'numeric',
-                                })}
-                            </CardTitle>
-                        </div>
-                        <Button size="sm" variant="outline" onClick={onAddEvent}>
-                            <Plus className="h-4 w-4 mr-1" />
-                            Add
+                    <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" onClick={onBackToOverview} className="h-8 w-8">
+                            <ArrowLeft className="h-4 w-4" />
                         </Button>
-                    </>
+                        <CardTitle className="text-lg">
+                            {selectedDate.toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                            })}
+                        </CardTitle>
+                    </div>
                 ) : (
                     <CardTitle className="text-lg flex items-center gap-2">
                         <CalendarDays className="h-5 w-5" />
@@ -84,10 +75,7 @@ export function UpcomingEventsPanel({
                         <div className="text-center py-8 text-muted-foreground">
                             <CalendarDays className="h-12 w-12 mx-auto mb-2 opacity-30" />
                             <p>No events scheduled</p>
-                            <Button variant="outline" className="mt-4" onClick={onAddEvent}>
-                                <Plus className="h-4 w-4 mr-1" />
-                                Schedule Event
-                            </Button>
+                            <p className="text-sm mt-2">Use the "Add Event" button above to create one</p>
                         </div>
                     ) : (
                         <div className="space-y-3">
