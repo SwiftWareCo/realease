@@ -1,18 +1,17 @@
-'use client';
+"use client";
 
-import { useQuery } from 'convex/react';
-import { api } from '@/convex/_generated/api';
-import type { Doc, Id } from '@/convex/_generated/dataModel';
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+} from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     User,
     Phone,
@@ -22,38 +21,46 @@ import {
     MessageSquare,
     Clock,
     Calendar,
-    X,
-} from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { eventTypeConfig } from '@/components/events/event-types';
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { eventTypeConfig } from "@/components/events/event-types";
 
 interface LeadProfileModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    leadId: Id<'leads'>;
+    leadId: Id<"leads">;
 }
 
 // Event type for display
-type EventDoc = Doc<'events'> & { lead?: Doc<'leads'> | null };
+type EventDoc = Doc<"events"> & { lead?: Doc<"leads"> | null };
 
-export function LeadProfileModal({ open, onOpenChange, leadId }: LeadProfileModalProps) {
+export function LeadProfileModal({
+    open,
+    onOpenChange,
+    leadId,
+}: LeadProfileModalProps) {
     const router = useRouter();
-    const lead = useQuery(api.leads.queries.getLeadById, { id: leadId }) as Doc<'leads'> | null | undefined;
-    const events = useQuery(api.events.queries.getEventsByLead, { leadId }) as EventDoc[] | undefined;
+    const lead = useQuery(api.leads.queries.getLeadById, { id: leadId }) as
+        | Doc<"leads">
+        | null
+        | undefined;
+    const eventBuckets = useQuery(api.events.queries.getLeadEventsBuckets, {
+        leadId,
+    }) as { upcoming: EventDoc[]; past: EventDoc[] } | undefined;
 
     const formatTime = (timestamp: number) => {
-        return new Date(timestamp).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
+        return new Date(timestamp).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
             hour12: true,
         });
     };
 
     const formatDate = (timestamp: number) => {
-        return new Date(timestamp).toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric',
+        return new Date(timestamp).toLocaleDateString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
         });
     };
 
@@ -63,44 +70,22 @@ export function LeadProfileModal({ open, onOpenChange, leadId }: LeadProfileModa
         const year = eventDate.getFullYear();
         const day = eventDate.getDate();
         // Navigate to calendar with date and event params
-        router.push(`/calendar?month=${month}&year=${year}&day=${day}&event=${event._id}`);
+        router.push(
+            `/calendar?month=${month}&year=${year}&day=${day}&event=${event._id}`,
+        );
         onOpenChange(false);
     };
 
-    if (lead === undefined) {
-        return (
-            <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-                    <div className="space-y-4">
-                        <Skeleton className="h-8 w-48" />
-                        <Skeleton className="h-32" />
-                        <Skeleton className="h-32" />
-                    </div>
-                </DialogContent>
-            </Dialog>
-        );
-    }
-
-    if (lead === null) {
-        return (
-            <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Lead Not Found</DialogTitle>
-                    </DialogHeader>
-                    <p className="text-muted-foreground">This lead could not be found.</p>
-                </DialogContent>
-            </Dialog>
-        );
-    }
+    const isLoading = lead === undefined;
+    const isNotFound = lead === null;
 
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'new':
+            case "new":
                 return <Badge className="bg-blue-500">New</Badge>;
-            case 'contacted':
+            case "contacted":
                 return <Badge className="bg-yellow-500">Contacted</Badge>;
-            case 'qualified':
+            case "qualified":
                 return <Badge className="bg-green-500">Qualified</Badge>;
             default:
                 return <Badge>{status}</Badge>;
@@ -109,183 +94,283 @@ export function LeadProfileModal({ open, onOpenChange, leadId }: LeadProfileModa
 
     const getIntentBadge = (intent: string) => {
         switch (intent) {
-            case 'buyer':
-                return <Badge variant="outline" className="border-blue-300 text-blue-700 dark:text-blue-300">Buyer</Badge>;
-            case 'seller':
-                return <Badge variant="outline" className="border-green-300 text-green-700 dark:text-green-300">Seller</Badge>;
-            case 'investor':
-                return <Badge variant="outline" className="border-purple-300 text-purple-700 dark:text-purple-300">Investor</Badge>;
+            case "buyer":
+                return (
+                    <Badge
+                        variant="outline"
+                        className="border-blue-300 text-blue-700 dark:text-blue-300"
+                    >
+                        Buyer
+                    </Badge>
+                );
+            case "seller":
+                return (
+                    <Badge
+                        variant="outline"
+                        className="border-green-300 text-green-700 dark:text-green-300"
+                    >
+                        Seller
+                    </Badge>
+                );
+            case "investor":
+                return (
+                    <Badge
+                        variant="outline"
+                        className="border-purple-300 text-purple-700 dark:text-purple-300"
+                    >
+                        Investor
+                    </Badge>
+                );
             default:
                 return <Badge variant="outline">{intent}</Badge>;
         }
     };
 
-    const upcomingEvents = events?.filter(e => e.start_time > Date.now() && !e.is_completed) ?? [];
-    const pastEvents = events?.filter(e => e.start_time <= Date.now() || e.is_completed) ?? [];
+    const upcomingEvents = eventBuckets?.upcoming ?? [];
+    const pastEvents = eventBuckets?.past ?? [];
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader className="border-b pb-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <DialogTitle className="text-xl flex items-center gap-3">
-                                {lead.name}
-                                {getStatusBadge(lead.status)}
-                            </DialogTitle>
-                            <div className="flex items-center gap-2 mt-2">
-                                {getIntentBadge(lead.intent)}
-                                <Badge variant="secondary" className="text-xs">
-                                    {lead.urgency_score}% Urgency
-                                </Badge>
+                    {isLoading ? (
+                        <DialogTitle className="sr-only">
+                            Loading lead
+                        </DialogTitle>
+                    ) : isNotFound ? (
+                        <DialogTitle>Lead Not Found</DialogTitle>
+                    ) : (
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <DialogTitle className="text-xl flex items-center gap-3">
+                                    {lead.name}
+                                    {getStatusBadge(lead.status)}
+                                </DialogTitle>
+                                <div className="flex items-center gap-2 mt-2">
+                                    {getIntentBadge(lead.intent)}
+                                    <Badge
+                                        variant="secondary"
+                                        className="text-xs"
+                                    >
+                                        {lead.urgency_score}% Urgency
+                                    </Badge>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </DialogHeader>
 
-                <div className="space-y-4 pt-4">
-                    {/* Contact Information */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                                <User className="h-4 w-4" />
-                                Contact Information
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2 text-sm">
-                            <div className="flex items-center gap-3">
-                                <Phone className="h-4 w-4 text-muted-foreground" />
-                                <span>{lead.phone}</span>
-                            </div>
-                            {lead.email && (
-                                <div className="flex items-center gap-3">
-                                    <Mail className="h-4 w-4 text-muted-foreground" />
-                                    <span>{lead.email}</span>
-                                </div>
-                            )}
-                            {lead.property_address && (
-                                <div className="flex items-start gap-3">
-                                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                                    <span>{lead.property_address}</span>
-                                </div>
-                            )}
-                            <div className="flex items-center gap-3 text-muted-foreground">
-                                <Clock className="h-4 w-4" />
-                                <span>Source: {lead.source}</span>
-                            </div>
-                            {lead.timeline && (
-                                <div className="text-muted-foreground">
-                                    Timeline: {lead.timeline}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* AI Insights */}
-                    {(lead.conversion_prediction || lead.ai_suggestion) && (
+                {isLoading ? (
+                    <div className="space-y-4 pt-4">
+                        <Skeleton className="h-8 w-48" />
+                        <Skeleton className="h-32" />
+                        <Skeleton className="h-32" />
+                    </div>
+                ) : isNotFound ? (
+                    <div className="pt-4 text-muted-foreground">
+                        This lead could not be found.
+                    </div>
+                ) : (
+                    <div className="space-y-4 pt-4">
+                        {/* Contact Information */}
                         <Card>
                             <CardHeader className="pb-2">
                                 <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                                    <TrendingUp className="h-4 w-4" />
-                                    AI Insights
+                                    <User className="h-4 w-4" />
+                                    Contact Information
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-2">
-                                {lead.conversion_prediction && (
-                                    <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-sm">
-                                        <p className="font-medium text-blue-900 dark:text-blue-200">Conversion</p>
-                                        <p className="text-blue-700 dark:text-blue-300">{lead.conversion_prediction}</p>
+                            <CardContent className="space-y-2 text-sm">
+                                <div className="flex items-center gap-3">
+                                    <Phone className="h-4 w-4 text-muted-foreground" />
+                                    <span>{lead.phone}</span>
+                                </div>
+                                {lead.email && (
+                                    <div className="flex items-center gap-3">
+                                        <Mail className="h-4 w-4 text-muted-foreground" />
+                                        <span>{lead.email}</span>
                                     </div>
                                 )}
-                                {lead.ai_suggestion && (
-                                    <div className="p-2 bg-yellow-50 dark:bg-yellow-950/30 rounded text-sm">
-                                        <p className="font-medium text-yellow-900 dark:text-yellow-200">💡 Suggestion</p>
-                                        <p className="text-yellow-700 dark:text-yellow-300">{lead.ai_suggestion}</p>
+                                {lead.property_address && (
+                                    <div className="flex items-start gap-3">
+                                        <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                                        <span>{lead.property_address}</span>
+                                    </div>
+                                )}
+                                <div className="flex items-center gap-3 text-muted-foreground">
+                                    <Clock className="h-4 w-4" />
+                                    <span>Source: {lead.source}</span>
+                                </div>
+                                {lead.timeline && (
+                                    <div className="text-muted-foreground">
+                                        Timeline: {lead.timeline}
                                     </div>
                                 )}
                             </CardContent>
                         </Card>
-                    )}
 
-                    {/* Notes */}
-                    {lead.notes && (
+                        {/* AI Insights */}
+                        {(lead.conversion_prediction || lead.ai_suggestion) && (
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                                        <TrendingUp className="h-4 w-4" />
+                                        AI Insights
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-2">
+                                    {lead.conversion_prediction && (
+                                        <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-sm">
+                                            <p className="font-medium text-blue-900 dark:text-blue-200">
+                                                Conversion
+                                            </p>
+                                            <p className="text-blue-700 dark:text-blue-300">
+                                                {lead.conversion_prediction}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {lead.ai_suggestion && (
+                                        <div className="p-2 bg-yellow-50 dark:bg-yellow-950/30 rounded text-sm">
+                                            <p className="font-medium text-yellow-900 dark:text-yellow-200">
+                                                💡 Suggestion
+                                            </p>
+                                            <p className="text-yellow-700 dark:text-yellow-300">
+                                                {lead.ai_suggestion}
+                                            </p>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Notes */}
+                        {lead.notes && (
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                                        <MessageSquare className="h-4 w-4" />
+                                        Notes
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                        {lead.notes}
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Events */}
                         <Card>
                             <CardHeader className="pb-2">
                                 <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                                    <MessageSquare className="h-4 w-4" />
-                                    Notes
+                                    <Calendar className="h-4 w-4" />
+                                    Events (
+                                    {(upcomingEvents?.length ?? 0) +
+                                        (pastEvents?.length ?? 0)}
+                                    )
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.notes}</p>
+                                {upcomingEvents.length === 0 &&
+                                pastEvents.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                        No events scheduled
+                                    </p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {upcomingEvents.length > 0 && (
+                                            <div>
+                                                <p className="text-xs font-medium text-muted-foreground mb-1">
+                                                    Upcoming
+                                                </p>
+                                                {upcomingEvents.map((event) => {
+                                                    const config =
+                                                        eventTypeConfig[
+                                                            event.event_type as keyof typeof eventTypeConfig
+                                                        ];
+                                                    return (
+                                                        <div
+                                                            key={event._id}
+                                                            className="p-2 rounded border hover:bg-accent cursor-pointer transition-colors flex items-center gap-2"
+                                                            onClick={() =>
+                                                                handleEventClick(
+                                                                    event,
+                                                                )
+                                                            }
+                                                        >
+                                                            <div
+                                                                className={`w-2 h-2 rounded-full ${config?.dotColor ?? "bg-gray-500"}`}
+                                                            />
+                                                            <div className="flex-1 min-w-0">
+                                                                <span className="text-sm font-medium truncate">
+                                                                    {
+                                                                        event.title
+                                                                    }
+                                                                </span>
+                                                                <span className="text-xs text-muted-foreground ml-2">
+                                                                    {formatDate(
+                                                                        event.start_time,
+                                                                    )}{" "}
+                                                                    at{" "}
+                                                                    {formatTime(
+                                                                        event.start_time,
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                        {pastEvents.length > 0 && (
+                                            <div>
+                                                <p className="text-xs font-medium text-muted-foreground mb-1 mt-3">
+                                                    Past
+                                                </p>
+                                                {pastEvents
+                                                    .slice(0, 3)
+                                                    .map((event) => {
+                                                        const config =
+                                                            eventTypeConfig[
+                                                                event.event_type as keyof typeof eventTypeConfig
+                                                            ];
+                                                        return (
+                                                            <div
+                                                                key={event._id}
+                                                                className="p-2 rounded border hover:bg-accent cursor-pointer transition-colors flex items-center gap-2 opacity-60"
+                                                                onClick={() =>
+                                                                    handleEventClick(
+                                                                        event,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <div
+                                                                    className={`w-2 h-2 rounded-full ${config?.dotColor ?? "bg-gray-500"}`}
+                                                                />
+                                                                <div className="flex-1 min-w-0">
+                                                                    <span className="text-sm font-medium truncate">
+                                                                        {
+                                                                            event.title
+                                                                        }
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground ml-2">
+                                                                        {formatDate(
+                                                                            event.start_time,
+                                                                        )}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
-                    )}
-
-                    {/* Events */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                                <Calendar className="h-4 w-4" />
-                                Events ({(upcomingEvents?.length ?? 0) + (pastEvents?.length ?? 0)})
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {upcomingEvents.length === 0 && pastEvents.length === 0 ? (
-                                <p className="text-sm text-muted-foreground text-center py-4">No events scheduled</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {upcomingEvents.length > 0 && (
-                                        <div>
-                                            <p className="text-xs font-medium text-muted-foreground mb-1">Upcoming</p>
-                                            {upcomingEvents.map((event) => {
-                                                const config = eventTypeConfig[event.event_type as keyof typeof eventTypeConfig];
-                                                return (
-                                                    <div
-                                                        key={event._id}
-                                                        className="p-2 rounded border hover:bg-accent cursor-pointer transition-colors flex items-center gap-2"
-                                                        onClick={() => handleEventClick(event)}
-                                                    >
-                                                        <div className={`w-2 h-2 rounded-full ${config?.dotColor ?? 'bg-gray-500'}`} />
-                                                        <div className="flex-1 min-w-0">
-                                                            <span className="text-sm font-medium truncate">{event.title}</span>
-                                                            <span className="text-xs text-muted-foreground ml-2">
-                                                                {formatDate(event.start_time)} at {formatTime(event.start_time)}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                    {pastEvents.length > 0 && (
-                                        <div>
-                                            <p className="text-xs font-medium text-muted-foreground mb-1 mt-3">Past</p>
-                                            {pastEvents.slice(0, 3).map((event) => {
-                                                const config = eventTypeConfig[event.event_type as keyof typeof eventTypeConfig];
-                                                return (
-                                                    <div
-                                                        key={event._id}
-                                                        className="p-2 rounded border hover:bg-accent cursor-pointer transition-colors flex items-center gap-2 opacity-60"
-                                                        onClick={() => handleEventClick(event)}
-                                                    >
-                                                        <div className={`w-2 h-2 rounded-full ${config?.dotColor ?? 'bg-gray-500'}`} />
-                                                        <div className="flex-1 min-w-0">
-                                                            <span className="text-sm font-medium truncate">{event.title}</span>
-                                                            <span className="text-xs text-muted-foreground ml-2">
-                                                                {formatDate(event.start_time)}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
+                    </div>
+                )}
             </DialogContent>
         </Dialog>
     );

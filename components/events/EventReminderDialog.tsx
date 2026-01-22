@@ -1,9 +1,8 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useMutation } from 'convex/react';
-import { api } from '@/convex/_generated/api';
-import type { Id } from '@/convex/_generated/dataModel';
+import { useEffect, useState } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import {
     Dialog,
     DialogContent,
@@ -11,19 +10,20 @@ import {
     DialogTitle,
     DialogFooter,
     DialogDescription,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Bell, MessageSquare, Mail, Smartphone } from 'lucide-react';
-import { EnrichedEvent } from './event-types';
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Bell, MessageSquare, Mail, Smartphone } from "lucide-react";
+import { EnrichedEvent } from "./event-types";
+import { toast } from "sonner";
 
 interface EventReminderDialogProps {
     open: boolean;
@@ -36,18 +36,28 @@ export function EventReminderDialog({
     onOpenChange,
     event,
 }: EventReminderDialogProps) {
-    const [recipient, setRecipient] = useState<'realtor' | 'client' | 'both'>(
-        event.reminder_config?.recipient ?? 'realtor'
+    const [recipient, setRecipient] = useState<"realtor" | "client" | "both">(
+        event.reminder_config?.recipient ?? "realtor",
     );
     const [timing, setTiming] = useState<string>(
-        event.reminder_config?.reminder_minutes_before?.[0]?.toString() ?? '60'
+        event.reminder_config?.reminder_minutes_before?.[0]?.toString() ?? "60",
     );
-    const [channels, setChannels] = useState<('sms' | 'email' | 'push')[]>(
-        event.reminder_config?.channels ?? ['sms']
+    const [channels, setChannels] = useState<("sms" | "email" | "push")[]>(
+        event.reminder_config?.channels ?? ["sms"],
     );
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const updateEvent = useMutation(api.events.mutations.updateEvent);
+
+    useEffect(() => {
+        if (!open) return;
+        setRecipient(event.reminder_config?.recipient ?? "realtor");
+        setTiming(
+            event.reminder_config?.reminder_minutes_before?.[0]?.toString() ??
+                "60",
+        );
+        setChannels(event.reminder_config?.channels ?? ["sms"]);
+    }, [open, event]);
 
     const handleSubmit = async () => {
         setIsSubmitting(true);
@@ -61,9 +71,11 @@ export function EventReminderDialog({
                     recipient,
                 },
             });
+            toast.success("Reminder saved");
             onOpenChange(false);
         } catch (error) {
-            console.error('Failed to update reminder:', error);
+            console.error("Failed to update reminder:", error);
+            toast.error("Failed to save reminder");
         } finally {
             setIsSubmitting(false);
         }
@@ -78,18 +90,20 @@ export function EventReminderDialog({
                     send_reminder: false,
                     reminder_minutes_before: [],
                     channels: [],
-                    recipient: 'realtor',
+                    recipient: "realtor",
                 },
             });
+            toast.success("Reminder removed");
             onOpenChange(false);
         } catch (error) {
-            console.error('Failed to remove reminder:', error);
+            console.error("Failed to remove reminder:", error);
+            toast.error("Failed to remove reminder");
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const toggleChannel = (channel: 'sms' | 'email' | 'push') => {
+    const toggleChannel = (channel: "sms" | "email" | "push") => {
         if (channels.includes(channel)) {
             setChannels(channels.filter((c) => c !== channel));
         } else {
@@ -98,12 +112,12 @@ export function EventReminderDialog({
     };
 
     const timingOptions = [
-        { value: '15', label: '15 minutes before' },
-        { value: '30', label: '30 minutes before' },
-        { value: '60', label: '1 hour before' },
-        { value: '120', label: '2 hours before' },
-        { value: '1440', label: '1 day before' },
-        { value: '2880', label: '2 days before' },
+        { value: "15", label: "15 minutes before" },
+        { value: "30", label: "30 minutes before" },
+        { value: "60", label: "1 hour before" },
+        { value: "120", label: "2 hours before" },
+        { value: "1440", label: "1 day before" },
+        { value: "2880", label: "2 days before" },
     ];
 
     return (
@@ -123,19 +137,31 @@ export function EventReminderDialog({
                     {/* Recipient */}
                     <div className="space-y-2">
                         <Label>Send reminder to</Label>
-                        <Select value={recipient} onValueChange={(v) => setRecipient(v as typeof recipient)}>
+                        <Select
+                            value={recipient}
+                            onValueChange={(v) =>
+                                setRecipient(v as typeof recipient)
+                            }
+                        >
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="realtor">Agent only</SelectItem>
-                                <SelectItem value="client">Client only</SelectItem>
-                                <SelectItem value="both">Both agent and client</SelectItem>
+                                <SelectItem value="realtor">
+                                    Agent only
+                                </SelectItem>
+                                <SelectItem value="client">
+                                    Client only
+                                </SelectItem>
+                                <SelectItem value="both">
+                                    Both agent and client
+                                </SelectItem>
                             </SelectContent>
                         </Select>
-                        {recipient !== 'realtor' && !event.lead && (
+                        {recipient !== "realtor" && !event.lead && (
                             <p className="text-xs text-amber-600 dark:text-amber-400">
-                                ⚠️ No client linked to this event. Link a lead to send client reminders.
+                                ⚠️ No client linked to this event. Link a lead
+                                to send client reminders.
                             </p>
                         )}
                     </div>
@@ -149,7 +175,10 @@ export function EventReminderDialog({
                             </SelectTrigger>
                             <SelectContent>
                                 {timingOptions.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
+                                    <SelectItem
+                                        key={option.value}
+                                        value={option.value}
+                                    >
                                         {option.label}
                                     </SelectItem>
                                 ))}
@@ -162,25 +191,37 @@ export function EventReminderDialog({
                         <Label>Notification channels</Label>
                         <div className="flex gap-2 flex-wrap">
                             <Badge
-                                variant={channels.includes('sms') ? 'default' : 'outline'}
+                                variant={
+                                    channels.includes("sms")
+                                        ? "default"
+                                        : "outline"
+                                }
                                 className="cursor-pointer"
-                                onClick={() => toggleChannel('sms')}
+                                onClick={() => toggleChannel("sms")}
                             >
                                 <MessageSquare className="h-3 w-3 mr-1" />
                                 SMS
                             </Badge>
                             <Badge
-                                variant={channels.includes('email') ? 'default' : 'outline'}
+                                variant={
+                                    channels.includes("email")
+                                        ? "default"
+                                        : "outline"
+                                }
                                 className="cursor-pointer"
-                                onClick={() => toggleChannel('email')}
+                                onClick={() => toggleChannel("email")}
                             >
                                 <Mail className="h-3 w-3 mr-1" />
                                 Email
                             </Badge>
                             <Badge
-                                variant={channels.includes('push') ? 'default' : 'outline'}
+                                variant={
+                                    channels.includes("push")
+                                        ? "default"
+                                        : "outline"
+                                }
                                 className="cursor-pointer"
-                                onClick={() => toggleChannel('push')}
+                                onClick={() => toggleChannel("push")}
                             >
                                 <Smartphone className="h-3 w-3 mr-1" />
                                 Push
@@ -197,8 +238,9 @@ export function EventReminderDialog({
                     <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-xs text-blue-700 dark:text-blue-300">
                         <p className="font-medium">🚀 Coming Soon</p>
                         <p className="mt-1">
-                            SMS and email reminders will be automatically sent by our AI assistant.
-                            For now, reminders are saved for future integration.
+                            SMS and email reminders will be automatically sent
+                            by our AI assistant. For now, reminders are saved
+                            for future integration.
                         </p>
                     </div>
                 </div>
@@ -214,14 +256,17 @@ export function EventReminderDialog({
                             Remove Reminder
                         </Button>
                     )}
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    <Button
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                    >
                         Cancel
                     </Button>
                     <Button
                         onClick={handleSubmit}
                         disabled={isSubmitting || channels.length === 0}
                     >
-                        {isSubmitting ? 'Saving...' : 'Save Reminder'}
+                        {isSubmitting ? "Saving..." : "Save Reminder"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

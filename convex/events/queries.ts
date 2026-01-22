@@ -1,11 +1,11 @@
-import { query } from '../_generated/server';
-import { v } from 'convex/values';
+import { query } from "../_generated/server";
+import { v } from "convex/values";
 
 // Get all events
 export const getAllEvents = query({
     args: {},
     handler: async (ctx) => {
-        return await ctx.db.query('events').order('asc').collect();
+        return await ctx.db.query("events").order("asc").collect();
     },
 });
 
@@ -22,16 +22,16 @@ export const getUpcomingEvents = query({
         const limit = args.limit ?? 10;
 
         const events = await ctx.db
-            .query('events')
-            .withIndex('by_start_time')
+            .query("events")
+            .withIndex("by_start_time")
             .filter((q) =>
                 q.and(
-                    q.gte(q.field('start_time'), now),
-                    q.lte(q.field('start_time'), endTime),
-                    q.eq(q.field('is_completed'), false)
-                )
+                    q.gte(q.field("start_time"), now),
+                    q.lte(q.field("start_time"), endTime),
+                    q.eq(q.field("is_completed"), false),
+                ),
             )
-            .order('asc')
+            .order("asc")
             .take(limit);
 
         // Enrich events with lead data if linked
@@ -42,7 +42,7 @@ export const getUpcomingEvents = query({
                     return { ...event, lead };
                 }
                 return { ...event, lead: null };
-            })
+            }),
         );
 
         return enrichedEvents;
@@ -52,21 +52,49 @@ export const getUpcomingEvents = query({
 // Get events for a specific lead
 export const getEventsByLead = query({
     args: {
-        leadId: v.id('leads'),
+        leadId: v.id("leads"),
     },
     handler: async (ctx, args) => {
         return await ctx.db
-            .query('events')
-            .withIndex('by_lead_id', (q) => q.eq('lead_id', args.leadId))
-            .order('desc')
+            .query("events")
+            .withIndex("by_lead_id", (q) => q.eq("lead_id", args.leadId))
+            .order("desc")
             .collect();
+    },
+});
+
+// Get events for a specific lead, bucketed by upcoming vs past on the server
+export const getLeadEventsBuckets = query({
+    args: {
+        leadId: v.id("leads"),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        const events = await ctx.db
+            .query("events")
+            .withIndex("by_lead_id", (q) => q.eq("lead_id", args.leadId))
+            .order("desc")
+            .collect();
+
+        const upcoming: typeof events = [];
+        const past: typeof events = [];
+
+        for (const event of events) {
+            if (event.is_completed || event.start_time <= now) {
+                past.push(event);
+            } else {
+                upcoming.push(event);
+            }
+        }
+
+        return { upcoming, past };
     },
 });
 
 // Get a single event by ID
 export const getEventById = query({
     args: {
-        id: v.id('events'),
+        id: v.id("events"),
     },
     handler: async (ctx, args) => {
         const event = await ctx.db.get(args.id);
@@ -89,15 +117,15 @@ export const getEventsInRange = query({
     },
     handler: async (ctx, args) => {
         const events = await ctx.db
-            .query('events')
-            .withIndex('by_start_time')
+            .query("events")
+            .withIndex("by_start_time")
             .filter((q) =>
                 q.and(
-                    q.gte(q.field('start_time'), args.startTime),
-                    q.lte(q.field('start_time'), args.endTime)
-                )
+                    q.gte(q.field("start_time"), args.startTime),
+                    q.lte(q.field("start_time"), args.endTime),
+                ),
             )
-            .order('asc')
+            .order("asc")
             .collect();
 
         // Enrich events with lead data
@@ -108,7 +136,7 @@ export const getEventsInRange = query({
                     return { ...event, lead };
                 }
                 return { ...event, lead: null };
-            })
+            }),
         );
 
         return enrichedEvents;

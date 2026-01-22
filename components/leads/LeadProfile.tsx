@@ -26,7 +26,7 @@ interface LeadProfileProps {
 
 export function LeadProfile({ leadId }: LeadProfileProps) {
     const lead = useQuery(api.leads.queries.getLeadById, { id: leadId }) as Doc<'leads'> | null | undefined;
-
+    
     if (lead === undefined) {
         return (
             <div className="space-y-6">
