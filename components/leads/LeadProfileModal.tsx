@@ -131,8 +131,8 @@ export function LeadProfileModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-                <DialogHeader className="border-b pb-4">
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto gap-2">
+                <DialogHeader className="border-b pb-2">
                     {isLoading ? (
                         <DialogTitle className="sr-only">
                             Loading lead
@@ -146,7 +146,7 @@ export function LeadProfileModal({
                                     {lead.name}
                                     {getStatusBadge(lead.status)}
                                 </DialogTitle>
-                                <div className="flex items-center gap-2 mt-2">
+                                <div className="flex items-center gap-2 mt-1">
                                     {getIntentBadge(lead.intent)}
                                     <Badge
                                         variant="secondary"
@@ -171,16 +171,16 @@ export function LeadProfileModal({
                         This lead could not be found.
                     </div>
                 ) : (
-                    <div className="space-y-4 pt-4">
+                    <div className="space-y-2 pt-2">
                         {/* Contact Information */}
-                        <Card>
-                            <CardHeader className="pb-2">
+                        <Card className="py-3 gap-2">
+                            <CardHeader className="py-1.5 px-4">
                                 <CardTitle className="flex items-center gap-2 text-sm font-medium">
                                     <User className="h-4 w-4" />
                                     Contact Information
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-2 text-sm">
+                            <CardContent className="space-y-1.5 text-sm px-4">
                                 <div className="flex items-center gap-3">
                                     <Phone className="h-4 w-4 text-muted-foreground" />
                                     <span>{lead.phone}</span>
@@ -211,16 +211,16 @@ export function LeadProfileModal({
 
                         {/* AI Insights */}
                         {(lead.conversion_prediction || lead.ai_suggestion) && (
-                            <Card>
-                                <CardHeader className="pb-2">
+                            <Card className="py-3 gap-2">
+                                <CardHeader className="py-1.5 px-4">
                                     <CardTitle className="flex items-center gap-2 text-sm font-medium">
                                         <TrendingUp className="h-4 w-4" />
                                         AI Insights
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-2">
+                                <CardContent className="space-y-1.5 px-4">
                                     {lead.conversion_prediction && (
-                                        <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-sm">
+                                        <div className="p-1.5 bg-blue-50 dark:bg-blue-950/30 rounded text-sm">
                                             <p className="font-medium text-blue-900 dark:text-blue-200">
                                                 Conversion
                                             </p>
@@ -230,7 +230,7 @@ export function LeadProfileModal({
                                         </div>
                                     )}
                                     {lead.ai_suggestion && (
-                                        <div className="p-2 bg-yellow-50 dark:bg-yellow-950/30 rounded text-sm">
+                                        <div className="p-1.5 bg-yellow-50 dark:bg-yellow-950/30 rounded text-sm">
                                             <p className="font-medium text-yellow-900 dark:text-yellow-200">
                                                 💡 Suggestion
                                             </p>
@@ -245,14 +245,14 @@ export function LeadProfileModal({
 
                         {/* Notes */}
                         {lead.notes && (
-                            <Card>
-                                <CardHeader className="pb-2">
+                            <Card className="py-3 gap-2">
+                                <CardHeader className="py-1.5 px-4">
                                     <CardTitle className="flex items-center gap-2 text-sm font-medium">
                                         <MessageSquare className="h-4 w-4" />
                                         Notes
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="px-4">
                                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                                         {lead.notes}
                                     </p>
@@ -261,8 +261,8 @@ export function LeadProfileModal({
                         )}
 
                         {/* Events */}
-                        <Card>
-                            <CardHeader className="pb-2">
+                        <Card className="py-3 gap-2">
+                            <CardHeader className="py-1.5 px-4">
                                 <CardTitle className="flex items-center gap-2 text-sm font-medium">
                                     <Calendar className="h-4 w-4" />
                                     Events (
@@ -271,10 +271,10 @@ export function LeadProfileModal({
                                     )
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="px-4">
                                 {upcomingEvents.length === 0 &&
-                                pastEvents.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                    pastEvents.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground text-center py-2">
                                         No events scheduled
                                     </p>
                                 ) : (
@@ -287,7 +287,7 @@ export function LeadProfileModal({
                                                 {upcomingEvents.map((event) => {
                                                     const config =
                                                         eventTypeConfig[
-                                                            event.event_type as keyof typeof eventTypeConfig
+                                                        event.event_type as keyof typeof eventTypeConfig
                                                         ];
                                                     return (
                                                         <div
@@ -325,7 +325,7 @@ export function LeadProfileModal({
                                         )}
                                         {pastEvents.length > 0 && (
                                             <div>
-                                                <p className="text-xs font-medium text-muted-foreground mb-1 mt-3">
+                                                <p className="text-xs font-medium text-muted-foreground mb-1 mt-2">
                                                     Past
                                                 </p>
                                                 {pastEvents
@@ -333,7 +333,7 @@ export function LeadProfileModal({
                                                     .map((event) => {
                                                         const config =
                                                             eventTypeConfig[
-                                                                event.event_type as keyof typeof eventTypeConfig
+                                                            event.event_type as keyof typeof eventTypeConfig
                                                             ];
                                                         return (
                                                             <div
