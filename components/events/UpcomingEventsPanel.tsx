@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import type { Id } from '@/convex/_generated/dataModel';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { useState } from "react";
+import type { Id } from "@/convex/_generated/dataModel";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
     ArrowLeft,
     Bell,
@@ -14,16 +14,16 @@ import {
     MapPin,
     Pencil,
     User,
-} from 'lucide-react';
-import { eventTypeConfig, type EnrichedEvent } from './event-types';
-import { LeadProfileModal } from '@/components/leads/LeadProfileModal';
+} from "lucide-react";
+import { eventTypeConfig, type EnrichedEvent } from "./event-types";
+import { LeadProfileModal } from "@/components/leads/LeadProfileModal";
 
 interface UpcomingEventsPanelProps {
     selectedDate: Date | null;
     selectedDateEvents: EnrichedEvent[];
     upcomingEvents: EnrichedEvent[] | undefined;
     onBackToOverview: () => void;
-    onMarkComplete: (eventId: Id<'events'>, completed: boolean) => void;
+    onMarkComplete: (eventId: Id<"events">, completed: boolean) => void;
     onSetReminder: (event: EnrichedEvent) => void;
     onEdit: (event: EnrichedEvent) => void;
     onSelectDate: (date: Date) => void;
@@ -39,18 +39,20 @@ export function UpcomingEventsPanel({
     onEdit,
     onSelectDate,
 }: UpcomingEventsPanelProps) {
-    const [selectedLeadId, setSelectedLeadId] = useState<Id<'leads'> | null>(null);
+    const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(
+        null,
+    );
     const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
 
-    const handleLeadClick = (leadId: Id<'leads'>) => {
+    const handleLeadClick = (leadId: Id<"leads">) => {
         setSelectedLeadId(leadId);
         setIsLeadModalOpen(true);
     };
 
     const formatTime = (timestamp: number) => {
-        return new Date(timestamp).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
+        return new Date(timestamp).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
             hour12: true,
         });
     };
@@ -61,14 +63,19 @@ export function UpcomingEventsPanel({
                 <CardHeader className="flex flex-row items-center justify-between">
                     {selectedDate ? (
                         <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" onClick={onBackToOverview} className="h-8 w-8">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={onBackToOverview}
+                                className="h-8 w-8"
+                            >
                                 <ArrowLeft className="h-4 w-4" />
                             </Button>
                             <CardTitle className="text-lg">
-                                {selectedDate.toLocaleDateString('en-US', {
-                                    weekday: 'short',
-                                    month: 'short',
-                                    day: 'numeric',
+                                {selectedDate.toLocaleDateString("en-US", {
+                                    weekday: "short",
+                                    month: "short",
+                                    day: "numeric",
                                 })}
                             </CardTitle>
                         </div>
@@ -85,7 +92,10 @@ export function UpcomingEventsPanel({
                             <div className="text-center py-8 text-muted-foreground">
                                 <CalendarDays className="h-12 w-12 mx-auto mb-2 opacity-30" />
                                 <p>No events scheduled</p>
-                                <p className="text-sm mt-2">Use the "Add Event" button above to create one</p>
+                                <p className="text-sm mt-2">
+                                    Use the &ldquo;Add Event&rdquo; button above
+                                    to create one
+                                </p>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -94,7 +104,9 @@ export function UpcomingEventsPanel({
                                         key={event._id}
                                         event={event}
                                         onMarkComplete={onMarkComplete}
-                                        onSetReminder={() => onSetReminder(event)}
+                                        onSetReminder={() =>
+                                            onSetReminder(event)
+                                        }
                                         onEdit={() => onEdit(event)}
                                         onLeadClick={handleLeadClick}
                                     />
@@ -105,7 +117,9 @@ export function UpcomingEventsPanel({
                         <div className="text-center py-8 text-muted-foreground">
                             <CalendarDays className="h-12 w-12 mx-auto mb-2 opacity-30" />
                             <p>No upcoming events</p>
-                            <p className="text-sm mt-1">Click a date to schedule one</p>
+                            <p className="text-sm mt-1">
+                                Click a date to schedule one
+                            </p>
                         </div>
                     ) : (
                         <div className="space-y-3">
@@ -115,18 +129,28 @@ export function UpcomingEventsPanel({
                                 const tomorrow = new Date(today);
                                 tomorrow.setDate(tomorrow.getDate() + 1);
 
-                                let dateLabel = eventDate.toLocaleDateString('en-US', {
-                                    weekday: 'short',
-                                    month: 'short',
-                                    day: 'numeric',
-                                });
-                                if (eventDate.toDateString() === today.toDateString()) {
-                                    dateLabel = 'Today';
-                                } else if (eventDate.toDateString() === tomorrow.toDateString()) {
-                                    dateLabel = 'Tomorrow';
+                                let dateLabel = eventDate.toLocaleDateString(
+                                    "en-US",
+                                    {
+                                        weekday: "short",
+                                        month: "short",
+                                        day: "numeric",
+                                    },
+                                );
+                                if (
+                                    eventDate.toDateString() ===
+                                    today.toDateString()
+                                ) {
+                                    dateLabel = "Today";
+                                } else if (
+                                    eventDate.toDateString() ===
+                                    tomorrow.toDateString()
+                                ) {
+                                    dateLabel = "Tomorrow";
                                 }
 
-                                const config = eventTypeConfig[event.event_type];
+                                const config =
+                                    eventTypeConfig[event.event_type];
                                 const Icon = config.icon;
 
                                 return (
@@ -136,23 +160,35 @@ export function UpcomingEventsPanel({
                                         onClick={() => onSelectDate(eventDate)}
                                     >
                                         <div className="flex items-start gap-3">
-                                            <div className={`p-2 rounded-lg ${config.color} text-white shrink-0`}>
+                                            <div
+                                                className={`p-2 rounded-lg ${config.color} text-white shrink-0`}
+                                            >
                                                 <Icon className="h-4 w-4" />
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <h4 className="font-medium text-sm truncate">{event.title}</h4>
-                                                    <Badge variant="outline" className="text-[10px]">
+                                                    <h4 className="font-medium text-sm truncate">
+                                                        {event.title}
+                                                    </h4>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="text-[10px]"
+                                                    >
                                                         {config.label}
                                                     </Badge>
                                                 </div>
                                                 <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                                    <Badge variant="secondary" className="text-[10px]">
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className="text-[10px]"
+                                                    >
                                                         {dateLabel}
                                                     </Badge>
                                                     <span className="flex items-center gap-1">
                                                         <Clock className="h-3 w-3" />
-                                                        {formatTime(event.start_time)}
+                                                        {formatTime(
+                                                            event.start_time,
+                                                        )}
                                                     </span>
                                                 </div>
                                                 {event.lead && (
@@ -184,37 +220,52 @@ export function UpcomingEventsPanel({
 
 interface EventCardProps {
     event: EnrichedEvent;
-    onMarkComplete: (eventId: Id<'events'>, completed: boolean) => void;
+    onMarkComplete: (eventId: Id<"events">, completed: boolean) => void;
     onSetReminder: () => void;
     onEdit: () => void;
-    onLeadClick: (leadId: Id<'leads'>) => void;
+    onLeadClick: (leadId: Id<"leads">) => void;
 }
 
-function EventCard({ event, onMarkComplete, onSetReminder, onEdit, onLeadClick }: EventCardProps) {
+function EventCard({
+    event,
+    onMarkComplete,
+    onSetReminder,
+    onEdit,
+    onLeadClick,
+}: EventCardProps) {
     const config = eventTypeConfig[event.event_type];
     const Icon = config.icon;
 
     const formatTime = (timestamp: number) => {
-        return new Date(timestamp).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
+        return new Date(timestamp).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
             hour12: true,
         });
     };
 
     return (
-        <Card className={`${event.is_completed ? 'opacity-60' : ''} hover:shadow-md transition-shadow`}>
+        <Card
+            className={`${event.is_completed ? "opacity-60" : ""} hover:shadow-md transition-shadow`}
+        >
             <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-lg ${config.color} text-white shrink-0`}>
+                    <div
+                        className={`p-2 rounded-lg ${config.color} text-white shrink-0`}
+                    >
                         <Icon className="h-4 w-4" />
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className={`font-medium ${event.is_completed ? 'line-through' : ''}`}>
+                            <h4
+                                className={`font-medium ${event.is_completed ? "line-through" : ""}`}
+                            >
                                 {event.title}
                             </h4>
-                            <Badge variant="outline" className={`text-xs ${config.textColor} border-current`}>
+                            <Badge
+                                variant="outline"
+                                className={`text-xs ${config.textColor} border-current`}
+                            >
                                 {config.label}
                             </Badge>
                         </div>
@@ -222,14 +273,17 @@ function EventCard({ event, onMarkComplete, onSetReminder, onEdit, onLeadClick }
                         <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                {formatTime(event.start_time)} - {formatTime(event.end_time)}
+                                {formatTime(event.start_time)} -{" "}
+                                {formatTime(event.end_time)}
                             </span>
                         </div>
 
                         {event.location && (
                             <div className="flex items-center gap-1 mt-1 text-sm text-muted-foreground">
                                 <MapPin className="h-3 w-3" />
-                                <span className="truncate">{event.location}</span>
+                                <span className="truncate">
+                                    {event.location}
+                                </span>
                             </div>
                         )}
 
@@ -258,24 +312,40 @@ function EventCard({ event, onMarkComplete, onSetReminder, onEdit, onLeadClick }
                         {event.reminder_config?.send_reminder && (
                             <div className="mt-2 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                                 <Bell className="h-3 w-3" />
-                                Reminder set for {event.reminder_config.recipient}
+                                Reminder set for{" "}
+                                {event.reminder_config.recipient}
                             </div>
                         )}
 
                         <div className="mt-3 flex gap-2 flex-wrap">
                             <Button
                                 size="sm"
-                                variant={event.is_completed ? 'outline' : 'default'}
-                                onClick={() => onMarkComplete(event._id, !event.is_completed)}
+                                variant={
+                                    event.is_completed ? "outline" : "default"
+                                }
+                                onClick={() =>
+                                    onMarkComplete(
+                                        event._id,
+                                        !event.is_completed,
+                                    )
+                                }
                             >
                                 <CheckCircle2 className="h-3 w-3 mr-1" />
-                                {event.is_completed ? 'Undo' : 'Complete'}
+                                {event.is_completed ? "Undo" : "Complete"}
                             </Button>
-                            <Button size="sm" variant="outline" onClick={onEdit}>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={onEdit}
+                            >
                                 <Pencil className="h-3 w-3 mr-1" />
                                 Edit
                             </Button>
-                            <Button size="sm" variant="outline" onClick={onSetReminder}>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={onSetReminder}
+                            >
                                 <Bell className="h-3 w-3 mr-1" />
                                 Reminder
                             </Button>

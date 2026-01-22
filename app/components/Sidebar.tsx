@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FileText, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, FileText, CalendarDays, Home } from 'lucide-react';
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -16,6 +16,11 @@ import {
 } from '@/components/ui/sidebar';
 
 const navigation = [
+  {
+    name: 'Homepage',
+    href: '/',
+    icon: Home,
+  },
   {
     name: 'Dashboard',
     href: '/dashboard',
