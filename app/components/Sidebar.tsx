@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, FileText, CalendarDays, Home } from 'lucide-react';
 import {
@@ -50,9 +51,13 @@ export function Sidebar() {
     <ShadcnSidebar>
       <SidebarHeader>
         <div className="flex h-16 items-center px-6">
-          <h2 className="text-lg font-semibold text-sidebar-foreground">
-            Realty
-          </h2>
+          <Image
+            src="/logo.png"
+            alt="RealEase"
+            width={260}
+            height={74}
+            priority
+          />
         </div>
       </SidebarHeader>
       <SidebarContent>
