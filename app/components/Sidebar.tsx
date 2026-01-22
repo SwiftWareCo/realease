@@ -36,6 +36,11 @@ const navigation = [
     href: '/lead-forms',
     icon: FileText,
   },
+  {
+    name: 'Listings',
+    href: '/listings',
+    icon: Home,
+  },
 ];
 
 export function Sidebar() {
