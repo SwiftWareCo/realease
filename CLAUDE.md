@@ -67,6 +67,10 @@ realty/
 - Use functional components with hooks
 - Prefer named exports for components
 - Use `'use client'` directive only when necessary (client-side hooks, event handlers)
+- **Forms**: use `react-hook-form` for client forms unless there's a strong reason not to
+- **Purity**: avoid impure functions during render (e.g., `Date.now`, `Math.random`) and keep render output idempotent
+- **Modal state**: reset form/state on open (not on close) to avoid exit-animation flashes
+- **Dialogs/Modals**: keep them mounted and control open state via props; avoid `{open && <Dialog/>}` patterns that unmount and break exit animations
 
 ### Convex Integration
 
@@ -89,6 +93,7 @@ realty/
 - Install new shadcn components using: `npx shadcn@latest add [component-name]`
 - Components are located in `app/components/ui/`
 - Follow shadcn patterns and conventions
+- **User feedback**: add Sonner toast notifications for user-triggered actions (create/update/delete/submit) and surface failures with error toasts
 
 ### Styling
 
