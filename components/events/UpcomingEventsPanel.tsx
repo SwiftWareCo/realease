@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { useState } from 'react';
 import type { Id } from '@/convex/_generated/dataModel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ import {
     User,
 } from 'lucide-react';
 import { eventTypeConfig, type EnrichedEvent } from './event-types';
+import { LeadProfileModal } from '@/components/leads/LeadProfileModal';
 
 interface UpcomingEventsPanelProps {
     selectedDate: Date | null;
@@ -38,6 +39,14 @@ export function UpcomingEventsPanel({
     onEdit,
     onSelectDate,
 }: UpcomingEventsPanelProps) {
+    const [selectedLeadId, setSelectedLeadId] = useState<Id<'leads'> | null>(null);
+    const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
+
+    const handleLeadClick = (leadId: Id<'leads'>) => {
+        setSelectedLeadId(leadId);
+        setIsLeadModalOpen(true);
+    };
+
     const formatTime = (timestamp: number) => {
         return new Date(timestamp).toLocaleTimeString('en-US', {
             hour: 'numeric',
@@ -47,118 +56,129 @@ export function UpcomingEventsPanel({
     };
 
     return (
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-                {selectedDate ? (
-                    <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" onClick={onBackToOverview} className="h-8 w-8">
-                            <ArrowLeft className="h-4 w-4" />
-                        </Button>
-                        <CardTitle className="text-lg">
-                            {selectedDate.toLocaleDateString('en-US', {
-                                weekday: 'short',
-                                month: 'short',
-                                day: 'numeric',
-                            })}
+        <>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    {selectedDate ? (
+                        <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="icon" onClick={onBackToOverview} className="h-8 w-8">
+                                <ArrowLeft className="h-4 w-4" />
+                            </Button>
+                            <CardTitle className="text-lg">
+                                {selectedDate.toLocaleDateString('en-US', {
+                                    weekday: 'short',
+                                    month: 'short',
+                                    day: 'numeric',
+                                })}
+                            </CardTitle>
+                        </div>
+                    ) : (
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <CalendarDays className="h-5 w-5" />
+                            Upcoming Events
                         </CardTitle>
-                    </div>
-                ) : (
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <CalendarDays className="h-5 w-5" />
-                        Upcoming Events
-                    </CardTitle>
-                )}
-            </CardHeader>
-            <CardContent className="max-h-[600px] overflow-y-auto">
-                {selectedDate ? (
-                    selectedDateEvents.length === 0 ? (
+                    )}
+                </CardHeader>
+                <CardContent className="max-h-[600px] overflow-y-auto">
+                    {selectedDate ? (
+                        selectedDateEvents.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <CalendarDays className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                                <p>No events scheduled</p>
+                                <p className="text-sm mt-2">Use the "Add Event" button above to create one</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {selectedDateEvents.map((event) => (
+                                    <EventCard
+                                        key={event._id}
+                                        event={event}
+                                        onMarkComplete={onMarkComplete}
+                                        onSetReminder={() => onSetReminder(event)}
+                                        onEdit={() => onEdit(event)}
+                                        onLeadClick={handleLeadClick}
+                                    />
+                                ))}
+                            </div>
+                        )
+                    ) : !upcomingEvents || upcomingEvents.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                             <CalendarDays className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                            <p>No events scheduled</p>
-                            <p className="text-sm mt-2">Use the "Add Event" button above to create one</p>
+                            <p>No upcoming events</p>
+                            <p className="text-sm mt-1">Click a date to schedule one</p>
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {selectedDateEvents.map((event) => (
-                                <EventCard
-                                    key={event._id}
-                                    event={event}
-                                    onMarkComplete={onMarkComplete}
-                                    onSetReminder={() => onSetReminder(event)}
-                                    onEdit={() => onEdit(event)}
-                                />
-                            ))}
-                        </div>
-                    )
-                ) : !upcomingEvents || upcomingEvents.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                        <CalendarDays className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                        <p>No upcoming events</p>
-                        <p className="text-sm mt-1">Click a date to schedule one</p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {upcomingEvents.map((event) => {
-                            const eventDate = new Date(event.start_time);
-                            const today = new Date();
-                            const tomorrow = new Date(today);
-                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            {upcomingEvents.map((event) => {
+                                const eventDate = new Date(event.start_time);
+                                const today = new Date();
+                                const tomorrow = new Date(today);
+                                tomorrow.setDate(tomorrow.getDate() + 1);
 
-                            let dateLabel = eventDate.toLocaleDateString('en-US', {
-                                weekday: 'short',
-                                month: 'short',
-                                day: 'numeric',
-                            });
-                            if (eventDate.toDateString() === today.toDateString()) {
-                                dateLabel = 'Today';
-                            } else if (eventDate.toDateString() === tomorrow.toDateString()) {
-                                dateLabel = 'Tomorrow';
-                            }
+                                let dateLabel = eventDate.toLocaleDateString('en-US', {
+                                    weekday: 'short',
+                                    month: 'short',
+                                    day: 'numeric',
+                                });
+                                if (eventDate.toDateString() === today.toDateString()) {
+                                    dateLabel = 'Today';
+                                } else if (eventDate.toDateString() === tomorrow.toDateString()) {
+                                    dateLabel = 'Tomorrow';
+                                }
 
-                            const config = eventTypeConfig[event.event_type];
-                            const Icon = config.icon;
+                                const config = eventTypeConfig[event.event_type];
+                                const Icon = config.icon;
 
-                            return (
-                                <div
-                                    key={event._id}
-                                    className="p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer"
-                                    onClick={() => onSelectDate(eventDate)}
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className={`p-2 rounded-lg ${config.color} text-white shrink-0`}>
-                                            <Icon className="h-4 w-4" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <h4 className="font-medium text-sm truncate">{event.title}</h4>
-                                                <Badge variant="outline" className="text-[10px]">
-                                                    {config.label}
-                                                </Badge>
+                                return (
+                                    <div
+                                        key={event._id}
+                                        className="p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer"
+                                        onClick={() => onSelectDate(eventDate)}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <div className={`p-2 rounded-lg ${config.color} text-white shrink-0`}>
+                                                <Icon className="h-4 w-4" />
                                             </div>
-                                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                                <Badge variant="secondary" className="text-[10px]">
-                                                    {dateLabel}
-                                                </Badge>
-                                                <span className="flex items-center gap-1">
-                                                    <Clock className="h-3 w-3" />
-                                                    {formatTime(event.start_time)}
-                                                </span>
-                                            </div>
-                                            {event.lead && (
-                                                <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                                                    <User className="h-3 w-3" />
-                                                    {event.lead.name}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h4 className="font-medium text-sm truncate">{event.title}</h4>
+                                                    <Badge variant="outline" className="text-[10px]">
+                                                        {config.label}
+                                                    </Badge>
                                                 </div>
-                                            )}
+                                                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                                    <Badge variant="secondary" className="text-[10px]">
+                                                        {dateLabel}
+                                                    </Badge>
+                                                    <span className="flex items-center gap-1">
+                                                        <Clock className="h-3 w-3" />
+                                                        {formatTime(event.start_time)}
+                                                    </span>
+                                                </div>
+                                                {event.lead && (
+                                                    <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                                                        <User className="h-3 w-3" />
+                                                        {event.lead.name}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </CardContent>
-        </Card>
+                                );
+                            })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {selectedLeadId && (
+                <LeadProfileModal
+                    open={isLeadModalOpen}
+                    onOpenChange={setIsLeadModalOpen}
+                    leadId={selectedLeadId}
+                />
+            )}
+        </>
     );
 }
 
@@ -167,9 +187,10 @@ interface EventCardProps {
     onMarkComplete: (eventId: Id<'events'>, completed: boolean) => void;
     onSetReminder: () => void;
     onEdit: () => void;
+    onLeadClick: (leadId: Id<'leads'>) => void;
 }
 
-function EventCard({ event, onMarkComplete, onSetReminder, onEdit }: EventCardProps) {
+function EventCard({ event, onMarkComplete, onSetReminder, onEdit, onLeadClick }: EventCardProps) {
     const config = eventTypeConfig[event.event_type];
     const Icon = config.icon;
 
@@ -215,13 +236,16 @@ function EventCard({ event, onMarkComplete, onSetReminder, onEdit }: EventCardPr
                         {event.lead && (
                             <div className="flex items-center gap-1 mt-2">
                                 <User className="h-3 w-3 text-muted-foreground" />
-                                <Link
-                                    href={`/leads/${event.lead._id}`}
+                                <button
+                                    type="button"
                                     className="text-sm text-primary hover:underline"
-                                    onClick={(e) => e.stopPropagation()}
+                                    onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        onLeadClick(event.lead!._id);
+                                    }}
                                 >
                                     {event.lead.name}
-                                </Link>
+                                </button>
                             </div>
                         )}
 
