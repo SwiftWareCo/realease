@@ -1,17 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 
 export function WelcomeHeader() {
-    const [mounted, setMounted] = useState(false);
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
 
     const getTimeBasedGreeting = () => {
-        if (!mounted) return 'Welcome';
         const hour = new Date().getHours();
         if (hour < 12) return 'Good Morning';
         if (hour < 17) return 'Good Afternoon';
@@ -20,7 +14,6 @@ export function WelcomeHeader() {
 
     // Motivational message instead of redundant date
     const getMotivationalMessage = () => {
-        if (!mounted) return '';
         const messages = [
             'Ready to close some deals today?',
             'Make today count!',
@@ -53,7 +46,7 @@ export function WelcomeHeader() {
                     </h1>
                     <p className='mt-1 text-sm text-muted-foreground flex items-center gap-1.5'>
                         <Sparkles className='size-3.5' aria-hidden='true' />
-                        {mounted ? getMotivationalMessage() : <span className='invisible'>Loading...</span>}
+                        {getMotivationalMessage()} 
                     </p>
                 </div>
 
