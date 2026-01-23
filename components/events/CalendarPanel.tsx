@@ -160,16 +160,36 @@ export function CalendarPanel({
                                             {date.getDate()}
                                         </span>
                                         {hasEvents && (
-                                            <div className="flex-1 flex flex-col gap-0.5 mt-0.5 overflow-hidden">
-                                                {dayEvents.slice(0, 3).map((event) => {
+                                            <div className="flex-1 flex flex-col gap-1 mt-1 overflow-hidden">
+                                                {dayEvents.slice(0, 2).map((event) => {
                                                     const config = eventTypeConfig[event.event_type];
                                                     return (
                                                         <Tooltip key={event._id}>
                                                             <TooltipTrigger asChild>
                                                                 <div
-                                                                    className={`h-1.5 w-full rounded-full ${config.dotColor} ${isSelectedDate ? 'opacity-70' : ''}`}
+                                                                    className={`relative flex items-start gap-0 rounded-sm overflow-hidden ${isSelectedDate ? 'opacity-80' : ''}`}
+                                                                    style={{
+                                                                        backgroundColor: `color-mix(in srgb, ${config.color === 'bg-blue-500' ? '#3b82f6' : config.color === 'bg-purple-500' ? '#a855f7' : config.color === 'bg-yellow-500' ? '#eab308' : config.color === 'bg-green-500' ? '#22c55e' : config.color === 'bg-orange-500' ? '#f97316' : '#6b7280'} 20%, transparent)`
+                                                                    }}
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                />
+                                                                >
+                                                                    {/* Left accent bar */}
+                                                                    <div
+                                                                        className="w-1 self-stretch flex-shrink-0"
+                                                                        style={{
+                                                                            backgroundColor: config.color === 'bg-blue-500' ? '#3b82f6' : config.color === 'bg-purple-500' ? '#a855f7' : config.color === 'bg-yellow-500' ? '#eab308' : config.color === 'bg-green-500' ? '#22c55e' : config.color === 'bg-orange-500' ? '#f97316' : '#6b7280'
+                                                                        }}
+                                                                    />
+                                                                    {/* Event content */}
+                                                                    <div className="flex-1 px-1.5 py-0.5 min-w-0">
+                                                                        <div className={`text-[10px] font-medium leading-tight truncate ${isSelectedDate ? 'text-primary-foreground' : config.textColor}`}>
+                                                                            {event.title}
+                                                                        </div>
+                                                                        <div className={`text-[9px] leading-tight ${isSelectedDate ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                                                            {formatTime(event.start_time)}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                             </TooltipTrigger>
                                                             <TooltipContent side="top" className="max-w-[200px]">
                                                                 <div className="flex items-center gap-2">
@@ -183,11 +203,11 @@ export function CalendarPanel({
                                                         </Tooltip>
                                                     );
                                                 })}
-                                                {dayEvents.length > 3 && (
+                                                {dayEvents.length > 2 && (
                                                     <span
-                                                        className={`text-[10px] ${isSelectedDate ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}
+                                                        className={`text-[9px] ${isSelectedDate ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}
                                                     >
-                                                        +{dayEvents.length - 3} more
+                                                        +{dayEvents.length - 2} more
                                                     </span>
                                                 )}
                                             </div>
