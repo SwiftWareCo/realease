@@ -76,7 +76,7 @@ export function CalendarPanel({
     return (
         <TooltipProvider>
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardHeader className="flex flex-row items-center justify-between pb-1">
                     <CardTitle className="flex items-center gap-2">
                         <CalendarDays className="h-5 w-5" />
                         Calendar
@@ -89,8 +89,8 @@ export function CalendarPanel({
 
                 <div className="border-t border-border/50 mx-4" />
 
-                <CardContent className="pt-4">
-                    <div className="flex items-center justify-between mb-4">
+                <CardContent className="pt-2">
+                    <div className="flex items-center justify-between mb-2">
                         <Button variant="ghost" size="icon" onClick={onPrevMonth}>
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
