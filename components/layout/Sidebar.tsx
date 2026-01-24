@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FileText, CalendarDays, Home } from 'lucide-react';
+import { LayoutDashboard, FileText, CalendarDays, Home, ChevronRight, BarChart3, Users } from 'lucide-react';
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -13,9 +14,24 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
-const navigation = [
+type NavItem = {
+  name: string;
+  href: string;
+  icon: React.ElementType;
+  children?: { name: string; href: string; icon?: React.ElementType }[];
+};
+
+const navigation: NavItem[] = [
   {
     name: 'Homepage',
     href: '/',
@@ -25,6 +41,10 @@ const navigation = [
     name: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
+    children: [
+      { name: 'Leads', href: '/dashboard/leads', icon: Users },
+      { name: 'Insights', href: '/dashboard/insights', icon: BarChart3 },
+    ],
   },
   {
     name: 'Calendar',
@@ -49,10 +69,14 @@ export function Sidebar() {
   return (
     <ShadcnSidebar>
       <SidebarHeader>
-        <div className="flex h-16 items-center px-6">
-          <h2 className="text-lg font-semibold text-sidebar-foreground">
-            Realty
-          </h2>
+        <div className="flex h-14 items-center px-4">
+          <Image
+            src="/logo.png"
+            alt="RealEase"
+            width={180}
+            height={51}
+            priority
+          />
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -62,6 +86,51 @@ export function Sidebar() {
             <SidebarMenu>
               {navigation.map((item) => {
                 const isActive = pathname === item.href;
+                const isChildActive = item.children?.some(child => pathname === child.href);
+
+                // Items with children use Collapsible
+                if (item.children && item.children.length > 0) {
+                  return (
+                    <Collapsible
+                      key={item.name}
+                      asChild
+                      defaultOpen={isActive || isChildActive}
+                      className="group/collapsible"
+                    >
+                      <SidebarMenuItem>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                            isActive={isActive || isChildActive}
+                            tooltip={item.name}
+                          >
+                            <item.icon />
+                            <span>{item.name}</span>
+                            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {item.children.map((child) => (
+                              <SidebarMenuSubItem key={child.name}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  isActive={pathname === child.href}
+                                >
+                                  <Link href={child.href}>
+                                    {child.icon && <child.icon />}
+                                    <span>{child.name}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            ))}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </SidebarMenuItem>
+                    </Collapsible>
+                  );
+                }
+
+                // Regular items without children
                 return (
                   <SidebarMenuItem key={item.name}>
                     <SidebarMenuButton
@@ -84,3 +153,4 @@ export function Sidebar() {
     </ShadcnSidebar>
   );
 }
+

@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     User,
     Phone,
@@ -21,6 +22,7 @@ import {
     MessageSquare,
     Clock,
     Calendar,
+    Link2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { eventTypeConfig } from "@/components/events/event-types";
@@ -131,7 +133,7 @@ export function LeadProfileModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden gap-2">
                 <DialogHeader className="border-b pb-4">
                     {isLoading ? (
                         <DialogTitle className="sr-only">
@@ -146,7 +148,7 @@ export function LeadProfileModal({
                                     {lead.name}
                                     {getStatusBadge(lead.status)}
                                 </DialogTitle>
-                                <div className="flex items-center gap-2 mt-2">
+                                <div className="flex items-center gap-2 mt-1">
                                     {getIntentBadge(lead.intent)}
                                     <Badge
                                         variant="secondary"
@@ -171,16 +173,16 @@ export function LeadProfileModal({
                         This lead could not be found.
                     </div>
                 ) : (
-                    <div className="space-y-4 pt-4">
+                    <div className="space-y-2 pt-2">
                         {/* Contact Information */}
-                        <Card>
-                            <CardHeader className="pb-2">
+                        <Card className="py-3 gap-0">
+                            <CardHeader className="py-1.5 px-4">
                                 <CardTitle className="flex items-center gap-2 text-sm font-medium">
                                     <User className="h-4 w-4" />
                                     Contact Information
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-2 text-sm">
+                            <CardContent className="space-y-1.5 text-sm px-4">
                                 <div className="flex items-center gap-3">
                                     <Phone className="h-4 w-4 text-muted-foreground" />
                                     <span>{lead.phone}</span>
@@ -198,12 +200,13 @@ export function LeadProfileModal({
                                     </div>
                                 )}
                                 <div className="flex items-center gap-3 text-muted-foreground">
-                                    <Clock className="h-4 w-4" />
+                                    <Link2 className="h-4 w-4" />
                                     <span>Source: {lead.source}</span>
                                 </div>
                                 {lead.timeline && (
-                                    <div className="text-muted-foreground">
-                                        Timeline: {lead.timeline}
+                                    <div className="flex items-center gap-3 text-muted-foreground">
+                                        <Clock className="h-4 w-4" />
+                                        <span>Timeline: {lead.timeline}</span>
                                     </div>
                                 )}
                             </CardContent>
@@ -211,16 +214,16 @@ export function LeadProfileModal({
 
                         {/* AI Insights */}
                         {(lead.conversion_prediction || lead.ai_suggestion) && (
-                            <Card>
-                                <CardHeader className="pb-2">
+                            <Card className="py-3 gap-0">
+                                <CardHeader className="py-1.5 px-4">
                                     <CardTitle className="flex items-center gap-2 text-sm font-medium">
                                         <TrendingUp className="h-4 w-4" />
                                         AI Insights
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-2">
+                                <CardContent className="space-y-1.5 px-4">
                                     {lead.conversion_prediction && (
-                                        <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-sm">
+                                        <div className="p-1.5 pl-3 bg-blue-50 dark:bg-blue-950/30 rounded text-sm">
                                             <p className="font-medium text-blue-900 dark:text-blue-200">
                                                 Conversion
                                             </p>
@@ -230,7 +233,7 @@ export function LeadProfileModal({
                                         </div>
                                     )}
                                     {lead.ai_suggestion && (
-                                        <div className="p-2 bg-yellow-50 dark:bg-yellow-950/30 rounded text-sm">
+                                        <div className="p-1.5 pl-3 bg-yellow-50 dark:bg-yellow-950/30 rounded text-sm">
                                             <p className="font-medium text-yellow-900 dark:text-yellow-200">
                                                 💡 Suggestion
                                             </p>
@@ -245,14 +248,14 @@ export function LeadProfileModal({
 
                         {/* Notes */}
                         {lead.notes && (
-                            <Card>
-                                <CardHeader className="pb-2">
+                            <Card className="py-3 gap-1">
+                                <CardHeader className="py-1.5 px-4">
                                     <CardTitle className="flex items-center gap-2 text-sm font-medium">
                                         <MessageSquare className="h-4 w-4" />
                                         Notes
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="px-4">
                                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                                         {lead.notes}
                                     </p>
@@ -261,8 +264,8 @@ export function LeadProfileModal({
                         )}
 
                         {/* Events */}
-                        <Card>
-                            <CardHeader className="pb-2">
+                        <Card className="py-3 gap-0">
+                            <CardHeader className="py-1.5 px-4">
                                 <CardTitle className="flex items-center gap-2 text-sm font-medium">
                                     <Calendar className="h-4 w-4" />
                                     Events (
@@ -271,69 +274,68 @@ export function LeadProfileModal({
                                     )
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="px-4">
                                 {upcomingEvents.length === 0 &&
-                                pastEvents.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                    pastEvents.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground text-center py-2">
                                         No events scheduled
                                     </p>
                                 ) : (
-                                    <div className="space-y-2">
-                                        {upcomingEvents.length > 0 && (
-                                            <div>
-                                                <p className="text-xs font-medium text-muted-foreground mb-1">
-                                                    Upcoming
-                                                </p>
-                                                {upcomingEvents.map((event) => {
-                                                    const config =
-                                                        eventTypeConfig[
-                                                            event.event_type as keyof typeof eventTypeConfig
-                                                        ];
-                                                    return (
-                                                        <div
-                                                            key={event._id}
-                                                            className="p-2 rounded border hover:bg-accent cursor-pointer transition-colors flex items-center gap-2"
-                                                            onClick={() =>
-                                                                handleEventClick(
-                                                                    event,
-                                                                )
-                                                            }
-                                                        >
-                                                            <div
-                                                                className={`w-2 h-2 rounded-full ${config?.dotColor ?? "bg-gray-500"}`}
-                                                            />
-                                                            <div className="flex-1 min-w-0">
-                                                                <span className="text-sm font-medium truncate">
-                                                                    {
-                                                                        event.title
-                                                                    }
-                                                                </span>
-                                                                <span className="text-xs text-muted-foreground ml-2">
-                                                                    {formatDate(
-                                                                        event.start_time,
-                                                                    )}{" "}
-                                                                    at{" "}
-                                                                    {formatTime(
-                                                                        event.start_time,
-                                                                    )}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                        {pastEvents.length > 0 && (
-                                            <div>
-                                                <p className="text-xs font-medium text-muted-foreground mb-1 mt-3">
-                                                    Past
-                                                </p>
-                                                {pastEvents
-                                                    .slice(0, 3)
-                                                    .map((event) => {
+                                    <ScrollArea className="h-40 px-3">
+                                        <div className="space-y-2">
+                                            {upcomingEvents.length > 0 && (
+                                                <div>
+                                                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                                                        Upcoming
+                                                    </p>
+                                                    {upcomingEvents.map((event) => {
                                                         const config =
                                                             eventTypeConfig[
-                                                                event.event_type as keyof typeof eventTypeConfig
+                                                            event.event_type as keyof typeof eventTypeConfig
+                                                            ];
+                                                        return (
+                                                            <div
+                                                                key={event._id}
+                                                                className="p-2 rounded border hover:bg-accent cursor-pointer transition-colors flex items-center gap-2"
+                                                                onClick={() =>
+                                                                    handleEventClick(
+                                                                        event,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <div
+                                                                    className={`w-2 h-2 rounded-full ${config?.dotColor ?? "bg-gray-500"}`}
+                                                                />
+                                                                <div className="flex-1 min-w-0">
+                                                                    <span className="text-sm font-medium truncate">
+                                                                        {
+                                                                            event.title
+                                                                        }
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground ml-2">
+                                                                        {formatDate(
+                                                                            event.start_time,
+                                                                        )}{" "}
+                                                                        at{" "}
+                                                                        {formatTime(
+                                                                            event.start_time,
+                                                                        )}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                            {pastEvents.length > 0 && (
+                                                <div>
+                                                    <p className="text-xs font-medium text-muted-foreground mb-1 mt-2">
+                                                        Past
+                                                    </p>
+                                                    {pastEvents.map((event) => {
+                                                        const config =
+                                                            eventTypeConfig[
+                                                            event.event_type as keyof typeof eventTypeConfig
                                                             ];
                                                         return (
                                                             <div
@@ -363,9 +365,10 @@ export function LeadProfileModal({
                                                             </div>
                                                         );
                                                     })}
-                                            </div>
-                                        )}
-                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </ScrollArea>
                                 )}
                             </CardContent>
                         </Card>
