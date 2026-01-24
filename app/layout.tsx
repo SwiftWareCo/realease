@@ -1,12 +1,8 @@
 import type { Metadata } from "next";
 import { Open_Sans, IBM_Plex_Mono, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
-import { ConvexClientProvider } from "./providers/ConvexClientProvider";
 import { ThemeProvider } from "./providers/ThemeProvider";
-import { Sidebar } from "./components/Sidebar";
-import { TopBar } from "./components/TopBar";
-import { Toaster } from "sonner";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { ClerkProvider } from "@clerk/nextjs";
 
 const openSans = Open_Sans({
     variable: "--font-sans",
@@ -39,25 +35,16 @@ export default function RootLayout({
             <body
                 className={`${openSans.variable} ${ibmPlexMono.variable} ${sourceSerif4.variable} h-svh overflow-hidden antialiased`}
             >
-                <ThemeProvider
-                    attribute="class"
-                    defaultTheme="system"
-                    enableSystem
-                    disableTransitionOnChange
-                >
-                    <ConvexClientProvider>
-                        <SidebarProvider className="h-svh overflow-hidden">
-                            <Sidebar />
-                            <SidebarInset className="min-h-0">
-                                <TopBar />
-                                <main className="flex-1 min-h-0 overflow-y-auto">
-                                    {children}
-                                </main>
-                            </SidebarInset>
-                        </SidebarProvider>
-                        <Toaster richColors position="top-right" />
-                    </ConvexClientProvider>
-                </ThemeProvider>
+                <ClerkProvider afterSignOutUrl={"/"}>
+                    <ThemeProvider
+                        attribute="class"
+                        defaultTheme="system"
+                        enableSystem
+                        disableTransitionOnChange
+                    >
+                        {children}
+                    </ThemeProvider>
+                </ClerkProvider>
             </body>
         </html>
     );

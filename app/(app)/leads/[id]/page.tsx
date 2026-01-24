@@ -1,4 +1,4 @@
-import { LeadProfile } from '@/components/leads/LeadProfile';
+import { LeadProfile } from '@/app/(app)/leads/components/LeadProfile';
 import type { Id } from '@/convex/_generated/dataModel';
 
 interface LeadPageProps {

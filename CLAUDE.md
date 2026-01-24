@@ -114,11 +114,21 @@ realty/
 
 - **Next.js Environment Variables** (stored in `.env.local`):
   - `NEXT_PUBLIC_CONVEX_URL` (required) - Convex deployment URL
+  - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (required for Clerk client)
+  - `CLERK_SECRET_KEY` (required for Clerk server)
 - **Convex Environment Variables** (must be set in Convex Dashboard):
   - `OPENROUTER_API_KEY` (required for AI lead analysis) - Set in Convex Dashboard → Settings → Environment Variables
+  - `CLERK_JWT_ISSUER_DOMAIN` (required for Clerk auth) - use the Convex JWT template issuer domain from Clerk
+  - `CLERK_WEBHOOK_SECRET` (required for Clerk webhooks) - from Clerk webhook signing secret
   - Any other environment variables used by Convex functions must be added to the Convex Dashboard, not `.env.local`
 
 **Important**: Convex functions run in the Convex cloud, not in your Next.js app. Environment variables used by Convex actions/mutations must be configured in the Convex Dashboard, not in `.env.local`.
+
+## Authentication (Clerk + Convex)
+
+- **Middleware**: use `proxy.ts` (Next.js 16) with `clerkMiddleware` and the standard matcher.
+- **Client auth state**: use `useConvexAuth` and `<Authenticated>/<Unauthenticated>` from `convex/react` (not Clerk UI helpers) when gating Convex data.
+- **User sync**: Clerk webhooks POST to `convex/http.ts` and upsert/delete in the `users` table.
 
 ## Common Patterns
 

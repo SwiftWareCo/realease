@@ -1,4 +1,4 @@
-import { LeadsDashboard } from "@/components/leads/LeadsDashboard";
+import { LeadsDashboard } from "@/app/(app)/leads/components/LeadsDashboard";
 
 export default function DashboardPage() {
   return (
