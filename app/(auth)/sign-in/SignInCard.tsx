@@ -35,21 +35,9 @@ export function SignInCard() {
                         colorMuted: "hsl(var(--muted))",
                         colorBackground: "hsl(var(--background))",
                         colorInput: "hsl(var(--input))",
+                        colorBorder: "white",
                         colorInputForeground: "hsl(var(--foreground))",
-                        colorBorder: "hsl(var(--border))",
-                        colorRing: "hsl(var(--ring))",
-                        colorShadow: "hsl(var(--shadow-color))",
                         colorNeutral: "hsl(var(--muted-foreground))",
-                        borderRadius: "1rem",
-                        spacing: "1rem",
-                    },
-                    elements: {
-                        socialButtonsBlockButton: "text-foreground",
-                        socialButtonsBlockButtonText: "!text-foreground",
-                        socialButtonsBlockButton__google: "text-foreground",
-                        socialButtonsBlockButtonText__google:
-                            "!text-foreground",
-                        formButtonPrimary: "text-primary-foreground",
                     },
                 }}
             />

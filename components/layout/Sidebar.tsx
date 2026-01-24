@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FileText, CalendarDays, Home, ChevronRight, BarChart3, Users } from 'lucide-react';
+import { LayoutDashboard,CalendarDays, Home, ChevronRight, BarChart3, Users } from 'lucide-react';
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -50,11 +50,6 @@ const navigation: NavItem[] = [
     name: 'Calendar',
     href: '/calendar',
     icon: CalendarDays,
-  },
-  {
-    name: 'Lead Forms',
-    href: '/lead-forms',
-    icon: FileText,
   },
   {
     name: 'Listings',

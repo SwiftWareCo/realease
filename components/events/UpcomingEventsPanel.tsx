@@ -16,7 +16,7 @@ import {
     User,
 } from "lucide-react";
 import { eventTypeConfig, type EnrichedEvent } from "./event-types";
-import { LeadProfileModal } from "@/components/leads/LeadProfileModal";
+import { LeadProfileModal } from "../../app/(app)/leads/components/LeadProfileModal";
 
 interface UpcomingEventsPanelProps {
     selectedDate: Date | null;
