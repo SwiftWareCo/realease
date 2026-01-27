@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard,CalendarDays, Home, ChevronRight, BarChart3, Users } from 'lucide-react';
+import { CalendarDays, Home, ChevronRight, Users, Network, UserCheck, ShoppingCart, Store } from 'lucide-react';
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -28,7 +28,7 @@ type NavItem = {
   name: string;
   href: string;
   icon: React.ElementType;
-  children?: { name: string; href: string; icon?: React.ElementType }[];
+  children?: { name: string; href: string; icon?: React.ElementType; children?: { name: string; href: string; icon?: React.ElementType }[] }[];
 };
 
 const navigation: NavItem[] = [
@@ -38,12 +38,20 @@ const navigation: NavItem[] = [
     icon: Home,
   },
   {
-    name: 'Dashboard',
-    href: '/dashboard',
-    icon: LayoutDashboard,
+    name: 'Leads',
+    href: '/leads',
+    icon: Users,
     children: [
-      { name: 'Leads', href: '/dashboard/leads', icon: Users },
-      { name: 'Insights', href: '/dashboard/insights', icon: BarChart3 },
+      { name: 'Network', href: '/leads/network', icon: Network },
+      {
+        name: 'Active',
+        href: '/leads/active',
+        icon: UserCheck,
+        children: [
+          { name: 'Buyer', href: '/leads/active/buyer', icon: ShoppingCart },
+          { name: 'Seller', href: '/leads/active/seller', icon: Store },
+        ]
+      },
     ],
   },
   {
@@ -81,7 +89,10 @@ export function Sidebar() {
             <SidebarMenu>
               {navigation.map((item) => {
                 const isActive = pathname === item.href;
-                const isChildActive = item.children?.some(child => pathname === child.href);
+                const isChildActive = item.children?.some(child =>
+                  pathname === child.href ||
+                  child.children?.some(grandchild => pathname === grandchild.href)
+                );
 
                 // Items with children use Collapsible
                 if (item.children && item.children.length > 0) {
@@ -105,19 +116,66 @@ export function Sidebar() {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub>
-                            {item.children.map((child) => (
-                              <SidebarMenuSubItem key={child.name}>
-                                <SidebarMenuSubButton
-                                  asChild
-                                  isActive={pathname === child.href}
-                                >
-                                  <Link href={child.href}>
-                                    {child.icon && <child.icon />}
-                                    <span>{child.name}</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            ))}
+                            {item.children.map((child) => {
+                              const isChildItemActive = pathname === child.href;
+                              const isGrandchildActive = child.children?.some(grandchild => pathname === grandchild.href);
+
+                              // Child items with their own children (nested collapsible)
+                              if (child.children && child.children.length > 0) {
+                                return (
+                                  <Collapsible
+                                    key={child.name}
+                                    asChild
+                                    defaultOpen={isChildItemActive || isGrandchildActive}
+                                    className="group/nested"
+                                  >
+                                    <SidebarMenuSubItem>
+                                      <CollapsibleTrigger asChild>
+                                        <SidebarMenuSubButton
+                                          isActive={isChildItemActive || isGrandchildActive}
+                                        >
+                                          {child.icon && <child.icon />}
+                                          <span>{child.name}</span>
+                                          <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/nested:rotate-90" />
+                                        </SidebarMenuSubButton>
+                                      </CollapsibleTrigger>
+                                      <CollapsibleContent>
+                                        <SidebarMenuSub className="ml-4">
+                                          {child.children.map((grandchild) => (
+                                            <SidebarMenuSubItem key={grandchild.name}>
+                                              <SidebarMenuSubButton
+                                                asChild
+                                                isActive={pathname === grandchild.href}
+                                              >
+                                                <Link href={grandchild.href}>
+                                                  {grandchild.icon && <grandchild.icon />}
+                                                  <span>{grandchild.name}</span>
+                                                </Link>
+                                              </SidebarMenuSubButton>
+                                            </SidebarMenuSubItem>
+                                          ))}
+                                        </SidebarMenuSub>
+                                      </CollapsibleContent>
+                                    </SidebarMenuSubItem>
+                                  </Collapsible>
+                                );
+                              }
+
+                              // Regular child items without grandchildren
+                              return (
+                                <SidebarMenuSubItem key={child.name}>
+                                  <SidebarMenuSubButton
+                                    asChild
+                                    isActive={pathname === child.href}
+                                  >
+                                    <Link href={child.href}>
+                                      {child.icon && <child.icon />}
+                                      <span>{child.name}</span>
+                                    </Link>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              );
+                            })}
                           </SidebarMenuSub>
                         </CollapsibleContent>
                       </SidebarMenuItem>
