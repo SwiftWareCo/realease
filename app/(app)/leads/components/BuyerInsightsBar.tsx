@@ -104,14 +104,14 @@ export function BuyerInsightsBar() {
     };
 
     return (
-        <Card className="p-4 mb-6 bg-gradient-to-r from-card via-card to-card/80 border-border/50 backdrop-blur-sm">
+        <Card className="p-3 bg-gradient-to-r from-card via-card to-card/80 border-border/50 backdrop-blur-sm">
             <div className="flex items-center justify-between flex-wrap gap-4">
                 {/* Total count badge */}
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
-                        <Users className="h-4 w-4 text-primary" />
-                        <span className="font-semibold text-sm">{totalActive}</span>
-                        <span className="text-muted-foreground text-sm">Active Buyers</span>
+                    <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20">
+                        <Users className="h-3.5 w-3.5 text-primary" />
+                        <span className="font-semibold text-xs">{totalActive}</span>
+                        <span className="text-muted-foreground text-xs">Active Buyers</span>
                     </div>
                 </div>
 
@@ -122,7 +122,7 @@ export function BuyerInsightsBar() {
                             <Badge
                                 key={index}
                                 variant="outline"
-                                className={`flex items-center gap-1.5 px-3 py-1.5 font-medium ${getTypeStyles(alert.type)}`}
+                                className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium ${getTypeStyles(alert.type)}`}
                             >
                                 {alert.icon}
                                 <span className="font-bold">{alert.count}</span>

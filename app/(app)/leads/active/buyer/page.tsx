@@ -5,43 +5,42 @@ import { Plus, Download, Filter } from "lucide-react";
 
 export default function BuyerPage() {
     return (
-        <div className="p-6 lg:p-8 min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
-            {/* Header Section */}
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-                <div className="space-y-1">
+        <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden bg-gradient-to-br from-background via-background to-muted/20">
+            {/* Compact Header */}
+            <div className="flex-shrink-0 px-6 pt-4 pb-3">
+                <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-2 h-8 rounded-full bg-gradient-to-b from-blue-500 to-purple-600" />
-                        <h1 className="text-3xl font-bold tracking-tight">
-                            Buyer Pipeline
-                        </h1>
+                        <div className="w-1.5 h-6 rounded-full bg-gradient-to-b from-blue-500 to-purple-600" />
+                        <h1 className="text-2xl font-bold tracking-tight">Buyer Pipeline</h1>
                     </div>
-                    <p className="text-muted-foreground ml-5">
-                        Track your buyers from initial search to closing
-                    </p>
-                </div>
 
-                {/* Quick Actions */}
-                <div className="flex items-center gap-2 ml-5 lg:ml-0">
-                    <Button variant="outline" size="sm" className="gap-2">
-                        <Filter className="h-4 w-4" />
-                        <span className="hidden sm:inline">Filter</span>
-                    </Button>
-                    <Button variant="outline" size="sm" className="gap-2">
-                        <Download className="h-4 w-4" />
-                        <span className="hidden sm:inline">Export</span>
-                    </Button>
-                    <Button size="sm" className="gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-                        <Plus className="h-4 w-4" />
-                        <span>Add Buyer</span>
-                    </Button>
+                    {/* Quick Actions */}
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="gap-2 h-8">
+                            <Filter className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Filter</span>
+                        </Button>
+                        <Button variant="outline" size="sm" className="gap-2 h-8">
+                            <Download className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Export</span>
+                        </Button>
+                        <Button size="sm" className="gap-2 h-8 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                            <Plus className="h-3.5 w-3.5" />
+                            <span>Add Buyer</span>
+                        </Button>
+                    </div>
                 </div>
             </div>
 
             {/* Insights Bar */}
-            <BuyerInsightsBar />
+            <div className="flex-shrink-0 px-6 pb-3">
+                <BuyerInsightsBar />
+            </div>
 
-            {/* Kanban Board */}
-            <BuyerKanbanBoard />
+            {/* Kanban Board - takes remaining space */}
+            <div className="flex-1 min-h-0 px-6 pb-4">
+                <BuyerKanbanBoard />
+            </div>
         </div>
     );
 }

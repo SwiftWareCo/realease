@@ -246,7 +246,7 @@ export function BuyerKanbanBoard() {
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
             >
-                <div className="grid grid-cols-5 gap-4 h-[calc(100vh-280px)]">
+                <div className="grid grid-cols-5 gap-4 h-full">
                     {buyerStages.map((stage) => (
                         <StageColumn
                             key={stage.id}
