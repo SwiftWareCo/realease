@@ -50,3 +50,28 @@ export const getLeadById = query({
         return lead;
     },
 });
+
+export const getBuyerLeads = query({
+    args: {},
+    handler: async (ctx) => {
+        const leads = await ctx.db
+            .query("leads")
+            .withIndex("by_lead_type", (q) => q.eq("lead_type", "buyer"))
+            .order("desc")
+            .collect();
+        return leads;
+    },
+});
+
+export const getSellerLeads = query({
+    args: {},
+    handler: async (ctx) => {
+        const leads = await ctx.db
+            .query("leads")
+            .withIndex("by_lead_type", (q) => q.eq("lead_type", "seller"))
+            .order("desc")
+            .collect();
+        return leads;
+    },
+});
+

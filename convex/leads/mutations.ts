@@ -52,3 +52,64 @@ export const updateLeadStatus = mutation({
     });
   },
 });
+
+export const updateBuyerPipelineStage = mutation({
+  args: {
+    id: v.id("leads"),
+    stage: v.union(
+      v.literal("searching"),
+      v.literal("showings"),
+      v.literal("offer_out"),
+      v.literal("under_contract"),
+      v.literal("closed"),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      buyer_pipeline_stage: args.stage,
+    });
+  },
+});
+
+export const updateSellerPipelineStage = mutation({
+  args: {
+    id: v.id("leads"),
+    stage: v.union(
+      v.literal("pre_listing"),
+      v.literal("on_market"),
+      v.literal("offer_in"),
+      v.literal("under_contract"),
+      v.literal("sold"),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      seller_pipeline_stage: args.stage,
+    });
+  },
+});
+
+// For future Network page integration - assign lead as buyer or seller
+export const setLeadType = mutation({
+  args: {
+    id: v.id("leads"),
+    leadType: v.union(v.literal("buyer"), v.literal("seller")),
+    // Initial pipeline stage when assigning
+    initialBuyerStage: v.optional(v.literal("searching")),
+    initialSellerStage: v.optional(v.literal("pre_listing")),
+  },
+  handler: async (ctx, args) => {
+    const updates: Record<string, unknown> = {
+      lead_type: args.leadType,
+    };
+
+    if (args.leadType === "buyer") {
+      updates.buyer_pipeline_stage = args.initialBuyerStage ?? "searching";
+    } else {
+      updates.seller_pipeline_stage = args.initialSellerStage ?? "pre_listing";
+    }
+
+    await ctx.db.patch(args.id, updates);
+  },
+});
+
