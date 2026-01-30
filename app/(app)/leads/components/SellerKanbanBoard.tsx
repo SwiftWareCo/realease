@@ -162,7 +162,7 @@ function StageColumn({
     });
 
     return (
-        <div className="flex flex-col h-full min-w-[280px]">
+        <div className="flex flex-col h-full flex-1 min-w-0">
             <Card className={`flex-1 flex flex-col border-t-4 ${color.replace('bg-', 'border-t-')} bg-card/50 backdrop-blur-sm`}>
                 <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
@@ -276,7 +276,7 @@ export function SellerKanbanBoard() {
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
             >
-                <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-280px)]">
+                <div className="grid grid-cols-5 gap-4 h-[calc(100vh-280px)]">
                     {sellerStages.map((stage) => (
                         <StageColumn
                             key={stage.id}
