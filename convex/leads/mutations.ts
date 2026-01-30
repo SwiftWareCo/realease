@@ -113,3 +113,35 @@ export const setLeadType = mutation({
   },
 });
 
+// Public mutation for manually creating leads from the UI
+export const createLead = mutation({
+  args: {
+    name: v.string(),
+    phone: v.string(),
+    email: v.optional(v.string()),
+    property_address: v.optional(v.string()),
+    timeline: v.optional(v.string()),
+    intent: v.union(v.literal("buyer"), v.literal("seller"), v.literal("investor")),
+    source: v.string(),
+    urgency_score: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    status: v.optional(v.union(v.literal("new"), v.literal("contacted"), v.literal("qualified"))),
+  },
+  handler: async (ctx, args) => {
+    const leadId = await ctx.db.insert("leads", {
+      name: args.name,
+      phone: args.phone,
+      email: args.email,
+      property_address: args.property_address,
+      timeline: args.timeline,
+      intent: args.intent,
+      source: args.source,
+      urgency_score: args.urgency_score ?? 50, // Default urgency
+      status: args.status ?? "new",
+      notes: args.notes,
+      message_count: 0,
+      created_at: Date.now(),
+    });
+    return leadId;
+  },
+});

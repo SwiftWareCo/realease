@@ -35,23 +35,29 @@ import {
     AlertCircle,
     TrendingUp,
     MessageSquare,
+    Plus,
 } from "lucide-react";
 import { LeadsKanbanBoard } from "./LeadsKanbanBoard";
+import { AddLeadModal } from "./AddLeadModal";
 
 export function LeadsDashboard() {
     const [viewMode, setViewMode] = useState<"table" | "kanban">("kanban");
     const [statusFilter, setStatusFilter] = useState<
         "all" | "new" | "contacted" | "qualified"
     >("all");
+    const [intentFilter, setIntentFilter] = useState<
+        "all" | "buyer" | "seller" | "investor"
+    >("all");
+    const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
     const allLeads = useQuery(api.leads.queries.getAllLeads);
     const updateStatus = useMutation(api.leads.mutations.updateLeadStatus);
 
-    const leads =
-        statusFilter === "all"
-            ? allLeads
-            : allLeads?.filter(
-                  (lead: Doc<"leads">) => lead.status === statusFilter,
-              );
+    // Apply both status and intent filters
+    const leads = allLeads?.filter((lead: Doc<"leads">) => {
+        const statusMatch = statusFilter === "all" || lead.status === statusFilter;
+        const intentMatch = intentFilter === "all" || lead.intent === intentFilter;
+        return statusMatch && intentMatch;
+    });
 
     const handleStatusUpdate = async (
         leadId: Id<"leads">,
@@ -287,15 +293,14 @@ export function LeadsDashboard() {
                                             )}
                                             {lead.last_message_content && (
                                                 <div
-                                                    className={`p-2 rounded text-xs ${
-                                                        lead.last_message_sentiment ===
+                                                    className={`p-2 rounded text-xs ${lead.last_message_sentiment ===
                                                         "positive"
-                                                            ? "bg-green-100 dark:bg-green-950/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800"
-                                                            : lead.last_message_sentiment ===
-                                                                "negative"
-                                                              ? "bg-red-100 dark:bg-red-950/20 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800"
-                                                              : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700"
-                                                    }`}
+                                                        ? "bg-green-100 dark:bg-green-950/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800"
+                                                        : lead.last_message_sentiment ===
+                                                            "negative"
+                                                            ? "bg-red-100 dark:bg-red-950/20 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800"
+                                                            : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700"
+                                                        }`}
                                                 >
                                                     💬 Latest reply: &quot;
                                                     {lead.last_message_content}
@@ -418,34 +423,64 @@ export function LeadsDashboard() {
                                     </TabsTrigger>
                                 </TabsList>
                             </Tabs>
-                            {viewMode === "table" && (
-                                <Select
-                                    value={statusFilter}
-                                    onValueChange={(
-                                        value:
-                                            | "all"
-                                            | "new"
-                                            | "contacted"
-                                            | "qualified",
-                                    ) => setStatusFilter(value)}
-                                >
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="Filter by status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">
-                                            All Statuses
-                                        </SelectItem>
-                                        <SelectItem value="new">New</SelectItem>
-                                        <SelectItem value="contacted">
-                                            Contacted
-                                        </SelectItem>
-                                        <SelectItem value="qualified">
-                                            Qualified
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            )}
+                            {/* Status Filter */}
+                            <Select
+                                value={statusFilter}
+                                onValueChange={(
+                                    value:
+                                        | "all"
+                                        | "new"
+                                        | "contacted"
+                                        | "qualified",
+                                ) => setStatusFilter(value)}
+                            >
+                                <SelectTrigger className="w-[140px]">
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All Statuses
+                                    </SelectItem>
+                                    <SelectItem value="new">New</SelectItem>
+                                    <SelectItem value="contacted">
+                                        Contacted
+                                    </SelectItem>
+                                    <SelectItem value="qualified">
+                                        Qualified
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {/* Intent Filter */}
+                            <Select
+                                value={intentFilter}
+                                onValueChange={(
+                                    value:
+                                        | "all"
+                                        | "buyer"
+                                        | "seller"
+                                        | "investor",
+                                ) => setIntentFilter(value)}
+                            >
+                                <SelectTrigger className="w-[140px]">
+                                    <SelectValue placeholder="Category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All Categories
+                                    </SelectItem>
+                                    <SelectItem value="buyer">Buyer</SelectItem>
+                                    <SelectItem value="seller">Seller</SelectItem>
+                                    <SelectItem value="investor">Investor</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {/* Add Lead Button */}
+                            <Button
+                                onClick={() => setIsAddLeadOpen(true)}
+                                className="gap-2 bg-gradient-to-r from-primary to-primary/80"
+                            >
+                                <Plus className="h-4 w-4" />
+                                Add Lead
+                            </Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -577,36 +612,36 @@ export function LeadsDashboard() {
                                                     <div className="flex gap-1">
                                                         {lead.status !==
                                                             "contacted" && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() =>
-                                                                    handleStatusUpdate(
-                                                                        lead._id,
-                                                                        "contacted",
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Clock className="h-3 w-3 mr-1" />
-                                                                Contact
-                                                            </Button>
-                                                        )}
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() =>
+                                                                        handleStatusUpdate(
+                                                                            lead._id,
+                                                                            "contacted",
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Clock className="h-3 w-3 mr-1" />
+                                                                    Contact
+                                                                </Button>
+                                                            )}
                                                         {lead.status !==
                                                             "qualified" && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() =>
-                                                                    handleStatusUpdate(
-                                                                        lead._id,
-                                                                        "qualified",
-                                                                    )
-                                                                }
-                                                            >
-                                                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                                                Qualify
-                                                            </Button>
-                                                        )}
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() =>
+                                                                        handleStatusUpdate(
+                                                                            lead._id,
+                                                                            "qualified",
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                                                    Qualify
+                                                                </Button>
+                                                            )}
                                                     </div>
                                                 </TableCell>
                                             </TableRow>
@@ -673,6 +708,10 @@ export function LeadsDashboard() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Add Lead Modal */}
+            <AddLeadModal open={isAddLeadOpen} onOpenChange={setIsAddLeadOpen} />
         </div>
     );
 }
+
