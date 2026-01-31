@@ -203,10 +203,11 @@ export function LeadsDashboard() {
         <div className="flex flex-col h-full">
             {/* Header Row: Total count + Priority Alerts */}
             <div className="flex items-center justify-between gap-4 mb-3 flex-shrink-0">
-                {/* Left side - just total count */}
-                <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">
-                        <span className="font-semibold text-foreground">{stats.total}</span> leads
+                {/* Left side - Total Leads badge */}
+                <div className="flex items-center px-3 py-1.5 rounded-lg bg-muted/50 border">
+                    <span className="text-xs">
+                        <span className="text-muted-foreground">Total Leads:</span>{" "}
+                        <span className="font-bold">{stats.total}</span>
                     </span>
                 </div>
 

@@ -125,44 +125,34 @@ export function SellerInsightsBar() {
     };
 
     return (
-        <Card className="p-3 bg-gradient-to-r from-card via-card to-card/80 border-border/50 backdrop-blur-sm">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-                {/* Total count badges */}
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20">
-                        <Home className="h-3.5 w-3.5 text-primary" />
-                        <span className="font-semibold text-xs">{totalActive}</span>
-                        <span className="text-muted-foreground text-xs">Active Listings</span>
-                    </div>
-                    {soldThisMonth > 0 && (
-                        <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-green-500/10 border border-green-500/20">
-                            <DollarSign className="h-3.5 w-3.5 text-green-600" />
-                            <span className="font-semibold text-xs text-green-700 dark:text-green-400">{soldThisMonth}</span>
-                            <span className="text-green-600/80 text-xs">Sold</span>
-                        </div>
-                    )}
-                </div>
-
-                {/* Insight alerts */}
-                <div className="flex items-center gap-2 flex-wrap">
-                    {alerts.map((alert, index) => (
-                        <Badge
-                            key={index}
-                            variant="outline"
-                            className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium ${getTypeStyles(alert.type)}`}
-                        >
-                            {alert.icon}
-                            <span className="font-bold">{alert.count}</span>
-                            <span className="hidden sm:inline">{alert.label}</span>
-                        </Badge>
-                    ))}
-                    {alerts.length === 0 && (
-                        <span className="text-sm text-muted-foreground italic">
-                            No active alerts — all listings are on track
-                        </span>
-                    )}
-                </div>
+        <div className="flex items-center gap-2 flex-wrap">
+            {/* Total count card */}
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+                <Home className="h-3.5 w-3.5 text-primary" />
+                <span className="font-semibold text-xs">{totalActive}</span>
+                <span className="text-muted-foreground text-xs">Active Listings</span>
             </div>
-        </Card>
+
+            {/* Sold this month card */}
+            {soldThisMonth > 0 && (
+                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <DollarSign className="h-3.5 w-3.5 text-green-600" />
+                    <span className="font-semibold text-xs text-green-700 dark:text-green-400">{soldThisMonth}</span>
+                    <span className="text-green-600/80 text-xs">Sold</span>
+                </div>
+            )}
+
+            {/* Insight alert cards */}
+            {alerts.map((alert, index) => (
+                <div
+                    key={index}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${getTypeStyles(alert.type)}`}
+                >
+                    {alert.icon}
+                    <span className="font-semibold text-xs">{alert.count}</span>
+                    <span className="text-xs">{alert.label}</span>
+                </div>
+            ))}
+        </div>
     );
 }

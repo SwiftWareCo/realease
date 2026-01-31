@@ -60,28 +60,28 @@ export function BuyerInsightsBar() {
         {
             icon: <TrendingUp className="h-4 w-4" />,
             label: "Ready to submit offer",
-            count: readyToOffer,
+            count: readyToOffer || 1, // Sample: show at least 1
             type: "success",
         },
         {
             icon: <AlertTriangle className="h-4 w-4" />,
             label: "Active offers out",
-            count: inOfferStage,
+            count: inOfferStage || 1, // Sample: show at least 1
             type: "warning",
         },
         {
             icon: <CheckCircle className="h-4 w-4" />,
             label: "Under contract",
-            count: underContract,
+            count: underContract || 1, // Sample: show at least 1
             type: "info",
         },
-        // Future items - currently showing 0 but structure is ready
-        ...(missingDocuments > 0 ? [{
+        {
             icon: <FileX className="h-4 w-4" />,
             label: "Missing documents",
-            count: missingDocuments,
-            type: "danger" as const,
-        }] : []),
+            count: missingDocuments || 1, // Sample: show at least 1
+            type: "danger",
+        },
+        // Future items - currently showing 0 but structure is ready
         ...(inactiveLeads > 0 ? [{
             icon: <Clock className="h-4 w-4" />,
             label: "Inactive 14+ days",
@@ -104,39 +104,27 @@ export function BuyerInsightsBar() {
     };
 
     return (
-        <Card className="p-3 bg-gradient-to-r from-card via-card to-card/80 border-border/50 backdrop-blur-sm">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-                {/* Total count badge */}
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20">
-                        <Users className="h-3.5 w-3.5 text-primary" />
-                        <span className="font-semibold text-xs">{totalActive}</span>
-                        <span className="text-muted-foreground text-xs">Active Buyers</span>
-                    </div>
-                </div>
-
-                {/* Insight alerts */}
-                <div className="flex items-center gap-2 flex-wrap">
-                    {alerts.map((alert, index) => (
-                        alert.count > 0 && (
-                            <Badge
-                                key={index}
-                                variant="outline"
-                                className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium ${getTypeStyles(alert.type)}`}
-                            >
-                                {alert.icon}
-                                <span className="font-bold">{alert.count}</span>
-                                <span className="hidden sm:inline">{alert.label}</span>
-                            </Badge>
-                        )
-                    ))}
-                    {alerts.every(a => a.count === 0) && (
-                        <span className="text-sm text-muted-foreground italic">
-                            No active alerts — all buyers are on track
-                        </span>
-                    )}
-                </div>
+        <div className="flex items-center gap-2 flex-wrap">
+            {/* Total count card */}
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+                <Users className="h-3.5 w-3.5 text-primary" />
+                <span className="font-semibold text-xs">{totalActive}</span>
+                <span className="text-muted-foreground text-xs">Active Buyers</span>
             </div>
-        </Card>
+
+            {/* Insight alert cards */}
+            {alerts.map((alert, index) => (
+                alert.count > 0 && (
+                    <div
+                        key={index}
+                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${getTypeStyles(alert.type)}`}
+                    >
+                        {alert.icon}
+                        <span className="font-semibold text-xs">{alert.count}</span>
+                        <span className="text-xs">{alert.label}</span>
+                    </div>
+                )
+            ))}
+        </div>
     );
 }
