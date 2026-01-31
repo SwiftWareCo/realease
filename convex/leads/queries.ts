@@ -50,3 +50,45 @@ export const getLeadById = query({
         return lead;
     },
 });
+
+export const getBuyerLeads = query({
+    args: {},
+    handler: async (ctx) => {
+        const leads = await ctx.db
+            .query("leads")
+            .withIndex("by_lead_type", (q) => q.eq("lead_type", "buyer"))
+            .order("desc")
+            .collect();
+        return leads;
+    },
+});
+
+export const getSellerLeads = query({
+    args: {},
+    handler: async (ctx) => {
+        const leads = await ctx.db
+            .query("leads")
+            .withIndex("by_lead_type", (q) => q.eq("lead_type", "seller"))
+            .order("desc")
+            .collect();
+        return leads;
+    },
+});
+
+// Get all unique tags across all leads for filter dropdown
+export const getAllTags = query({
+    args: {},
+    handler: async (ctx) => {
+        const leads = await ctx.db.query("leads").collect();
+        const tagSet = new Set<string>();
+        for (const lead of leads) {
+            if (lead.tags) {
+                for (const tag of lead.tags) {
+                    tagSet.add(tag);
+                }
+            }
+        }
+        return Array.from(tagSet).sort();
+    },
+});
+

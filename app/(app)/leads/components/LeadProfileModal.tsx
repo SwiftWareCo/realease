@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import {
@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -23,9 +25,13 @@ import {
     Clock,
     Calendar,
     Link2,
+    Tag,
+    X,
+    Plus,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { eventTypeConfig } from "@/components/events/event-types";
+import { useState } from "react";
 
 interface LeadProfileModalProps {
     open: boolean;
@@ -42,6 +48,7 @@ export function LeadProfileModal({
     leadId,
 }: LeadProfileModalProps) {
     const router = useRouter();
+    const [newTag, setNewTag] = useState("");
     const lead = useQuery(api.leads.queries.getLeadById, { id: leadId }) as
         | Doc<"leads">
         | null
@@ -49,6 +56,8 @@ export function LeadProfileModal({
     const eventBuckets = useQuery(api.events.queries.getLeadEventsBuckets, {
         leadId,
     }) as { upcoming: EventDoc[]; past: EventDoc[] } | undefined;
+    const addTag = useMutation(api.leads.mutations.addTag);
+    const removeTag = useMutation(api.leads.mutations.removeTag);
 
     const formatTime = (timestamp: number) => {
         return new Date(timestamp).toLocaleTimeString("en-US", {
@@ -64,6 +73,23 @@ export function LeadProfileModal({
             month: "short",
             day: "numeric",
         });
+    };
+
+    const getTimeAgo = (timestamp: number): string => {
+        const now = Date.now();
+        const diffMs = now - timestamp;
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffWeeks = Math.floor(diffDays / 7);
+        const diffMonths = Math.floor(diffDays / 30);
+
+        if (diffMins < 1) return "just now";
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        if (diffWeeks < 4) return `${diffWeeks}w ago`;
+        return `${diffMonths}mo ago`;
     };
 
     const handleEventClick = (event: EventDoc) => {
@@ -157,6 +183,53 @@ export function LeadProfileModal({
                                         {lead.urgency_score}% Urgency
                                     </Badge>
                                 </div>
+                                {/* Tags Section */}
+                                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                    <Tag className="h-3 w-3 text-muted-foreground" />
+                                    {(lead.tags ?? []).map((tag) => (
+                                        <Badge
+                                            key={tag}
+                                            variant="outline"
+                                            className="text-xs px-2 py-1 h-6 gap-1"
+                                        >
+                                            {tag}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeTag({ id: leadId, tag })}
+                                                className="hover:text-destructive"
+                                            >
+                                                <X className="h-2.5 w-2.5" />
+                                            </button>
+                                        </Badge>
+                                    ))}
+                                    <div className="flex items-center gap-1">
+                                        <Input
+                                            value={newTag}
+                                            onChange={(e) => setNewTag(e.target.value)}
+                                            placeholder="Add tag..."
+                                            className="h-6 w-24 text-xs px-2 py-1"
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && newTag.trim()) {
+                                                    addTag({ id: leadId, tag: newTag.trim() });
+                                                    setNewTag("");
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0"
+                                            onClick={() => {
+                                                if (newTag.trim()) {
+                                                    addTag({ id: leadId, tag: newTag.trim() });
+                                                    setNewTag("");
+                                                }
+                                            }}
+                                        >
+                                            <Plus className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -201,7 +274,9 @@ export function LeadProfileModal({
                                 )}
                                 <div className="flex items-center gap-3 text-muted-foreground">
                                     <Link2 className="h-4 w-4" />
-                                    <span>Source: {lead.source}</span>
+                                    <span>
+                                        Source: {lead.source} • Added {getTimeAgo(lead._creationTime)}
+                                    </span>
                                 </div>
                                 {lead.timeline && (
                                     <div className="flex items-center gap-3 text-muted-foreground">

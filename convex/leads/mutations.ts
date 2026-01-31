@@ -52,3 +52,133 @@ export const updateLeadStatus = mutation({
     });
   },
 });
+
+export const updateBuyerPipelineStage = mutation({
+  args: {
+    id: v.id("leads"),
+    stage: v.union(
+      v.literal("searching"),
+      v.literal("showings"),
+      v.literal("offer_out"),
+      v.literal("under_contract"),
+      v.literal("closed"),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      buyer_pipeline_stage: args.stage,
+    });
+  },
+});
+
+export const updateSellerPipelineStage = mutation({
+  args: {
+    id: v.id("leads"),
+    stage: v.union(
+      v.literal("pre_listing"),
+      v.literal("on_market"),
+      v.literal("offer_in"),
+      v.literal("under_contract"),
+      v.literal("sold"),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      seller_pipeline_stage: args.stage,
+    });
+  },
+});
+
+// For future Network page integration - assign lead as buyer or seller
+export const setLeadType = mutation({
+  args: {
+    id: v.id("leads"),
+    leadType: v.union(v.literal("buyer"), v.literal("seller")),
+    // Initial pipeline stage when assigning
+    initialBuyerStage: v.optional(v.literal("searching")),
+    initialSellerStage: v.optional(v.literal("pre_listing")),
+  },
+  handler: async (ctx, args) => {
+    const updates: Record<string, unknown> = {
+      lead_type: args.leadType,
+    };
+
+    if (args.leadType === "buyer") {
+      updates.buyer_pipeline_stage = args.initialBuyerStage ?? "searching";
+    } else {
+      updates.seller_pipeline_stage = args.initialSellerStage ?? "pre_listing";
+    }
+
+    await ctx.db.patch(args.id, updates);
+  },
+});
+
+// Public mutation for manually creating leads from the UI
+export const createLead = mutation({
+  args: {
+    name: v.string(),
+    phone: v.string(),
+    email: v.optional(v.string()),
+    property_address: v.optional(v.string()),
+    timeline: v.optional(v.string()),
+    intent: v.union(v.literal("buyer"), v.literal("seller"), v.literal("investor")),
+    source: v.string(),
+    urgency_score: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    status: v.optional(v.union(v.literal("new"), v.literal("contacted"), v.literal("qualified"))),
+  },
+  handler: async (ctx, args) => {
+    const leadId = await ctx.db.insert("leads", {
+      name: args.name,
+      phone: args.phone,
+      email: args.email,
+      property_address: args.property_address,
+      timeline: args.timeline,
+      intent: args.intent,
+      source: args.source,
+      urgency_score: args.urgency_score ?? 50, // Default urgency
+      status: args.status ?? "new",
+      notes: args.notes,
+      message_count: 0,
+      created_at: Date.now(),
+    });
+    return leadId;
+  },
+});
+
+// Add a tag to a lead
+export const addTag = mutation({
+  args: {
+    id: v.id("leads"),
+    tag: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const lead = await ctx.db.get(args.id);
+    if (!lead) throw new Error("Lead not found");
+
+    const currentTags = lead.tags ?? [];
+    // Don't add duplicate tags
+    if (currentTags.includes(args.tag)) return;
+
+    await ctx.db.patch(args.id, {
+      tags: [...currentTags, args.tag],
+    });
+  },
+});
+
+// Remove a tag from a lead
+export const removeTag = mutation({
+  args: {
+    id: v.id("leads"),
+    tag: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const lead = await ctx.db.get(args.id);
+    if (!lead) throw new Error("Lead not found");
+
+    const currentTags = lead.tags ?? [];
+    await ctx.db.patch(args.id, {
+      tags: currentTags.filter(t => t !== args.tag),
+    });
+  },
+});
