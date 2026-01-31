@@ -1,0 +1,1 @@
+{"hook_name": "session-start-tldr-cache", "invocations": 4, "successes": 4, "failures": 0, "metrics": {"sessions_started": 4, "cache_warmed": 4}, "timestamp": "2026-01-24T06:50:07.827405+00:00"}
