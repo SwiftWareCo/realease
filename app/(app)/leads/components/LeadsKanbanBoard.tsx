@@ -29,9 +29,30 @@ import {
     GripVertical,
     MessageSquare,
     TrendingUp,
+    Clock,
+    Link2,
+    Tag,
 } from "lucide-react";
 import { useState } from "react";
 import { LeadProfileModal } from "./LeadProfileModal";
+
+// Helper function for relative time
+function getTimeAgo(timestamp: number): string {
+    const now = Date.now();
+    const diffMs = now - timestamp;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffWeeks = Math.floor(diffDays / 7);
+    const diffMonths = Math.floor(diffDays / 30);
+
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffWeeks < 4) return `${diffWeeks}w ago`;
+    return `${diffMonths}mo ago`;
+}
 
 const statuses = [
     { id: "new", label: "New", color: "bg-blue-500" },
@@ -193,6 +214,38 @@ function LeadCard({ lead, onOpenProfile }: LeadCardProps) {
                 {lead.notes && <MessageSquare className="h-3 w-3 text-blue-500 shrink-0" />}
             </div>
 
+            {/* Source and time ago row */}
+            <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-0.5">
+                    <Link2 className="h-2.5 w-2.5 shrink-0" />
+                    <span className="truncate">{lead.source}</span>
+                </span>
+                <span className="text-muted-foreground/50">•</span>
+                <span className="flex items-center gap-0.5">
+                    <Clock className="h-2.5 w-2.5 shrink-0" />
+                    <span>{getTimeAgo(lead._creationTime)}</span>
+                </span>
+            </div>
+
+            {/* Tags row if present */}
+            {lead.tags && lead.tags.length > 0 && (
+                <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    <Tag className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
+                    {lead.tags.slice(0, 3).map((tag) => (
+                        <Badge
+                            key={tag}
+                            variant="outline"
+                            className="text-[9px] px-1 py-0 h-4"
+                        >
+                            {tag}
+                        </Badge>
+                    ))}
+                    {lead.tags.length > 3 && (
+                        <span className="text-[9px] text-muted-foreground">+{lead.tags.length - 3}</span>
+                    )}
+                </div>
+            )}
+
             {/* AI suggestion if present */}
             {lead.ai_suggestion && (
                 <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">
@@ -266,7 +319,15 @@ function StatusColumn({
     );
 }
 
-export function LeadsKanbanBoard() {
+interface LeadsKanbanBoardProps {
+    intentFilter?: "all" | "buyer" | "seller" | "investor";
+    tagFilters?: string[];
+}
+
+export function LeadsKanbanBoard({
+    intentFilter = "all",
+    tagFilters = []
+}: LeadsKanbanBoardProps) {
     const allLeads = useQuery(api.leads.queries.getAllLeads);
     const updateStatus = useMutation(api.leads.mutations.updateLeadStatus);
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -283,10 +344,17 @@ export function LeadsKanbanBoard() {
         }),
     );
 
+    // Apply filters first
+    const filteredLeads = allLeads?.filter((lead) => {
+        const intentMatch = intentFilter === "all" || lead.intent === intentFilter;
+        const tagMatch = tagFilters.length === 0 || tagFilters.some(tag => lead.tags?.includes(tag));
+        return intentMatch && tagMatch;
+    });
+
     const leadsByStatus = statuses.reduce(
         (acc, status) => {
             acc[status.id] =
-                allLeads?.filter((lead) => lead.status === status.id) || [];
+                filteredLeads?.filter((lead) => lead.status === status.id) || [];
             return acc;
         },
         {} as Record<Status, Doc<"leads">[]>,

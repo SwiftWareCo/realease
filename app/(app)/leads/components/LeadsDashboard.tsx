@@ -36,27 +36,45 @@ import {
     TrendingUp,
     MessageSquare,
     Plus,
+    Tag,
+    X,
 } from "lucide-react";
 import { LeadsKanbanBoard } from "./LeadsKanbanBoard";
 import { AddLeadModal } from "./AddLeadModal";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function LeadsDashboard() {
     const [viewMode, setViewMode] = useState<"table" | "kanban">("kanban");
-    const [statusFilter, setStatusFilter] = useState<
-        "all" | "new" | "contacted" | "qualified"
-    >("all");
     const [intentFilter, setIntentFilter] = useState<
         "all" | "buyer" | "seller" | "investor"
     >("all");
+    const [tagFilters, setTagFilters] = useState<string[]>([]);
+    const [tagSearch, setTagSearch] = useState("");
     const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
     const allLeads = useQuery(api.leads.queries.getAllLeads);
+    const allTags = useQuery(api.leads.queries.getAllTags);
     const updateStatus = useMutation(api.leads.mutations.updateLeadStatus);
 
-    // Apply both status and intent filters
+    // Toggle a tag filter
+    const toggleTagFilter = (tag: string) => {
+        setTagFilters(prev =>
+            prev.includes(tag)
+                ? prev.filter(t => t !== tag)
+                : [...prev, tag]
+        );
+    };
+
+    // Apply intent and tag filters
     const leads = allLeads?.filter((lead: Doc<"leads">) => {
-        const statusMatch = statusFilter === "all" || lead.status === statusFilter;
         const intentMatch = intentFilter === "all" || lead.intent === intentFilter;
-        return statusMatch && intentMatch;
+        const tagMatch = tagFilters.length === 0 || tagFilters.some(tag => lead.tags?.includes(tag));
+        return intentMatch && tagMatch;
     });
 
     const handleStatusUpdate = async (
@@ -261,20 +279,6 @@ export function LeadsDashboard() {
                         </TabsList>
                     </Tabs>
                     <Select
-                        value={statusFilter}
-                        onValueChange={(value: "all" | "new" | "contacted" | "qualified") => setStatusFilter(value)}
-                    >
-                        <SelectTrigger className="w-[120px] h-8 text-xs">
-                            <SelectValue placeholder="Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            <SelectItem value="new">New</SelectItem>
-                            <SelectItem value="contacted">Contacted</SelectItem>
-                            <SelectItem value="qualified">Qualified</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <Select
                         value={intentFilter}
                         onValueChange={(value: "all" | "buyer" | "seller" | "investor") => setIntentFilter(value)}
                     >
@@ -288,6 +292,83 @@ export function LeadsDashboard() {
                             <SelectItem value="investor">Investor</SelectItem>
                         </SelectContent>
                     </Select>
+                    {/* Tag Filter Popover */}
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 border-dashed text-xs gap-1">
+                                <Tag className="h-3.5 w-3.5 mr-1" />
+                                Tags
+                                {tagFilters.length > 0 && (
+                                    <Badge variant="secondary" className="px-1 h-5 ml-1 text-[10px]">
+                                        {tagFilters.length}
+                                    </Badge>
+                                )}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[200px] p-2" align="start">
+                            <Input
+                                placeholder="Filter tags..."
+                                value={tagSearch}
+                                onChange={(e) => setTagSearch(e.target.value)}
+                                className="h-8 text-xs mb-2"
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && tagSearch.trim()) {
+                                        if (!tagFilters.includes(tagSearch.trim())) {
+                                            toggleTagFilter(tagSearch.trim());
+                                        }
+                                        setTagSearch("");
+                                    }
+                                }}
+                            />
+                            {tagFilters.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                    {tagFilters.sort().map(tag => (
+                                        <Badge
+                                            key={tag}
+                                            variant="secondary"
+                                            className="text-[10px] px-1 h-5 gap-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive"
+                                            onClick={() => toggleTagFilter(tag)}
+                                        >
+                                            {tag}
+                                            <X className="h-2.5 w-2.5" />
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
+                            <ScrollArea className="h-[200px]">
+                                <div className="space-y-1">
+                                    {(allTags ?? [])
+                                        .filter(t => t.toLowerCase().includes(tagSearch.toLowerCase()))
+                                        .filter(t => !tagFilters.includes(t))
+                                        .map(tag => (
+                                            <div
+                                                key={tag}
+                                                className="flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-accent rounded-sm cursor-pointer"
+                                                onClick={() => {
+                                                    toggleTagFilter(tag);
+                                                    setTagSearch("");
+                                                }}
+                                            >
+                                                <Tag className="h-3 w-3 text-muted-foreground" />
+                                                {tag}
+                                            </div>
+                                        ))}
+                                    {tagSearch.trim() && !(allTags ?? []).includes(tagSearch.trim()) && !tagFilters.includes(tagSearch.trim()) && (
+                                        <div
+                                            className="flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-accent rounded-sm cursor-pointer text-muted-foreground"
+                                            onClick={() => {
+                                                toggleTagFilter(tagSearch.trim());
+                                                setTagSearch("");
+                                            }}
+                                        >
+                                            <Plus className="h-3 w-3" />
+                                            Filter by "{tagSearch}"
+                                        </div>
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </PopoverContent>
+                    </Popover>
                 </div>
                 <Button
                     onClick={() => setIsAddLeadOpen(true)}
@@ -302,7 +383,10 @@ export function LeadsDashboard() {
             {/* Main Content Area - Kanban or Table */}
             <div className="flex-1 min-h-0 overflow-hidden">
                 {viewMode === "kanban" ? (
-                    <LeadsKanbanBoard />
+                    <LeadsKanbanBoard
+                        intentFilter={intentFilter}
+                        tagFilters={tagFilters}
+                    />
                 ) : leads && leads.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                         <p>No leads found.</p>

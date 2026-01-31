@@ -145,3 +145,40 @@ export const createLead = mutation({
     return leadId;
   },
 });
+
+// Add a tag to a lead
+export const addTag = mutation({
+  args: {
+    id: v.id("leads"),
+    tag: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const lead = await ctx.db.get(args.id);
+    if (!lead) throw new Error("Lead not found");
+
+    const currentTags = lead.tags ?? [];
+    // Don't add duplicate tags
+    if (currentTags.includes(args.tag)) return;
+
+    await ctx.db.patch(args.id, {
+      tags: [...currentTags, args.tag],
+    });
+  },
+});
+
+// Remove a tag from a lead
+export const removeTag = mutation({
+  args: {
+    id: v.id("leads"),
+    tag: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const lead = await ctx.db.get(args.id);
+    if (!lead) throw new Error("Lead not found");
+
+    const currentTags = lead.tags ?? [];
+    await ctx.db.patch(args.id, {
+      tags: currentTags.filter(t => t !== args.tag),
+    });
+  },
+});

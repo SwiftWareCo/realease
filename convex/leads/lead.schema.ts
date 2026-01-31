@@ -59,6 +59,7 @@ export const leadsTable = defineTable({
     ),
     last_message_content: v.optional(v.string()),
     message_count: v.optional(v.number()), // Track number of messages exchanged
+    tags: v.optional(v.array(v.string())), // Custom tags for filtering/organization
     created_at: v.number(),
 })
     .index("by_status", ["status"])

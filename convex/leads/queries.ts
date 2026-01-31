@@ -75,3 +75,20 @@ export const getSellerLeads = query({
     },
 });
 
+// Get all unique tags across all leads for filter dropdown
+export const getAllTags = query({
+    args: {},
+    handler: async (ctx) => {
+        const leads = await ctx.db.query("leads").collect();
+        const tagSet = new Set<string>();
+        for (const lead of leads) {
+            if (lead.tags) {
+                for (const tag of lead.tags) {
+                    tagSet.add(tag);
+                }
+            }
+        }
+        return Array.from(tagSet).sort();
+    },
+});
+

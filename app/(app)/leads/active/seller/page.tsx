@@ -26,7 +26,7 @@ export default function SellerPage() {
                         </Button>
                         <Button size="sm" className="gap-2 h-8 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700">
                             <Plus className="h-3.5 w-3.5" />
-                            <span>Add Listing</span>
+                            <span>Add Seller</span>
                         </Button>
                     </div>
                 </div>
