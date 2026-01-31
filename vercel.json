@@ -2,8 +2,8 @@
     "git": {
         "deploymentEnabled": {
             "main": true,
-            "omar*": false,
-            "amar*": false
+            "o*": false,
+            "a*": false
         }
     }
 }
