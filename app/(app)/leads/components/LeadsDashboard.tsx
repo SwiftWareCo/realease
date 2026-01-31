@@ -200,518 +200,276 @@ export function LeadsDashboard() {
     };
 
     return (
-        <div className="space-y-6">
-            {/* Priority Leads Section */}
-            {priorityLeads.length > 0 && (
-                <Card className="border-red-500 border-2 bg-red-50 dark:bg-red-950/20">
-                    <CardHeader>
-                        <CardTitle className="flex items-center text-red-800 dark:text-red-300">
-                            <AlertCircle className="w-5 h-5 mr-2" />
-                            🔥 Money-Critical Actions ({priorityLeads.length})
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        {priorityLeads.map((lead: Doc<"leads">) => (
-                            <Card
-                                key={lead._id}
-                                className="hover:shadow-lg transition-shadow"
-                            >
-                                <CardContent className="p-4">
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div className="flex-1 space-y-3">
-                                            <div className="flex items-center space-x-2 flex-wrap">
-                                                <h3 className="font-bold text-lg">
-                                                    {lead.name}
-                                                </h3>
-                                                <Badge
-                                                    variant={
-                                                        lead.urgency_score >= 75
-                                                            ? "destructive"
-                                                            : "default"
-                                                    }
-                                                >
-                                                    {lead.urgency_score}%
-                                                    Urgency
-                                                </Badge>
-                                                {getIntentBadge(lead.intent)}
-                                                {lead.notes && (
-                                                    <MessageSquare className="w-4 h-4 text-blue-500" />
-                                                )}
-                                                {getSentimentBadge(
-                                                    lead.last_message_sentiment,
-                                                )}
-                                            </div>
-                                            <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 space-x-4 flex-wrap">
-                                                <span className="flex items-center">
-                                                    <Phone className="w-4 h-4 mr-1" />
-                                                    {lead.phone}
-                                                </span>
-                                                {lead.property_address && (
-                                                    <span className="flex items-center">
-                                                        <MapPin className="w-4 h-4 mr-1" />
-                                                        {
-                                                            lead.property_address.split(
-                                                                ",",
-                                                            )[0]
-                                                        }
-                                                    </span>
-                                                )}
-                                                <span className="flex items-center">
-                                                    <Clock className="w-4 h-4 mr-1" />
-                                                    Created{" "}
-                                                    {formatCreatedAt(
-                                                        lead.created_at,
-                                                    )}
-                                                </span>
-                                            </div>
-                                            {lead.notes && (
-                                                <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded">
-                                                    <p className="text-sm font-medium text-yellow-900 dark:text-yellow-200">
-                                                        📝 Notes:
-                                                    </p>
-                                                    <p className="text-sm text-yellow-800 dark:text-yellow-300 italic">
-                                                        {lead.notes}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {lead.conversion_prediction && (
-                                                <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                                    <p className="text-sm font-medium text-blue-900 dark:text-blue-200 flex items-center mb-1">
-                                                        <TrendingUp className="w-4 h-4 mr-2" />
-                                                        AI Prediction:{" "}
-                                                        {
-                                                            lead.conversion_prediction
-                                                        }
-                                                    </p>
-                                                    {lead.ai_suggestion && (
-                                                        <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                                                            💡{" "}
-                                                            {lead.ai_suggestion}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            )}
-                                            {lead.last_message_content && (
-                                                <div
-                                                    className={`p-2 rounded text-xs ${lead.last_message_sentiment ===
-                                                        "positive"
-                                                        ? "bg-green-100 dark:bg-green-950/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800"
-                                                        : lead.last_message_sentiment ===
-                                                            "negative"
-                                                            ? "bg-red-100 dark:bg-red-950/20 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800"
-                                                            : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700"
-                                                        }`}
-                                                >
-                                                    💬 Latest reply: &quot;
-                                                    {lead.last_message_content}
-                                                    &quot; →{" "}
-                                                    {lead.last_message_sentiment ||
-                                                        "neutral"}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex gap-1">
-                                            {lead.status !== "contacted" && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() =>
-                                                        handleStatusUpdate(
-                                                            lead._id,
-                                                            "contacted",
-                                                        )
-                                                    }
-                                                >
-                                                    <Clock className="h-3 w-3 mr-1" />
-                                                    Contact
-                                                </Button>
-                                            )}
-                                            {lead.status !== "qualified" && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() =>
-                                                        handleStatusUpdate(
-                                                            lead._id,
-                                                            "qualified",
-                                                        )
-                                                    }
-                                                >
-                                                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                                                    Qualify
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </CardContent>
-                </Card>
-            )}
+        <div className="flex flex-col h-full">
+            {/* Header Row: Total count + Priority Alerts */}
+            <div className="flex items-center justify-between gap-4 mb-3 flex-shrink-0">
+                {/* Left side - just total count */}
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                        <span className="font-semibold text-foreground">{stats.total}</span> leads
+                    </span>
+                </div>
 
-            {/* Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-4">
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Total Leads
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.total}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            New
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                            {stats.new}
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Contacted
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                            {stats.contacted}
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Qualified
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                            {stats.qualified}
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* View Toggle and Filters */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <CardTitle>All Leads</CardTitle>
-                        <div className="flex items-center gap-2">
-                            <Tabs
-                                value={viewMode}
-                                onValueChange={(value) =>
-                                    setViewMode(value as "table" | "kanban")
-                                }
-                            >
-                                <TabsList>
-                                    <TabsTrigger value="kanban">
-                                        <LayoutGrid className="h-4 w-4 mr-1" />
-                                        Kanban
-                                    </TabsTrigger>
-                                    <TabsTrigger value="table">
-                                        <Table2 className="h-4 w-4 mr-1" />
-                                        Table
-                                    </TabsTrigger>
-                                </TabsList>
-                            </Tabs>
-                            {/* Status Filter */}
-                            <Select
-                                value={statusFilter}
-                                onValueChange={(
-                                    value:
-                                        | "all"
-                                        | "new"
-                                        | "contacted"
-                                        | "qualified",
-                                ) => setStatusFilter(value)}
-                            >
-                                <SelectTrigger className="w-[140px]">
-                                    <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">
-                                        All Statuses
-                                    </SelectItem>
-                                    <SelectItem value="new">New</SelectItem>
-                                    <SelectItem value="contacted">
-                                        Contacted
-                                    </SelectItem>
-                                    <SelectItem value="qualified">
-                                        Qualified
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            {/* Intent Filter */}
-                            <Select
-                                value={intentFilter}
-                                onValueChange={(
-                                    value:
-                                        | "all"
-                                        | "buyer"
-                                        | "seller"
-                                        | "investor",
-                                ) => setIntentFilter(value)}
-                            >
-                                <SelectTrigger className="w-[140px]">
-                                    <SelectValue placeholder="Category" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">
-                                        All Categories
-                                    </SelectItem>
-                                    <SelectItem value="buyer">Buyer</SelectItem>
-                                    <SelectItem value="seller">Seller</SelectItem>
-                                    <SelectItem value="investor">Investor</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            {/* Add Lead Button */}
-                            <Button
-                                onClick={() => setIsAddLeadOpen(true)}
-                                className="gap-2 bg-gradient-to-r from-primary to-primary/80"
-                            >
-                                <Plus className="h-4 w-4" />
-                                Add Lead
-                            </Button>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    {viewMode === "kanban" ? (
-                        <LeadsKanbanBoard />
-                    ) : leads && leads.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <p>No leads found.</p>
-                        </div>
-                    ) : (
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Contact</TableHead>
-                                        <TableHead>Property</TableHead>
-                                        <TableHead>Intent</TableHead>
-                                        <TableHead>Source</TableHead>
-                                        <TableHead>Urgency</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>AI Insights</TableHead>
-                                        <TableHead>Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {regularLeadsList?.map(
-                                        (lead: Doc<"leads">) => (
-                                            <TableRow key={lead._id}>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <User className="h-4 w-4 text-muted-foreground" />
-                                                        <div className="flex flex-col">
-                                                            <span className="font-medium">
-                                                                {lead.name}
-                                                            </span>
-                                                            {lead.notes && (
-                                                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                                                    <MessageSquare className="w-3 h-3" />
-                                                                    Has notes
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-1 text-sm">
-                                                            <Phone className="h-3 w-3 text-muted-foreground" />
-                                                            <span>
-                                                                {lead.phone}
-                                                            </span>
-                                                        </div>
-                                                        {lead.email && (
-                                                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                                                <Mail className="h-3 w-3" />
-                                                                <span>
-                                                                    {lead.email}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {lead.property_address ? (
-                                                        <div className="flex items-start gap-1 max-w-[200px]">
-                                                            <MapPin className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
-                                                            <span className="text-sm truncate">
-                                                                {
-                                                                    lead.property_address
-                                                                }
-                                                            </span>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-muted-foreground text-sm">
-                                                            —
-                                                        </span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-col gap-1">
-                                                        {getIntentBadge(
-                                                            lead.intent,
-                                                        )}
-                                                        {getSentimentBadge(
-                                                            lead.last_message_sentiment,
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <span className="text-sm text-muted-foreground">
-                                                        {lead.source}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <span
-                                                        className={getUrgencyColor(
-                                                            lead.urgency_score,
-                                                        )}
-                                                    >
-                                                        {lead.urgency_score}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {getStatusBadge(
-                                                        lead.status,
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-col gap-1 max-w-[200px]">
-                                                        {lead.conversion_prediction && (
-                                                            <span className="text-xs text-blue-600 dark:text-blue-400">
-                                                                {
-                                                                    lead.conversion_prediction
-                                                                }
-                                                            </span>
-                                                        )}
-                                                        {lead.ai_suggestion && (
-                                                            <span className="text-xs text-muted-foreground truncate">
-                                                                {
-                                                                    lead.ai_suggestion
-                                                                }
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex gap-1">
-                                                        {lead.status !==
-                                                            "contacted" && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    onClick={() =>
-                                                                        handleStatusUpdate(
-                                                                            lead._id,
-                                                                            "contacted",
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    <Clock className="h-3 w-3 mr-1" />
-                                                                    Contact
-                                                                </Button>
-                                                            )}
-                                                        {lead.status !==
-                                                            "qualified" && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    onClick={() =>
-                                                                        handleStatusUpdate(
-                                                                            lead._id,
-                                                                            "qualified",
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                                                                    Qualify
-                                                                </Button>
-                                                            )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ),
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* AI Suggestions */}
-            {allLeads && allLeads.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>AI Suggestions</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-3">
-                            {allLeads
-                                .filter(
-                                    (lead: Doc<"leads">) =>
-                                        lead.ai_suggestion &&
-                                        lead.status === "new",
-                                )
-                                .slice(0, 5)
-                                .map((lead: Doc<"leads">) => (
+                {/* Priority Alerts Card - Top Right */}
+                {priorityLeads.length > 0 && (
+                    <Card className="border-red-500/50 bg-red-50/50 dark:bg-red-950/20 shrink-0">
+                        <CardContent className="p-2 flex items-center gap-3">
+                            <div className="flex items-center gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                                <span className="text-xs font-semibold text-red-700 dark:text-red-300">
+                                    🔥 Priority
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                {priorityLeads.slice(0, 3).map((lead: Doc<"leads">) => (
                                     <div
                                         key={lead._id}
-                                        className="flex items-start gap-3 p-3 bg-muted rounded-lg"
+                                        className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white dark:bg-gray-800 border text-[10px]"
                                     >
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <p className="text-sm font-medium">
-                                                    {lead.name}
-                                                </p>
-                                                {getSentimentBadge(
-                                                    lead.last_message_sentiment,
-                                                )}
-                                                {lead.conversion_prediction && (
-                                                    <Badge
-                                                        variant="outline"
-                                                        className="text-xs"
-                                                    >
-                                                        {
-                                                            lead.conversion_prediction
-                                                        }
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                            <p className="text-sm text-muted-foreground mt-1">
-                                                💡 {lead.ai_suggestion}
-                                            </p>
-                                            {lead.notes && (
-                                                <p className="text-xs text-muted-foreground mt-2 italic">
-                                                    📝 {lead.notes}
-                                                </p>
-                                            )}
-                                        </div>
+                                        <span className="font-medium truncate max-w-[60px]">{lead.name}</span>
+                                        <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4">{lead.urgency_score}%</Badge>
                                     </div>
                                 ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+                                {priorityLeads.length > 3 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                        +{priorityLeads.length - 3}
+                                    </span>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
+
+            {/* Controls Row: View Toggle + Filters + Add Button */}
+            <div className="flex items-center justify-between gap-3 mb-3 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                    <Tabs
+                        value={viewMode}
+                        onValueChange={(value) => setViewMode(value as "table" | "kanban")}
+                    >
+                        <TabsList className="h-8">
+                            <TabsTrigger value="kanban" className="text-xs px-2.5 h-7">
+                                <LayoutGrid className="h-3.5 w-3.5 mr-1" />
+                                Kanban
+                            </TabsTrigger>
+                            <TabsTrigger value="table" className="text-xs px-2.5 h-7">
+                                <Table2 className="h-3.5 w-3.5 mr-1" />
+                                Table
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                    <Select
+                        value={statusFilter}
+                        onValueChange={(value: "all" | "new" | "contacted" | "qualified") => setStatusFilter(value)}
+                    >
+                        <SelectTrigger className="w-[120px] h-8 text-xs">
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            <SelectItem value="new">New</SelectItem>
+                            <SelectItem value="contacted">Contacted</SelectItem>
+                            <SelectItem value="qualified">Qualified</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={intentFilter}
+                        onValueChange={(value: "all" | "buyer" | "seller" | "investor") => setIntentFilter(value)}
+                    >
+                        <SelectTrigger className="w-[120px] h-8 text-xs">
+                            <SelectValue placeholder="Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Categories</SelectItem>
+                            <SelectItem value="buyer">Buyer</SelectItem>
+                            <SelectItem value="seller">Seller</SelectItem>
+                            <SelectItem value="investor">Investor</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <Button
+                    onClick={() => setIsAddLeadOpen(true)}
+                    size="sm"
+                    className="gap-1.5 bg-gradient-to-r from-primary to-primary/80 h-8"
+                >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Lead
+                </Button>
+            </div>
+
+            {/* Main Content Area - Kanban or Table */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+                {viewMode === "kanban" ? (
+                    <LeadsKanbanBoard />
+                ) : leads && leads.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                        <p>No leads found.</p>
+                    </div>
+                ) : (
+                    <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Contact</TableHead>
+                                    <TableHead>Property</TableHead>
+                                    <TableHead>Intent</TableHead>
+                                    <TableHead>Source</TableHead>
+                                    <TableHead>Urgency</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>AI Insights</TableHead>
+                                    <TableHead>Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {regularLeadsList?.map(
+                                    (lead: Doc<"leads">) => (
+                                        <TableRow key={lead._id}>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <User className="h-4 w-4 text-muted-foreground" />
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium">
+                                                            {lead.name}
+                                                        </span>
+                                                        {lead.notes && (
+                                                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                                <MessageSquare className="w-3 h-3" />
+                                                                Has notes
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-1 text-sm">
+                                                        <Phone className="h-3 w-3 text-muted-foreground" />
+                                                        <span>
+                                                            {lead.phone}
+                                                        </span>
+                                                    </div>
+                                                    {lead.email && (
+                                                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                                            <Mail className="h-3 w-3" />
+                                                            <span>
+                                                                {lead.email}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {lead.property_address ? (
+                                                    <div className="flex items-start gap-1 max-w-[200px]">
+                                                        <MapPin className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
+                                                        <span className="text-sm truncate">
+                                                            {
+                                                                lead.property_address
+                                                            }
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-sm">
+                                                        —
+                                                    </span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-col gap-1">
+                                                    {getIntentBadge(
+                                                        lead.intent,
+                                                    )}
+                                                    {getSentimentBadge(
+                                                        lead.last_message_sentiment,
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-sm text-muted-foreground">
+                                                    {lead.source}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span
+                                                    className={getUrgencyColor(
+                                                        lead.urgency_score,
+                                                    )}
+                                                >
+                                                    {lead.urgency_score}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                {getStatusBadge(
+                                                    lead.status,
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-col gap-1 max-w-[200px]">
+                                                    {lead.conversion_prediction && (
+                                                        <span className="text-xs text-blue-600 dark:text-blue-400">
+                                                            {
+                                                                lead.conversion_prediction
+                                                            }
+                                                        </span>
+                                                    )}
+                                                    {lead.ai_suggestion && (
+                                                        <span className="text-xs text-muted-foreground truncate">
+                                                            {
+                                                                lead.ai_suggestion
+                                                            }
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-1">
+                                                    {lead.status !==
+                                                        "contacted" && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() =>
+                                                                    handleStatusUpdate(
+                                                                        lead._id,
+                                                                        "contacted",
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Clock className="h-3 w-3 mr-1" />
+                                                                Contact
+                                                            </Button>
+                                                        )}
+                                                    {lead.status !==
+                                                        "qualified" && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() =>
+                                                                    handleStatusUpdate(
+                                                                        lead._id,
+                                                                        "qualified",
+                                                                    )
+                                                                }
+                                                            >
+                                                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                                                Qualify
+                                                            </Button>
+                                                        )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ),
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
+            </div>
 
             {/* Add Lead Modal */}
             <AddLeadModal open={isAddLeadOpen} onOpenChange={setIsAddLeadOpen} />
         </div>
     );
 }
-

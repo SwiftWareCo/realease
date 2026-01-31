@@ -143,18 +143,18 @@ function LeadCard({ lead, onOpenProfile }: LeadCardProps) {
         <div
             ref={setNodeRef}
             style={style}
-            className="bg-card border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow"
+            className="bg-card border rounded-lg p-2.5 shadow-sm hover:shadow-md transition-shadow"
         >
-            <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* Header row: grip, name, badges */}
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
                     <div
                         className="cursor-grab active:cursor-grabbing"
                         {...attributes}
                         {...listeners}
                     >
-                        <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     </div>
-                    <User className="h-4 w-4 text-muted-foreground shrink-0" />
                     <button
                         type="button"
                         className="font-medium text-sm truncate hover:underline hover:text-primary text-left"
@@ -165,71 +165,39 @@ function LeadCard({ lead, onOpenProfile }: LeadCardProps) {
                     >
                         {lead.name}
                     </button>
-                    {lead.notes && (
-                        <MessageSquare className="h-3 w-3 text-blue-500 shrink-0" />
-                    )}
                 </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span
-                        className={`text-xs font-semibold ${getUrgencyColor(lead.urgency_score)}`}
+                <div className="flex items-center gap-1.5 shrink-0">
+                    {getIntentBadge(lead.intent)}
+                    <Badge
+                        variant={lead.urgency_score >= 75 ? "destructive" : "secondary"}
+                        className="text-[10px] px-1.5 py-0 h-5 font-semibold"
                     >
-                        {lead.urgency_score}
-                    </span>
+                        {lead.urgency_score}%
+                    </Badge>
                     {getSentimentBadge(lead.last_message_sentiment)}
                 </div>
             </div>
 
-            <div className="space-y-1.5 text-xs">
-                <div className="flex items-center gap-1 text-muted-foreground">
-                    <Phone className="h-3 w-3" />
+            {/* Contact info row - properly aligned */}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                    <Phone className="h-3 w-3 shrink-0" />
                     <span className="truncate">{lead.phone}</span>
-                </div>
-                {lead.email && (
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                        <Mail className="h-3 w-3" />
-                        <span className="truncate">{lead.email}</span>
-                    </div>
-                )}
+                </span>
                 {lead.property_address && (
-                    <div className="flex items-start gap-1">
-                        <MapPin className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
-                        <span className="text-muted-foreground truncate text-xs">
-                            {lead.property_address}
-                        </span>
-                    </div>
+                    <span className="flex items-center gap-1 truncate">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{lead.property_address.split(",")[0]}</span>
+                    </span>
                 )}
+                {lead.notes && <MessageSquare className="h-3 w-3 text-blue-500 shrink-0" />}
             </div>
 
-            {lead.notes && (
-                <div className="mt-2 pt-2 border-t">
-                    <div className="flex items-start gap-1">
-                        <MessageSquare className="h-3 w-3 text-blue-500 shrink-0 mt-0.5" />
-                        <p className="text-xs text-muted-foreground line-clamp-2 italic">
-                            {lead.notes}
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            <div className="flex items-center justify-between mt-2 pt-2 border-t">
-                {getIntentBadge(lead.intent)}
-                {lead.conversion_prediction && (
-                    <Badge
-                        variant="outline"
-                        className="text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                    >
-                        <TrendingUp className="h-3 w-3 mr-1" />
-                        {lead.conversion_prediction}
-                    </Badge>
-                )}
-            </div>
-
+            {/* AI suggestion if present */}
             {lead.ai_suggestion && (
-                <div className="mt-2 pt-2 border-t">
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                        💡 {lead.ai_suggestion}
-                    </p>
-                </div>
+                <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">
+                    💡 {lead.ai_suggestion}
+                </p>
             )}
         </div>
     );
@@ -269,9 +237,8 @@ function StatusColumn({
                 </CardHeader>
                 <CardContent
                     ref={setNodeRef}
-                    className={`flex-1 overflow-y-auto transition-colors ${
-                        isOver ? "bg-muted/50" : ""
-                    }`}
+                    className={`flex-1 overflow-y-auto transition-colors ${isOver ? "bg-muted/50" : ""
+                        }`}
                 >
                     <SortableContext
                         items={leads.map((l) => l._id)}
@@ -370,7 +337,7 @@ export function LeadsKanbanBoard() {
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
             >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-[calc(100vh-300px)]">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-full">
                     {statuses.map((status) => (
                         <StatusColumn
                             key={status.id}
