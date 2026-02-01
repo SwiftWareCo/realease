@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FileText, ExternalLink, Calendar, Building2, ArrowRight, TrendingUp, TrendingDown, Home, DollarSign } from 'lucide-react';
+import { FileText, ExternalLink, Calendar, Building2, ArrowRight, TrendingUp, TrendingDown, Home, DollarSign, ArrowDown, ArrowUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Placeholder interface for future API integration
@@ -132,35 +132,55 @@ export function MarketReportCard({
                     </div>
                 </div>
 
-                {/* Market snapshot stats */}
-                <div className="grid grid-cols-3 gap-2 border-b px-5 py-4">
-                    <div className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                            <DollarSign className="size-3 text-muted-foreground" />
-                            <span className="text-lg font-bold tabular-nums">
-                                ${(snapshot.medianPrice / 1000).toFixed(0)}k
-                            </span>
+                {/* Market Highlights */}
+                <div className="grid grid-cols-2 gap-3 border-b px-5 py-4">
+                    <div className="flex items-start gap-3 rounded-lg bg-gradient-to-br from-emerald-500/10 to-transparent p-3">
+                        <div className="rounded-md bg-emerald-100 p-1.5 text-emerald-600 dark:bg-emerald-900/30">
+                            <TrendingUp className="size-4" />
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Median Price</p>
-                        <TrendBadge value={snapshot.priceChange} />
+                        <div>
+                            <span className="text-[10px] font-medium uppercase text-muted-foreground tracking-wider">Sale/List Ratio</span>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-lg font-bold text-foreground">101.4%</span>
+                                <span className="text-[10px] text-muted-foreground">of ask price</span>
+                            </div>
+                        </div>
                     </div>
-                    <div className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                            <Calendar className="size-3 text-muted-foreground" />
-                            <span className="text-lg font-bold tabular-nums">{snapshot.daysOnMarket}</span>
+                    <div className="flex items-start gap-3 rounded-lg bg-gradient-to-br from-blue-500/10 to-transparent p-3">
+                        <div className="rounded-md bg-blue-100 p-1.5 text-blue-600 dark:bg-blue-900/30">
+                            <ArrowDown className="size-4" />
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Avg Days</p>
-                        <TrendBadge value={snapshot.domChange} inverted />
+                        <div>
+                            <span className="text-[10px] font-medium uppercase text-muted-foreground tracking-wider">Interest Rates</span>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-lg font-bold text-foreground">5.8%</span>
+                                <span className="text-[10px] text-muted-foreground">30y Fixed</span>
+                            </div>
+                        </div>
                     </div>
-                    <div className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                            <Home className="size-3 text-muted-foreground" />
-                            <span className="text-lg font-bold tabular-nums">
-                                {(snapshot.inventory / 1000).toFixed(1)}k
-                            </span>
+                    <div className="flex items-start gap-3 rounded-lg bg-gradient-to-br from-purple-500/10 to-transparent p-3">
+                        <div className="rounded-md bg-purple-100 p-1.5 text-purple-600 dark:bg-purple-900/30">
+                            <Home className="size-4" />
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Listings</p>
-                        <TrendBadge value={snapshot.inventoryChange} />
+                        <div>
+                            <span className="text-[10px] font-medium uppercase text-muted-foreground tracking-wider">Absorption Rate</span>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-lg font-bold text-foreground">24.5%</span>
+                                <span className="text-[10px] text-muted-foreground">sold/month</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-3 rounded-lg bg-gradient-to-br from-amber-500/10 to-transparent p-3">
+                        <div className="rounded-md bg-amber-100 p-1.5 text-amber-600 dark:bg-amber-900/30">
+                            <TrendingUp className="size-4" />
+                        </div>
+                        <div>
+                            <span className="text-[10px] font-medium uppercase text-muted-foreground tracking-wider">Forecast</span>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-lg font-bold text-emerald-600">+4.5%</span>
+                                <span className="text-[10px] text-muted-foreground">Next Qtr</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

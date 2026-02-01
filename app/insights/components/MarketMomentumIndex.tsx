@@ -1,82 +1,84 @@
 'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Gauge, TrendingUp, TrendingDown, Clock, Activity, ArrowDown } from "lucide-react";
+import { Gauge, DollarSign, Calendar, Home, ArrowUp, ArrowDown } from "lucide-react";
 
 export function MarketMomentumIndex() {
-    // Dummy data - ideally this would come from a prop or API
-    const momentumScore = 7.5; // 1-10, >5 Seller's Market, <5 Buyer's Market
+    const momentumScore = 7.5;
     const isSellersMarket = momentumScore > 5;
 
     return (
-        <Card className="col-span-full h-full flex flex-col">
-            <CardHeader className="pb-2 shrink-0">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Gauge className="size-5 text-primary" />
-                        <CardTitle>Market Momentum Index</CardTitle>
+        <Card className="flex h-full flex-col p-0 overflow-hidden">
+            {/* Header with breathing room */}
+            <div className="flex items-center gap-2 border-b px-4 py-3 shrink-0">
+                <Gauge className="size-5 text-primary" />
+                <span className="text-base font-semibold">Market Momentum</span>
+            </div>
+
+            {/* Top: Score Circle with Badge */}
+            <div className="flex flex-1 flex-col items-center justify-center gap-1 p-2 min-h-0">
+                <Badge variant={isSellersMarket ? "default" : "secondary"} className="text-xs px-3 h-6 shrink-0">
+                    {isSellersMarket ? "Seller's Market" : "Buyer's Market"}
+                </Badge>
+                <div className="flex w-28 h-28 shrink-0 items-center justify-center rounded-full border-[10px] border-muted border-t-primary bg-muted/10 shadow-sm">
+                    <div className="flex flex-col items-center">
+                        <span className="text-4xl font-bold tracking-tighter leading-none">{momentumScore}</span>
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase">Score</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">Updated today</span>
                 </div>
-            </CardHeader>
-            <CardContent className="flex-1 min-h-0 pb-4">
-                <div className="flex h-full items-center gap-8">
-                    {/* Main Gauge - Compact */}
-                    <div className="flex shrink-0 flex-col items-center justify-center pl-4">
-                        <div className="relative flex aspect-square w-32 items-center justify-center rounded-full border-[8px] border-muted border-t-primary shadow-lg">
-                            <div className="flex flex-col items-center">
-                                <span className="text-3xl font-bold tracking-tighter">{momentumScore}</span>
-                            </div>
-                            <Badge variant={isSellersMarket ? "default" : "secondary"} className="absolute -bottom-3 text-[10px] px-2 h-5">
-                                {isSellersMarket ? "Seller's Market" : "Buyer's Market"}
-                            </Badge>
-                        </div>
-                        <p className="mt-5 text-xs font-semibold text-muted-foreground">Top 15% Activity</p>
+            </div>
+
+            {/* Bottom: 3 Metric Cards - horizontal content inside rectangles */}
+            <div className="grid grid-cols-3 gap-1.5 border-t px-2 py-2 shrink-0">
+                {/* Median Price */}
+                <div className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 px-2 py-2">
+                    <div className="rounded bg-emerald-100 p-1.5 text-emerald-600 dark:bg-emerald-900/20 shrink-0">
+                        <DollarSign className="size-4" />
                     </div>
-
-                    {/* Metrics - Compact Horizontal List */}
-                    <div className="flex flex-1 items-center justify-between gap-4 pr-4">
-                        {/* Metric 1 */}
-                        <div className="flex flex-1 flex-col justify-center rounded-lg border bg-muted/10 p-3">
-                            <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-                                <TrendingUp className="size-4 text-green-600" />
-                                <span className="text-xs font-medium uppercase tracking-wider">Speed</span>
-                            </div>
-                            <div className="text-2xl font-bold">14 Days</div>
-                            <div className="flex items-center gap-1 text-[10px] text-green-600">
-                                <ArrowDown className="size-3" />
-                                12% vs avg
-                            </div>
-                        </div>
-
-                        {/* Metric 2 */}
-                        <div className="flex flex-1 flex-col justify-center rounded-lg border bg-muted/10 p-3">
-                            <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-                                <Activity className="size-4 text-blue-600" />
-                                <span className="text-xs font-medium uppercase tracking-wider">Absorption</span>
-                            </div>
-                            <div className="text-2xl font-bold">2.4 Mo</div>
-                            <div className="flex items-center gap-1 text-[10px] text-blue-600">
-                                High Demand
-                            </div>
-                        </div>
-
-                        {/* Metric 3 */}
-                        <div className="flex flex-1 flex-col justify-center rounded-lg border bg-muted/10 p-3">
-                            <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-                                <Clock className="size-4 text-orange-600" />
-                                <span className="text-xs font-medium uppercase tracking-wider">Pricing</span>
-                            </div>
-                            <div className="text-2xl font-bold">+3.2%</div>
-                            <div className="flex items-center gap-1 text-[10px] text-green-600">
-                                <TrendingUp className="size-3" />
-                                Power Rising
-                            </div>
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-bold leading-tight truncate">$485k</span>
+                        <div className="flex items-center gap-1">
+                            <span className="text-[9px] text-muted-foreground truncate">Median</span>
+                            <span className="flex items-center text-[9px] text-emerald-600 shrink-0">
+                                <ArrowUp className="size-2" />3%
+                            </span>
                         </div>
                     </div>
                 </div>
-            </CardContent>
+
+                {/* Days on Market */}
+                <div className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/5 px-2 py-2">
+                    <div className="rounded bg-blue-100 p-1.5 text-blue-600 dark:bg-blue-900/20 shrink-0">
+                        <Calendar className="size-4" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-bold leading-tight truncate">28 Days</span>
+                        <div className="flex items-center gap-1">
+                            <span className="text-[9px] text-muted-foreground truncate">DOM</span>
+                            <span className="flex items-center text-[9px] text-emerald-600 shrink-0">
+                                <ArrowDown className="size-2" />-5
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Total Listings */}
+                <div className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-purple-500/10 to-purple-500/5 px-2 py-2">
+                    <div className="rounded bg-purple-100 p-1.5 text-purple-600 dark:bg-purple-900/20 shrink-0">
+                        <Home className="size-4" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-bold leading-tight truncate">1,847</span>
+                        <div className="flex items-center gap-1">
+                            <span className="text-[9px] text-muted-foreground truncate">Listings</span>
+                            <span className="flex items-center text-[9px] text-red-500 shrink-0">
+                                <ArrowDown className="size-2" />-12%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </Card>
     );
 }
