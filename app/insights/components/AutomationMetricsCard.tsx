@@ -95,175 +95,97 @@ export function AutomationMetricsCard({
     }
 
     return (
-        <Card className="group relative overflow-hidden border-0 bg-gradient-to-br from-card via-card to-muted/30 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl md:col-span-2">
+        <Card className="group relative col-span-full h-full overflow-hidden border-0 bg-gradient-to-br from-card via-card to-muted/30 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
             {/* Decorative gradient border */}
             <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-chart-4/20 via-transparent to-chart-5/20 opacity-0 transition-opacity group-hover:opacity-100" />
             <div className="absolute inset-[1px] rounded-xl bg-card" />
 
-            <CardContent className="relative p-0">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-indigo-500/10 to-violet-500/10 px-5 py-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg">
-                                <Bot className="size-5 text-white" />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold tracking-tight">Your Automations</h3>
-                                <p className="text-xs text-muted-foreground">Impact on your business</p>
-                            </div>
+            <CardContent className="relative flex h-full flex-col p-0">
+                {/* Compact Header */}
+                <div className="flex shrink-0 items-center justify-between border-b bg-gradient-to-r from-indigo-500/10 to-violet-500/10 px-4 py-2">
+                    <div className="flex items-center gap-2">
+                        <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg">
+                            <Bot className="size-4 text-white" />
                         </div>
-                        <Badge className="gap-1 border-0 bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-sm">
-                            <TrendingUp className="size-3" />
-                            {hoursSavedChange > 0 ? '+' : ''}{hoursSavedChange.toFixed(0)}% efficiency
-                        </Badge>
+                        <div>
+                            <h3 className="text-sm font-semibold tracking-tight">Automation Impact</h3>
+                        </div>
                     </div>
+                    <Badge className="gap-1 border-0 bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-sm">
+                        <TrendingUp className="size-3" />
+                        {hoursSavedChange > 0 ? '+' : ''}{hoursSavedChange.toFixed(0)}%
+                    </Badge>
                 </div>
 
-                <div className="grid gap-6 p-5 md:grid-cols-2">
-                    {/* Left side - Main impact metrics */}
-                    <div className="space-y-5">
-                        {/* Hero metric: Time saved */}
-                        <div className="rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-5">
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <p className="text-5xl font-bold tabular-nums tracking-tight text-primary">
-                                        {metrics.impact.hoursSaved.toFixed(1)}
-                                    </p>
-                                    <p className="mt-1 text-lg font-medium">hours saved this month</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        That&apos;s {Math.round(metrics.impact.hoursSaved / 8)} extra days for closing deals
-                                    </p>
-                                </div>
-                                <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/20">
-                                    <Clock className="size-7 text-primary" />
+                <div className="flex min-h-0 flex-1 gap-4 p-4">
+                    {/* Left: Hero Metric */}
+                    <div className="flex w-1/4 flex-col justify-center rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4">
+                        <div className="text-center">
+                            <p className="text-4xl font-bold tabular-nums tracking-tight text-primary">
+                                {metrics.impact.hoursSaved.toFixed(1)}
+                            </p>
+                            <p className="mt-1 text-sm font-medium">Hours Saved</p>
+                            <div className="mt-4 flex justify-center">
+                                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/20">
+                                    <Clock className="size-5 text-primary" />
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Leads contacted chart - meaningful data */}
-                        <div>
-                            <div className="mb-2 flex items-center justify-between">
-                                <p className="text-xs font-medium text-muted-foreground">
-                                    Leads Auto-Contacted This Week
-                                </p>
-                                <span className="text-xs font-bold tabular-nums">{metrics.impact.leadsContacted} total</span>
-                            </div>
-                            <div className="h-[110px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart
-                                        data={metrics.dailyLeadsContacted}
-                                        margin={{ top: 10, right: 15, left: 5, bottom: 5 }}
-                                    >
-                                        <defs>
-                                            <linearGradient id="leadsGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#c4b5fd" stopOpacity={0.5} />
-                                                <stop offset="95%" stopColor="#c4b5fd" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid
-                                            strokeDasharray="3 3"
-                                            vertical={true}
-                                            horizontal={false}
-                                            stroke="#9ca3af"
-                                            opacity={0.2}
-                                        />
-                                        <XAxis
-                                            dataKey="day"
-                                            tick={{ fontSize: 12, fill: '#9ca3af' }}
-                                            axisLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
-                                            tickLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
-                                            interval={0}
-                                            padding={{ left: 20, right: 20 }}
-                                        />
-                                        <Tooltip
-                                            content={({ active, payload }) => {
-                                                if (active && payload && payload.length) {
-                                                    return (
-                                                        <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md">
-                                                            <p className="font-semibold">{payload[0].payload.day}</p>
-                                                            <p className="text-muted-foreground">
-                                                                {payload[0].value} leads contacted
-                                                            </p>
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            }}
-                                        />
-                                        <Area
-                                            type="monotone"
-                                            dataKey="leads"
-                                            stroke="#a78bfa"
-                                            strokeWidth={2}
-                                            fill="url(#leadsGradient)"
-                                        />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                        {/* Impact stats grid */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <ImpactStat
-                                icon={Mail}
-                                value={metrics.impact.followUpsSent}
-                                label="Follow-ups sent"
-                                sublabel="Auto-scheduled"
-                                gradient="from-blue-500 to-cyan-500"
-                            />
-                            <ImpactStat
-                                icon={Calendar}
-                                value={metrics.impact.appointmentsScheduled}
-                                label="Appointments"
-                                sublabel="Auto-booked"
-                                gradient="from-violet-500 to-purple-500"
-                            />
                         </div>
                     </div>
 
-                    {/* Right side - Top automations by impact */}
-                    <div className="space-y-4">
-                        <p className="text-sm font-medium text-muted-foreground">
-                            Top Performing Automations
-                        </p>
-
-                        <div className="space-y-3">
-                            {metrics.topAutomations.map((automation, index) => {
-                                const Icon = impactIcons[automation.icon] || Sparkles;
-                                return (
-                                    <div
-                                        key={automation.name}
-                                        className="group/item flex items-center gap-4 rounded-xl border bg-gradient-to-r from-muted/30 to-transparent p-4 transition-all hover:from-muted/50 hover:shadow-sm"
-                                    >
-                                        <div className="flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
-                                            <Icon className="size-6 text-primary" />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="font-semibold">{automation.name}</p>
-                                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                                <CheckCircle className="size-3 text-emerald-500" />
-                                                {automation.impact}
-                                            </div>
-                                        </div>
-                                        <Badge variant="secondary" className="shrink-0">
-                                            #{index + 1}
-                                        </Badge>
-                                    </div>
-                                );
-                            })}
+                    {/* Middle: Chart */}
+                    <div className="flex-1 flex-col justify-between">
+                        <div className="mb-1 flex items-center justify-between">
+                            <p className="text-[10px] font-medium text-muted-foreground">Leads Contacted (7 Days)</p>
+                            <span className="text-[10px] font-bold tabular-nums">{metrics.impact.leadsContacted} total</span>
                         </div>
-
-                        {/* Coming soon teaser */}
-                        <div className="rounded-xl border border-dashed bg-gradient-to-br from-muted/20 to-transparent p-4 text-center">
-                            <div className="mx-auto flex size-10 items-center justify-center rounded-xl bg-muted">
-                                <Sparkles className="size-5 text-muted-foreground" />
+                        <div className="h-full max-h-[120px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={metrics.dailyLeadsContacted} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="leadsGradient" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#c4b5fd" stopOpacity={0.5} />
+                                            <stop offset="95%" stopColor="#c4b5fd" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <XAxis dataKey="day" hide />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', border: '1px solid hsl(var(--border))', fontSize: '10px' }}
+                                        itemStyle={{ color: 'hsl(var(--foreground))' }}
+                                    />
+                                    <Area type="monotone" dataKey="leads" stroke="#a78bfa" strokeWidth={2} fill="url(#leadsGradient)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                            <div className="rounded-lg border bg-muted/30 p-2">
+                                <p className="text-lg font-bold tabular-nums leading-none">{metrics.impact.followUpsSent}</p>
+                                <p className="text-[10px] text-muted-foreground">Follow-ups</p>
                             </div>
-                            <p className="mt-2 text-sm font-medium">More AI features coming</p>
-                            <p className="text-xs text-muted-foreground">
-                                Smart insights, predictive analytics, and more
-                            </p>
+                            <div className="rounded-lg border bg-muted/30 p-2">
+                                <p className="text-lg font-bold tabular-nums leading-none">{metrics.impact.appointmentsScheduled}</p>
+                                <p className="text-[10px] text-muted-foreground">Booked</p>
+                            </div>
                         </div>
+                    </div>
+
+                    {/* Right: Top Automations (Compact List) */}
+                    <div className="w-1/3 min-w-0 space-y-2 overflow-y-auto">
+                        <p className="text-xs font-medium text-muted-foreground">Top Performing</p>
+                        {metrics.topAutomations.map((automation, index) => {
+                            const Icon = impactIcons[automation.icon] || Sparkles;
+                            return (
+                                <div key={automation.name} className="flex items-center gap-2 rounded-lg border bg-muted/10 p-2">
+                                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                        <Icon className="size-4 text-primary" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-xs font-semibold">{automation.name}</p>
+                                        <p className="truncate text-[10px] text-muted-foreground">{automation.impact}</p>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </CardContent>

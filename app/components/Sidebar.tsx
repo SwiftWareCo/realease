@@ -23,8 +23,14 @@ const navigation = [
   },
   {
     name: 'Insights',
-    href: '/insights',
+    href: '#',
     icon: TrendingUp,
+    items: [
+      { name: 'Market Intelligence', href: '/insights/market-intelligence' },
+      { name: 'My Business', href: '/insights/my-business' },
+      { name: 'Automations', href: '/insights/automations' },
+      { name: 'AI Suggestions', href: '/insights/ai-suggestions' },
+    ],
   },
   {
     name: 'Lead Forms',
@@ -51,6 +57,42 @@ export function Sidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navigation.map((item) => {
+                if (item.items) {
+                  return (
+                    <SidebarMenuItem key={item.name}>
+                      <SidebarMenuButton
+                        asChild
+                        tooltip={item.name}
+                        className="font-medium"
+                      >
+                        <div className="flex items-center">
+                          <item.icon />
+                          <span>{item.name}</span>
+                        </div>
+                      </SidebarMenuButton>
+                      <ul className="ml-4 mt-1 flex flex-col gap-1 border-l border-sidebar-border/50 px-2 py-0.5">
+                        {item.items.map((subItem) => {
+                          const isSubActive = pathname === subItem.href;
+                          return (
+                            <SidebarMenuItem key={subItem.name}>
+                              <SidebarMenuButton
+                                asChild
+                                isActive={isSubActive}
+                                size="sm"
+                                className="h-7 text-sm"
+                              >
+                                <Link href={subItem.href}>
+                                  <span>{subItem.name}</span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          );
+                        })}
+                      </ul>
+                    </SidebarMenuItem>
+                  );
+                }
+
                 const isActive = pathname === item.href;
                 return (
                   <SidebarMenuItem key={item.name}>
