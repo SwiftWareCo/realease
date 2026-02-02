@@ -26,7 +26,7 @@ interface LeadProfileProps {
 
 export function LeadProfile({ leadId }: LeadProfileProps) {
     const lead = useQuery(api.leads.queries.getLeadById, { id: leadId }) as Doc<'leads'> | null | undefined;
-    
+
     if (lead === undefined) {
         return (
             <div className="space-y-6">
@@ -45,9 +45,9 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                 <CardContent className="p-8 text-center">
                     <p className="text-muted-foreground">Lead not found</p>
                     <Button asChild className="mt-4">
-                        <Link href="/dashboard">
+                        <Link href="/leads">
                             <ArrowLeft className="h-4 w-4 mr-2" />
-                            Back to Dashboard
+                            Back to Leads
                         </Link>
                     </Button>
                 </CardContent>
@@ -99,7 +99,7 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" asChild>
-                        <Link href="/dashboard">
+                        <Link href="/leads">
                             <ArrowLeft className="h-4 w-4" />
                         </Link>
                     </Button>

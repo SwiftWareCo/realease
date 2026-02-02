@@ -10,7 +10,11 @@
         "build": "next build",
         "start": "next start",
         "lint:types": "tsc --noEmit",
-        "lint:eslint": "eslint ."
+        "lint:eslint": "eslint .",
+        "db:seed": "npx tsx scripts/mock-data.ts seed",
+        "db:clear": "npx tsx scripts/mock-data.ts clear --yes",
+        "db:reset": "npx tsx scripts/mock-data.ts reset --yes",
+        "db:dev": "npx tsx scripts/mock-data.ts"
     },
     "dependencies": {
         "@clerk/backend": "^2.29.5",
@@ -53,6 +57,7 @@
         "@types/node": "^20",
         "@types/react": "^19",
         "@types/react-dom": "^19",
+        "dotenv": "^17.2.3",
         "eslint": "^9",
         "eslint-config-next": "16.1.2",
         "npm-run-all2": "^5.0.0",

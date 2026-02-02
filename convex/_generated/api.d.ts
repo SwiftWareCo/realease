@@ -9,6 +9,8 @@
  */
 
 import type * as demo_demo from "../demo/demo.js";
+import type * as devtools_mockData from "../devtools/mockData.js";
+import type * as devtools_mockDataMutations from "../devtools/mockDataMutations.js";
 import type * as events_mutations from "../events/mutations.js";
 import type * as events_queries from "../events/queries.js";
 import type * as http from "../http.js";
@@ -27,6 +29,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "demo/demo": typeof demo_demo;
+  "devtools/mockData": typeof devtools_mockData;
+  "devtools/mockDataMutations": typeof devtools_mockDataMutations;
   "events/mutations": typeof events_mutations;
   "events/queries": typeof events_queries;
   http: typeof http;
