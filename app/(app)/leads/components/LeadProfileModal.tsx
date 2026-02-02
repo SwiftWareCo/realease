@@ -47,6 +47,7 @@ export function LeadProfileModal({
     onOpenChange,
     leadId,
 }: LeadProfileModalProps) {
+    const [now] = useState(() => Date.now());
     const router = useRouter();
     const [newTag, setNewTag] = useState("");
     const lead = useQuery(api.leads.queries.getLeadById, { id: leadId }) as
@@ -75,9 +76,8 @@ export function LeadProfileModal({
         });
     };
 
-    const getTimeAgo = (timestamp: number): string => {
-        const now = Date.now();
-        const diffMs = now - timestamp;
+    const getTimeAgo = (timestamp: number, currentTime: number): string => {
+        const diffMs = currentTime - timestamp;
         const diffMins = Math.floor(diffMs / (1000 * 60));
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -275,7 +275,7 @@ export function LeadProfileModal({
                                 <div className="flex items-center gap-3 text-muted-foreground">
                                     <Link2 className="h-4 w-4" />
                                     <span>
-                                        Source: {lead.source} • Added {getTimeAgo(lead._creationTime)}
+                                        Source: {lead.source} • Added {getTimeAgo(lead._creationTime, now)}
                                     </span>
                                 </div>
                                 {lead.timeline && (

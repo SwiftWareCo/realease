@@ -21,6 +21,8 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     User,
     GripVertical,
@@ -144,32 +146,35 @@ function StageColumn({
                         </Badge>
                     </div>
                 </CardHeader>
-                <CardContent
-                    ref={setNodeRef}
-                    className={`flex-1 overflow-y-auto transition-colors rounded-b-lg ${isOver ? "bg-primary/5 ring-2 ring-primary/20 ring-inset" : ""
-                        }`}
-                >
-                    <SortableContext
-                        items={leads.map((l) => l._id)}
-                        strategy={verticalListSortingStrategy}
-                    >
-                        <div className="space-y-3">
-                            {leads.length === 0 ? (
-                                <div className="text-center py-12 text-muted-foreground/60 text-sm border-2 border-dashed border-border/50 rounded-xl">
-                                    <p className="font-medium">No leads</p>
-                                    <p className="text-xs mt-1">Drop leads here</p>
+                <CardContent className="p-0 flex-1 min-h-0">
+                    <ScrollArea className="h-[calc(100vh-320px)]">
+                        <div
+                            ref={setNodeRef}
+                            className={`p-4 transition-colors min-h-[200px] ${isOver ? "bg-primary/5 ring-2 ring-primary/20 ring-inset" : ""}`}
+                        >
+                            <SortableContext
+                                items={leads.map((l) => l._id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                <div className="space-y-3">
+                                    {leads.length === 0 ? (
+                                        <div className="text-center py-12 text-muted-foreground/60 text-sm border-2 border-dashed border-border/50 rounded-xl">
+                                            <p className="font-medium">No leads</p>
+                                            <p className="text-xs mt-1">Drop leads here</p>
+                                        </div>
+                                    ) : (
+                                        leads.map((lead) => (
+                                            <BuyerLeadCard
+                                                key={lead._id}
+                                                lead={lead}
+                                                onOpenProfile={onOpenProfile}
+                                            />
+                                        ))
+                                    )}
                                 </div>
-                            ) : (
-                                leads.map((lead) => (
-                                    <BuyerLeadCard
-                                        key={lead._id}
-                                        lead={lead}
-                                        onOpenProfile={onOpenProfile}
-                                    />
-                                ))
-                            )}
+                            </SortableContext>
                         </div>
-                    </SortableContext>
+                    </ScrollArea>
                 </CardContent>
             </Card>
         </div>
@@ -230,11 +235,33 @@ export function BuyerKanbanBoard() {
 
     if (buyerLeads === undefined) {
         return (
-            <div className="flex items-center justify-center h-[500px]">
-                <div className="text-center space-y-3">
-                    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-                    <p className="text-muted-foreground">Loading buyer leads...</p>
-                </div>
+            <div className="grid grid-cols-5 gap-4 h-full">
+                {buyerStages.map((stage) => (
+                    <div key={stage.id} className="flex flex-col h-full flex-1 min-w-0">
+                        <Card className={`flex-1 flex flex-col border-t-4 ${stage.color.replace('bg-', 'border-t-')} bg-card/50 backdrop-blur-sm`}>
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Skeleton className="h-4 w-24" />
+                                        <Skeleton className="h-5 w-6 rounded-full" />
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-3">
+                                {[...Array(3)].map((_, i) => (
+                                    <div key={i} className="bg-card/80 border border-border/50 rounded-xl p-4 space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <Skeleton className="h-8 w-8 rounded-full" />
+                                            <Skeleton className="h-4 w-32" />
+                                        </div>
+                                        <Skeleton className="h-3 w-24" />
+                                        <Skeleton className="h-3 w-full" />
+                                    </div>
+                                ))}
+                            </CardContent>
+                        </Card>
+                    </div>
+                ))}
             </div>
         );
     }

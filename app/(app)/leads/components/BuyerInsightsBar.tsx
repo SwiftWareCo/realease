@@ -3,8 +3,6 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
     AlertTriangle,
     FileX,
@@ -26,25 +24,35 @@ export function BuyerInsightsBar() {
 
     if (buyerLeads === undefined) {
         return (
-            <Card className="p-4 mb-6 animate-pulse bg-muted/30">
-                <div className="h-6 bg-muted rounded w-3/4" />
-            </Card>
+            <div className="flex items-center gap-2 flex-wrap animate-pulse">
+                <div className="h-7 w-28 rounded-lg bg-muted/40 border border-muted/50" />
+                <div className="h-7 w-40 rounded-lg bg-muted/40 border border-muted/50" />
+                <div className="h-7 w-36 rounded-lg bg-muted/40 border border-muted/50" />
+                <div className="h-7 w-32 rounded-lg bg-muted/40 border border-muted/50" />
+                <div className="h-7 w-36 rounded-lg bg-muted/40 border border-muted/50" />
+            </div>
         );
     }
 
     // Calculate insights from leads
     // These calculations will be expanded when more data is available
-    const readyToOffer = buyerLeads?.filter(
-        (lead: Doc<"leads">) => lead.buyer_pipeline_stage === "showings" && lead.urgency_score >= 70
-    ).length ?? 0;
+    const readyToOffer =
+        buyerLeads?.filter(
+            (lead: Doc<"leads">) =>
+                lead.buyer_pipeline_stage === "showings" &&
+                lead.urgency_score >= 70,
+        ).length ?? 0;
 
-    const inOfferStage = buyerLeads?.filter(
-        (lead: Doc<"leads">) => lead.buyer_pipeline_stage === "offer_out"
-    ).length ?? 0;
+    const inOfferStage =
+        buyerLeads?.filter(
+            (lead: Doc<"leads">) => lead.buyer_pipeline_stage === "offer_out",
+        ).length ?? 0;
 
-    const underContract = buyerLeads?.filter(
-        (lead: Doc<"leads">) => lead.buyer_pipeline_stage === "under_contract"
-    ).length ?? 0;
+    const underContract =
+        buyerLeads?.filter(
+            (lead: Doc<"leads">) =>
+                lead.buyer_pipeline_stage === "under_contract",
+        ).length ?? 0;
 
     // Placeholder for future: leads missing documents
     // Will check for missing pre-approval, ID verification, etc.
@@ -82,12 +90,16 @@ export function BuyerInsightsBar() {
             type: "danger",
         },
         // Future items - currently showing 0 but structure is ready
-        ...(inactiveLeads > 0 ? [{
-            icon: <Clock className="h-4 w-4" />,
-            label: "Inactive 14+ days",
-            count: inactiveLeads,
-            type: "danger" as const,
-        }] : []),
+        ...(inactiveLeads > 0
+            ? [
+                  {
+                      icon: <Clock className="h-4 w-4" />,
+                      label: "Inactive 14+ days",
+                      count: inactiveLeads,
+                      type: "danger" as const,
+                  },
+              ]
+            : []),
     ];
 
     const getTypeStyles = (type: AlertItem["type"]) => {
@@ -109,22 +121,27 @@ export function BuyerInsightsBar() {
             <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
                 <Users className="h-3.5 w-3.5 text-primary" />
                 <span className="font-semibold text-xs">{totalActive}</span>
-                <span className="text-muted-foreground text-xs">Active Buyers</span>
+                <span className="text-muted-foreground text-xs">
+                    Active Buyers
+                </span>
             </div>
 
             {/* Insight alert cards */}
-            {alerts.map((alert, index) => (
-                alert.count > 0 && (
-                    <div
-                        key={index}
-                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${getTypeStyles(alert.type)}`}
-                    >
-                        {alert.icon}
-                        <span className="font-semibold text-xs">{alert.count}</span>
-                        <span className="text-xs">{alert.label}</span>
-                    </div>
-                )
-            ))}
+            {alerts.map(
+                (alert, index) =>
+                    alert.count > 0 && (
+                        <div
+                            key={index}
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${getTypeStyles(alert.type)}`}
+                        >
+                            {alert.icon}
+                            <span className="font-semibold text-xs">
+                                {alert.count}
+                            </span>
+                            <span className="text-xs">{alert.label}</span>
+                        </div>
+                    ),
+            )}
         </div>
     );
 }

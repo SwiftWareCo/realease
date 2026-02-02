@@ -3,9 +3,10 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     Table,
     TableBody,
@@ -33,7 +34,6 @@ import {
     LayoutGrid,
     Table2,
     AlertCircle,
-    TrendingUp,
     MessageSquare,
     Plus,
     Tag,
@@ -63,17 +63,18 @@ export function LeadsDashboard() {
 
     // Toggle a tag filter
     const toggleTagFilter = (tag: string) => {
-        setTagFilters(prev =>
-            prev.includes(tag)
-                ? prev.filter(t => t !== tag)
-                : [...prev, tag]
+        setTagFilters((prev) =>
+            prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
         );
     };
 
     // Apply intent and tag filters
     const leads = allLeads?.filter((lead: Doc<"leads">) => {
-        const intentMatch = intentFilter === "all" || lead.intent === intentFilter;
-        const tagMatch = tagFilters.length === 0 || tagFilters.some(tag => lead.tags?.includes(tag));
+        const intentMatch =
+            intentFilter === "all" || lead.intent === intentFilter;
+        const tagMatch =
+            tagFilters.length === 0 ||
+            tagFilters.some((tag) => lead.tags?.includes(tag));
         return intentMatch && tagMatch;
     });
 
@@ -182,13 +183,6 @@ export function LeadsDashboard() {
         }
     };
 
-    const formatCreatedAt = (createdAt: number) => {
-        return new Date(createdAt).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-        });
-    };
-
     // Separate priority leads (urgency >= 75)
     const priorityLeads =
         allLeads?.filter((lead: Doc<"leads">) => lead.urgency_score >= 75) ||
@@ -198,11 +192,52 @@ export function LeadsDashboard() {
 
     if (allLeads === undefined) {
         return (
-            <Card>
-                <CardContent className="p-8 text-center">
-                    <p className="text-muted-foreground">Loading leads...</p>
-                </CardContent>
-            </Card>
+            <div className="flex flex-col h-full space-y-4">
+                {/* Skeleton Header */}
+                <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
+                    <Skeleton className="h-8 w-28 rounded-lg" />
+                    <Skeleton className="h-8 w-40 rounded-lg" />
+                </div>
+                {/* Skeleton Controls */}
+                <div className="flex items-center justify-between gap-3 flex-shrink-0 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <Skeleton className="h-8 w-24 rounded-lg" />
+                        <Skeleton className="h-8 w-24 rounded-lg" />
+                        <Skeleton className="h-8 w-28 rounded-lg" />
+                    </div>
+                    <Skeleton className="h-8 w-24 rounded-lg" />
+                </div>
+                {/* Skeleton Content */}
+                <div className="flex-1 min-h-0">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-full">
+                        {[...Array(3)].map((_, i) => (
+                            <Card key={i} className="flex-1 flex flex-col">
+                                <CardHeader className="pb-3">
+                                    <div className="flex items-center justify-between">
+                                        <Skeleton className="h-4 w-20" />
+                                        <Skeleton className="h-5 w-8 rounded-full" />
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    {[...Array(4)].map((_, j) => (
+                                        <div
+                                            key={j}
+                                            className="bg-card border rounded-lg p-3 space-y-2"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <Skeleton className="h-4 w-24" />
+                                                <Skeleton className="h-4 w-16" />
+                                            </div>
+                                            <Skeleton className="h-3 w-full" />
+                                            <Skeleton className="h-3 w-2/3" />
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                </div>
+            </div>
         );
     }
 
@@ -220,43 +255,44 @@ export function LeadsDashboard() {
     return (
         <div className="flex flex-col h-full">
             {/* Header Row: Total count + Priority Alerts */}
-            <div className="flex items-center justify-between gap-4 mb-3 flex-shrink-0">
+            <div className="flex items-center gap-3 mb-3 flex-shrink-0 flex-wrap">
                 {/* Left side - Total Leads badge */}
                 <div className="flex items-center px-3 py-1.5 rounded-lg bg-muted/50 border">
                     <span className="text-xs">
-                        <span className="text-muted-foreground">Total Leads:</span>{" "}
+                        <span className="text-muted-foreground">
+                            Total Leads:
+                        </span>{" "}
                         <span className="font-bold">{stats.total}</span>
                     </span>
                 </div>
 
-                {/* Priority Alerts Card - Top Right */}
+                {/* Priority Alerts - Compact inline display */}
                 {priorityLeads.length > 0 && (
-                    <Card className="border-red-500/50 bg-red-50/50 dark:bg-red-950/20 shrink-0">
-                        <CardContent className="p-2 flex items-center gap-3">
-                            <div className="flex items-center gap-1.5">
-                                <AlertCircle className="w-3.5 h-3.5 text-red-600" />
-                                <span className="text-xs font-semibold text-red-700 dark:text-red-300">
-                                    🔥 Priority
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                {priorityLeads.slice(0, 3).map((lead: Doc<"leads">) => (
-                                    <div
+                    <div className="flex items-center gap-2 px-2 py-1 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20">
+                        <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                        <span className="text-xs font-medium text-red-700 dark:text-red-300 whitespace-nowrap">
+                            {priorityLeads.length} Priority
+                        </span>
+                        <div className="flex items-center gap-1">
+                            {priorityLeads
+                                .slice(0, 2)
+                                .map((lead: Doc<"leads">) => (
+                                    <Badge
                                         key={lead._id}
-                                        className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white dark:bg-gray-800 border text-[10px]"
+                                        variant="destructive"
+                                        className="text-[9px] px-1 py-0 h-4 cursor-pointer hover:bg-red-700"
+                                        title={lead.name}
                                     >
-                                        <span className="font-medium truncate max-w-[60px]">{lead.name}</span>
-                                        <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4">{lead.urgency_score}%</Badge>
-                                    </div>
+                                        {lead.urgency_score}%
+                                    </Badge>
                                 ))}
-                                {priorityLeads.length > 3 && (
-                                    <span className="text-[10px] text-muted-foreground">
-                                        +{priorityLeads.length - 3}
-                                    </span>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
+                            {priorityLeads.length > 2 && (
+                                <span className="text-[10px] text-red-600 font-medium">
+                                    +{priorityLeads.length - 2}
+                                </span>
+                            )}
+                        </div>
+                    </div>
                 )}
             </div>
 
@@ -265,14 +301,22 @@ export function LeadsDashboard() {
                 <div className="flex items-center gap-2">
                     <Tabs
                         value={viewMode}
-                        onValueChange={(value) => setViewMode(value as "table" | "kanban")}
+                        onValueChange={(value) =>
+                            setViewMode(value as "table" | "kanban")
+                        }
                     >
                         <TabsList className="h-8">
-                            <TabsTrigger value="kanban" className="text-xs px-2.5 h-7">
+                            <TabsTrigger
+                                value="kanban"
+                                className="text-xs px-2.5 h-7"
+                            >
                                 <LayoutGrid className="h-3.5 w-3.5 mr-1" />
                                 Kanban
                             </TabsTrigger>
-                            <TabsTrigger value="table" className="text-xs px-2.5 h-7">
+                            <TabsTrigger
+                                value="table"
+                                className="text-xs px-2.5 h-7"
+                            >
                                 <Table2 className="h-3.5 w-3.5 mr-1" />
                                 Table
                             </TabsTrigger>
@@ -280,7 +324,9 @@ export function LeadsDashboard() {
                     </Tabs>
                     <Select
                         value={intentFilter}
-                        onValueChange={(value: "all" | "buyer" | "seller" | "investor") => setIntentFilter(value)}
+                        onValueChange={(
+                            value: "all" | "buyer" | "seller" | "investor",
+                        ) => setIntentFilter(value)}
                     >
                         <SelectTrigger className="w-[120px] h-8 text-xs">
                             <SelectValue placeholder="Category" />
@@ -295,11 +341,18 @@ export function LeadsDashboard() {
                     {/* Tag Filter Popover */}
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-8 border-dashed text-xs gap-1">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 border-dashed text-xs gap-1"
+                            >
                                 <Tag className="h-3.5 w-3.5 mr-1" />
                                 Tags
                                 {tagFilters.length > 0 && (
-                                    <Badge variant="secondary" className="px-1 h-5 ml-1 text-[10px]">
+                                    <Badge
+                                        variant="secondary"
+                                        className="px-1 h-5 ml-1 text-[10px]"
+                                    >
                                         {tagFilters.length}
                                     </Badge>
                                 )}
@@ -313,7 +366,11 @@ export function LeadsDashboard() {
                                 className="h-8 text-xs mb-2"
                                 onKeyDown={(e) => {
                                     if (e.key === "Enter" && tagSearch.trim()) {
-                                        if (!tagFilters.includes(tagSearch.trim())) {
+                                        if (
+                                            !tagFilters.includes(
+                                                tagSearch.trim(),
+                                            )
+                                        ) {
                                             toggleTagFilter(tagSearch.trim());
                                         }
                                         setTagSearch("");
@@ -322,7 +379,7 @@ export function LeadsDashboard() {
                             />
                             {tagFilters.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mb-2">
-                                    {tagFilters.sort().map(tag => (
+                                    {tagFilters.sort().map((tag) => (
                                         <Badge
                                             key={tag}
                                             variant="secondary"
@@ -338,9 +395,15 @@ export function LeadsDashboard() {
                             <ScrollArea className="h-[200px]">
                                 <div className="space-y-1">
                                     {(allTags ?? [])
-                                        .filter(t => t.toLowerCase().includes(tagSearch.toLowerCase()))
-                                        .filter(t => !tagFilters.includes(t))
-                                        .map(tag => (
+                                        .filter((t) =>
+                                            t
+                                                .toLowerCase()
+                                                .includes(
+                                                    tagSearch.toLowerCase(),
+                                                ),
+                                        )
+                                        .filter((t) => !tagFilters.includes(t))
+                                        .map((tag) => (
                                             <div
                                                 key={tag}
                                                 className="flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-accent rounded-sm cursor-pointer"
@@ -353,18 +416,27 @@ export function LeadsDashboard() {
                                                 {tag}
                                             </div>
                                         ))}
-                                    {tagSearch.trim() && !(allTags ?? []).includes(tagSearch.trim()) && !tagFilters.includes(tagSearch.trim()) && (
-                                        <div
-                                            className="flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-accent rounded-sm cursor-pointer text-muted-foreground"
-                                            onClick={() => {
-                                                toggleTagFilter(tagSearch.trim());
-                                                setTagSearch("");
-                                            }}
-                                        >
-                                            <Plus className="h-3 w-3" />
-                                            Filter by "{tagSearch}"
-                                        </div>
-                                    )}
+                                    {tagSearch.trim() &&
+                                        !(allTags ?? []).includes(
+                                            tagSearch.trim(),
+                                        ) &&
+                                        !tagFilters.includes(
+                                            tagSearch.trim(),
+                                        ) && (
+                                            <div
+                                                className="flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-accent rounded-sm cursor-pointer text-muted-foreground"
+                                                onClick={() => {
+                                                    toggleTagFilter(
+                                                        tagSearch.trim(),
+                                                    );
+                                                    setTagSearch("");
+                                                }}
+                                            >
+                                                <Plus className="h-3 w-3" />
+                                                Filter by &quot;{tagSearch}
+                                                &quot;
+                                            </div>
+                                        )}
                                 </div>
                             </ScrollArea>
                         </PopoverContent>
@@ -392,7 +464,7 @@ export function LeadsDashboard() {
                         <p>No leads found.</p>
                     </div>
                 ) : (
-                    <div className="rounded-md border">
+                    <ScrollArea className="h-[calc(100vh-260px)] rounded-md border">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -408,153 +480,144 @@ export function LeadsDashboard() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {regularLeadsList?.map(
-                                    (lead: Doc<"leads">) => (
-                                        <TableRow key={lead._id}>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <User className="h-4 w-4 text-muted-foreground" />
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium">
-                                                            {lead.name}
+                                {regularLeadsList?.map((lead: Doc<"leads">) => (
+                                    <TableRow key={lead._id}>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                <User className="h-4 w-4 text-muted-foreground" />
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">
+                                                        {lead.name}
+                                                    </span>
+                                                    {lead.notes && (
+                                                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                            <MessageSquare className="w-3 h-3" />
+                                                            Has notes
                                                         </span>
-                                                        {lead.notes && (
-                                                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                                                <MessageSquare className="w-3 h-3" />
-                                                                Has notes
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center gap-1 text-sm">
-                                                        <Phone className="h-3 w-3 text-muted-foreground" />
-                                                        <span>
-                                                            {lead.phone}
-                                                        </span>
-                                                    </div>
-                                                    {lead.email && (
-                                                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                                            <Mail className="h-3 w-3" />
-                                                            <span>
-                                                                {lead.email}
-                                                            </span>
-                                                        </div>
                                                     )}
                                                 </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                {lead.property_address ? (
-                                                    <div className="flex items-start gap-1 max-w-[200px]">
-                                                        <MapPin className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
-                                                        <span className="text-sm truncate">
-                                                            {
-                                                                lead.property_address
-                                                            }
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-1 text-sm">
+                                                    <Phone className="h-3 w-3 text-muted-foreground" />
+                                                    <span>{lead.phone}</span>
+                                                </div>
+                                                {lead.email && (
+                                                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                                        <Mail className="h-3 w-3" />
+                                                        <span>
+                                                            {lead.email}
                                                         </span>
                                                     </div>
-                                                ) : (
-                                                    <span className="text-muted-foreground text-sm">
-                                                        —
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            {lead.property_address ? (
+                                                <div className="flex items-start gap-1 max-w-[200px]">
+                                                    <MapPin className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
+                                                    <span className="text-sm truncate">
+                                                        {lead.property_address}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-muted-foreground text-sm">
+                                                    —
+                                                </span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col gap-1">
+                                                {getIntentBadge(lead.intent)}
+                                                {getSentimentBadge(
+                                                    lead.last_message_sentiment,
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <span className="text-sm text-muted-foreground">
+                                                {lead.source}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell>
+                                            <span
+                                                className={getUrgencyColor(
+                                                    lead.urgency_score,
+                                                )}
+                                            >
+                                                {lead.urgency_score}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell>
+                                            {getStatusBadge(lead.status)}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col gap-1 max-w-[200px]">
+                                                {lead.conversion_prediction && (
+                                                    <span className="text-xs text-blue-600 dark:text-blue-400">
+                                                        {
+                                                            lead.conversion_prediction
+                                                        }
                                                     </span>
                                                 )}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex flex-col gap-1">
-                                                    {getIntentBadge(
-                                                        lead.intent,
-                                                    )}
-                                                    {getSentimentBadge(
-                                                        lead.last_message_sentiment,
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <span className="text-sm text-muted-foreground">
-                                                    {lead.source}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                <span
-                                                    className={getUrgencyColor(
-                                                        lead.urgency_score,
-                                                    )}
-                                                >
-                                                    {lead.urgency_score}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                {getStatusBadge(
-                                                    lead.status,
+                                                {lead.ai_suggestion && (
+                                                    <span className="text-xs text-muted-foreground truncate">
+                                                        {lead.ai_suggestion}
+                                                    </span>
                                                 )}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex flex-col gap-1 max-w-[200px]">
-                                                    {lead.conversion_prediction && (
-                                                        <span className="text-xs text-blue-600 dark:text-blue-400">
-                                                            {
-                                                                lead.conversion_prediction
-                                                            }
-                                                        </span>
-                                                    )}
-                                                    {lead.ai_suggestion && (
-                                                        <span className="text-xs text-muted-foreground truncate">
-                                                            {
-                                                                lead.ai_suggestion
-                                                            }
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex gap-1">
-                                                    {lead.status !==
-                                                        "contacted" && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() =>
-                                                                    handleStatusUpdate(
-                                                                        lead._id,
-                                                                        "contacted",
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Clock className="h-3 w-3 mr-1" />
-                                                                Contact
-                                                            </Button>
-                                                        )}
-                                                    {lead.status !==
-                                                        "qualified" && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() =>
-                                                                    handleStatusUpdate(
-                                                                        lead._id,
-                                                                        "qualified",
-                                                                    )
-                                                                }
-                                                            >
-                                                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                                                Qualify
-                                                            </Button>
-                                                        )}
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ),
-                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex gap-1">
+                                                {lead.status !==
+                                                    "contacted" && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() =>
+                                                            handleStatusUpdate(
+                                                                lead._id,
+                                                                "contacted",
+                                                            )
+                                                        }
+                                                    >
+                                                        <Clock className="h-3 w-3 mr-1" />
+                                                        Contact
+                                                    </Button>
+                                                )}
+                                                {lead.status !==
+                                                    "qualified" && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() =>
+                                                            handleStatusUpdate(
+                                                                lead._id,
+                                                                "qualified",
+                                                            )
+                                                        }
+                                                    >
+                                                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                                                        Qualify
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
                             </TableBody>
                         </Table>
-                    </div>
+                    </ScrollArea>
                 )}
             </div>
 
             {/* Add Lead Modal */}
-            <AddLeadModal open={isAddLeadOpen} onOpenChange={setIsAddLeadOpen} />
+            <AddLeadModal
+                open={isAddLeadOpen}
+                onOpenChange={setIsAddLeadOpen}
+            />
         </div>
     );
 }

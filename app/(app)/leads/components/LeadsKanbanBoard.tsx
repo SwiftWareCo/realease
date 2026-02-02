@@ -21,14 +21,14 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     User,
     Phone,
-    Mail,
     MapPin,
     GripVertical,
     MessageSquare,
-    TrendingUp,
     Clock,
     Link2,
     Tag,
@@ -119,12 +119,6 @@ function LeadCard({ lead, onOpenProfile }: LeadCardProps) {
                     </Badge>
                 );
         }
-    };
-
-    const getUrgencyColor = (score: number) => {
-        if (score >= 80) return "text-red-600 dark:text-red-400 font-semibold";
-        if (score >= 60) return "text-orange-600 dark:text-orange-400";
-        return "text-gray-600 dark:text-gray-400";
     };
 
     const getSentimentBadge = (sentiment?: string) => {
@@ -288,31 +282,34 @@ function StatusColumn({
                         </Badge>
                     </div>
                 </CardHeader>
-                <CardContent
-                    ref={setNodeRef}
-                    className={`flex-1 overflow-y-auto transition-colors ${isOver ? "bg-muted/50" : ""
-                        }`}
-                >
-                    <SortableContext
-                        items={leads.map((l) => l._id)}
-                        strategy={verticalListSortingStrategy}
-                    >
-                        <div className="space-y-2">
-                            {leads.length === 0 ? (
-                                <div className="text-center py-8 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
-                                    Drop leads here
+                <CardContent className="p-0 flex-1 min-h-0">
+                    <ScrollArea className="h-[calc(100vh-360px)]">
+                        <div
+                            ref={setNodeRef}
+                            className={`px-3 py-2 transition-colors min-h-[150px] ${isOver ? "bg-muted/50" : ""}`}
+                        >
+                            <SortableContext
+                                items={leads.map((l) => l._id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                <div className="space-y-2">
+                                    {leads.length === 0 ? (
+                                        <div className="text-center py-8 text-muted-foreground text-sm border-2 border-dashed rounded-lg">
+                                            Drop leads here
+                                        </div>
+                                    ) : (
+                                        leads.map((lead) => (
+                                            <LeadCard
+                                                key={lead._id}
+                                                lead={lead}
+                                                onOpenProfile={onOpenProfile}
+                                            />
+                                        ))
+                                    )}
                                 </div>
-                            ) : (
-                                leads.map((lead) => (
-                                    <LeadCard
-                                        key={lead._id}
-                                        lead={lead}
-                                        onOpenProfile={onOpenProfile}
-                                    />
-                                ))
-                            )}
+                            </SortableContext>
                         </div>
-                    </SortableContext>
+                    </ScrollArea>
                 </CardContent>
             </Card>
         </div>
@@ -390,11 +387,33 @@ export function LeadsKanbanBoard({
 
     if (allLeads === undefined) {
         return (
-            <Card>
-                <CardContent className="p-8 text-center">
-                    <p className="text-muted-foreground">Loading leads...</p>
-                </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-full">
+                {statuses.map((status) => (
+                    <Card key={status.id} className="flex-1 flex flex-col">
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                                <Skeleton className="h-4 w-20" />
+                                <Skeleton className="h-5 w-8 rounded-full" />
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-2">
+                            {[...Array(4)].map((_, i) => (
+                                <div key={i} className="bg-card border rounded-lg p-3 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Skeleton className="h-4 w-4" />
+                                            <Skeleton className="h-4 w-24" />
+                                        </div>
+                                        <Skeleton className="h-4 w-16" />
+                                    </div>
+                                    <Skeleton className="h-3 w-full" />
+                                    <Skeleton className="h-3 w-2/3" />
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
         );
     }
 
