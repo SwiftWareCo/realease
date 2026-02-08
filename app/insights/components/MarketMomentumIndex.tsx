@@ -21,7 +21,7 @@ export function MarketMomentumIndex() {
                 <Badge variant={isSellersMarket ? "default" : "secondary"} className="text-xs px-3 h-6 shrink-0">
                     {isSellersMarket ? "Seller's Market" : "Buyer's Market"}
                 </Badge>
-                <div className="flex w-28 h-28 shrink-0 items-center justify-center rounded-full border-[10px] border-muted border-t-primary bg-muted/10 shadow-sm">
+                <div className="flex w-28 h-28 mt-2 shrink-0 items-center justify-center rounded-full border-[10px] border-muted border-t-primary bg-muted/10 shadow-sm">
                     <div className="flex flex-col items-center">
                         <span className="text-4xl font-bold tracking-tighter leading-none">{momentumScore}</span>
                         <span className="text-[10px] font-semibold text-muted-foreground uppercase">Score</span>

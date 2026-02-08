@@ -15,20 +15,20 @@ const COLORS = ['#ef4444', '#f97316', '#3b82f6', '#8b5cf6'];
 
 export function DropOffAnalysisWidget() {
     return (
-        <Card className="flex flex-col h-full">
-            <CardHeader className="pb-2">
+        <Card className="flex flex-col h-full overflow-hidden">
+            <CardHeader className="pb-1 pt-4 px-4">
                 <CardTitle className="text-base">Drop-off Reasons</CardTitle>
-                <CardDescription>Why leads turn cold</CardDescription>
+                <CardDescription className="text-xs">Why leads turn cold</CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 min-h-0">
+            <CardContent className="flex-1 min-h-0 px-4 pb-3">
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
                             data={data}
                             cx="50%"
-                            cy="50%"
-                            innerRadius={40}
-                            outerRadius={70}
+                            cy="45%"
+                            innerRadius={30}
+                            outerRadius={55}
                             paddingAngle={2}
                             dataKey="value"
                         >
@@ -40,7 +40,7 @@ export function DropOffAnalysisWidget() {
                             contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
                             itemStyle={{ color: 'hsl(var(--foreground))' }}
                         />
-                        <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                        <Legend verticalAlign="bottom" height={28} iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
                     </PieChart>
                 </ResponsiveContainer>
             </CardContent>

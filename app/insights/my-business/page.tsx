@@ -1,26 +1,21 @@
 'use client';
 
-import { Briefcase } from 'lucide-react';
 import { RevenueWidget } from '../components/RevenueWidget';
-import { LeadSourceEfficiencyWidget } from '../components/LeadSourceEfficiencyWidget';
 import { FunnelVelocityWidget } from '../components/FunnelVelocityWidget';
-import { DropOffAnalysisWidget } from '../components/DropOffAnalysisWidget';
-import { LeadHealthWidget } from '../components/LeadHealthWidget';
-import { InsightsSection } from '../components/InsightsSection';
+import { LeadSourcePerformanceWidget } from '../components/LeadSourcePerformanceWidget';
 
 export default function MyBusinessPage() {
     return (
-        <div className="flex h-[calc(100vh-2rem)] flex-col gap-4 p-4">
-            {/* Top Banner: Revenue */}
-            <div className="h-[35%] shrink-0">
+        <div className="h-[calc(100vh-4rem)] flex flex-col gap-2 p-3 overflow-hidden">
+            {/* Top: Revenue Widget - 40% height */}
+            <div className="h-[40%]">
                 <RevenueWidget />
             </div>
 
-            {/* Bottom Grid: 3 columns. Funnel (Middle) taller? No, make them equal. */}
-            <div className="grid min-h-0 flex-1 grid-cols-3 gap-4">
+            {/* Bottom: Two widgets side by side */}
+            <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
                 <FunnelVelocityWidget />
-                <DropOffAnalysisWidget />
-                <LeadHealthWidget />
+                <LeadSourcePerformanceWidget />
             </div>
         </div>
     );
