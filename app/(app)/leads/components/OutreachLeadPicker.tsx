@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -16,12 +17,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { CampaignCreateWizard } from "./outreach/CampaignCreateWizard";
-import { CampaignRunView } from "./outreach/CampaignRunView";
 import { CampaignSettingsForm } from "./outreach/CampaignSettingsForm";
 import { CampaignsTable } from "./outreach/CampaignsTable";
 import { StartOutreachWizardModal } from "./outreach/StartOutreachWizardModal";
 import type {
-    CampaignCallsData,
     CampaignRow,
     CampaignSettingsInput,
     CreateCampaignInput,
@@ -35,11 +34,10 @@ export function OutreachLeadPicker({
     createDialogOpen: boolean;
     onCreateDialogOpenChange: (open: boolean) => void;
 }) {
+    const router = useRouter();
     const [editingCampaignId, setEditingCampaignId] =
         useState<Id<"outreachCampaigns"> | null>(null);
     const [wizardCampaignId, setWizardCampaignId] =
-        useState<Id<"outreachCampaigns"> | null>(null);
-    const [activeCampaignViewId, setActiveCampaignViewId] =
         useState<Id<"outreachCampaigns"> | null>(null);
 
     const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
@@ -53,17 +51,6 @@ export function OutreachLeadPicker({
     });
     const campaigns = campaignsRaw as CampaignRow[] | undefined;
 
-    const runDataRaw = useQuery(
-        api.outreach.queries.getCampaignCallAttempts,
-        activeCampaignViewId
-            ? {
-                  campaignId: activeCampaignViewId,
-                  limit: 250,
-              }
-            : "skip",
-    );
-    const runData = runDataRaw as CampaignCallsData | undefined;
-
     const createCampaign = useMutation(api.outreach.mutations.createCampaign);
     const updateCampaign = useMutation(
         api.outreach.mutations.updateCampaignSettings,
@@ -71,9 +58,11 @@ export function OutreachLeadPicker({
     const startOutreach = useAction(api.outreach.actions.startCampaignOutreach);
 
     const editingCampaign =
-        campaigns?.find((campaign) => campaign._id === editingCampaignId) ?? null;
+        campaigns?.find((campaign) => campaign._id === editingCampaignId) ??
+        null;
     const wizardCampaign =
-        campaigns?.find((campaign) => campaign._id === wizardCampaignId) ?? null;
+        campaigns?.find((campaign) => campaign._id === wizardCampaignId) ??
+        null;
 
     const handleCreateCampaign = async (input: CreateCampaignInput) => {
         setIsCreatingCampaign(true);
@@ -160,7 +149,7 @@ export function OutreachLeadPicker({
             }
 
             if (result.startedCount > 0) {
-                setActiveCampaignViewId(result.campaignId);
+                router.push(`/leads/outreach/${result.campaignId}`);
             }
             setWizardCampaignId(null);
         } catch (error) {
@@ -171,7 +160,7 @@ export function OutreachLeadPicker({
         }
     };
 
-    if (campaigns === undefined || (activeCampaignViewId && runData === undefined)) {
+    if (campaigns === undefined) {
         return (
             <div className="space-y-4">
                 <Skeleton className="h-20" />
@@ -180,38 +169,19 @@ export function OutreachLeadPicker({
         );
     }
 
-    if (activeCampaignViewId && runData) {
-        return (
-            <>
-                <CampaignRunView
-                    data={runData}
-                    onBack={() => setActiveCampaignViewId(null)}
-                />
-
-                <Dialog open={createDialogOpen} onOpenChange={onCreateDialogOpenChange}>
-                    <DialogContent className="sm:max-w-[620px]">
-                        <DialogHeader>
-                            <DialogTitle>Create Campaign</DialogTitle>
-                            <DialogDescription>
-                                Use this wizard to create another campaign.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <CampaignCreateWizard
-                            isCreating={isCreatingCampaign}
-                            onCreate={handleCreateCampaign}
-                        />
-                    </DialogContent>
-                </Dialog>
-            </>
-        );
-    }
-
     return (
         <div className="space-y-4">
             <CampaignsTable
                 campaigns={campaigns}
-                onEditCampaign={(campaign) => setEditingCampaignId(campaign._id)}
-                onStartOutreach={(campaign) => setWizardCampaignId(campaign._id)}
+                onEditCampaign={(campaign) =>
+                    setEditingCampaignId(campaign._id)
+                }
+                onStartOutreach={(campaign) =>
+                    setWizardCampaignId(campaign._id)
+                }
+                onViewCampaign={(campaign) =>
+                    router.push(`/leads/outreach/${campaign._id}`)
+                }
             />
 
             {lastStartResult && (
@@ -230,13 +200,17 @@ export function OutreachLeadPicker({
                             Skipped: {lastStartResult.skippedCount}
                         </Badge>
                         <Badge variant="outline">
-                            Dispatch Failed: {lastStartResult.dispatchFailedCount}
+                            Dispatch Failed:{" "}
+                            {lastStartResult.dispatchFailedCount}
                         </Badge>
                     </CardContent>
                 </Card>
             )}
 
-            <Dialog open={createDialogOpen} onOpenChange={onCreateDialogOpenChange}>
+            <Dialog
+                open={createDialogOpen}
+                onOpenChange={onCreateDialogOpenChange}
+            >
                 <DialogContent className="sm:max-w-[620px]">
                     <DialogHeader>
                         <DialogTitle>Create Campaign</DialogTitle>

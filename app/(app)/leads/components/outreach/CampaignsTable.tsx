@@ -11,10 +11,13 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Edit3, Play } from "lucide-react";
+import { Edit3, Eye, Play } from "lucide-react";
 import { WEEKDAYS, getCampaignStatusBadge } from "./constants";
 import type { CampaignRow } from "./types";
-import { formatDateHumanReadable, formatHourTo12Hour } from "@/utils/dateandtimes";
+import {
+    formatDateHumanReadable,
+    formatHourTo12Hour,
+} from "@/utils/dateandtimes";
 
 function formatUpdatedAt(timestamp: number): string {
     const date = new Date(timestamp);
@@ -27,16 +30,20 @@ export function CampaignsTable({
     campaigns,
     onEditCampaign,
     onStartOutreach,
+    onViewCampaign,
 }: {
     campaigns: CampaignRow[];
     onEditCampaign: (campaign: CampaignRow) => void;
     onStartOutreach: (campaign: CampaignRow) => void;
+    onViewCampaign: (campaign: CampaignRow) => void;
 }) {
     if (campaigns.length === 0) {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-base">No Campaigns Yet</CardTitle>
+                    <CardTitle className="text-base">
+                        No Campaigns Yet
+                    </CardTitle>
                     <p className="text-sm text-muted-foreground">
                         Create a campaign to start outbound qualification.
                     </p>
@@ -59,16 +66,21 @@ export function CampaignsTable({
                             <TableHead>Calling Window</TableHead>
                             <TableHead>Retry</TableHead>
                             <TableHead>Updated</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                            <TableHead className="text-right">
+                                Actions
+                            </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {campaigns.map((campaign) => (
                             <TableRow key={campaign._id}>
                                 <TableCell>
-                                    <div className="font-medium">{campaign.name}</div>
+                                    <div className="font-medium">
+                                        {campaign.name}
+                                    </div>
                                     <div className="text-xs text-muted-foreground">
-                                        {campaign.description || campaign.timezone}
+                                        {campaign.description ||
+                                            campaign.timezone}
                                     </div>
                                 </TableCell>
                                 <TableCell>
@@ -87,7 +99,8 @@ export function CampaignsTable({
                                         .map(
                                             (weekday) =>
                                                 WEEKDAYS.find(
-                                                    (item) => item.value === weekday,
+                                                    (item) =>
+                                                        item.value === weekday,
                                                 )?.label,
                                         )
                                         .filter(Boolean)
@@ -113,13 +126,26 @@ export function CampaignsTable({
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            onClick={() => onEditCampaign(campaign)}
+                                            onClick={() =>
+                                                onEditCampaign(campaign)
+                                            }
                                         >
                                             <Edit3 className="h-4 w-4" />
                                         </Button>
                                         <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={() =>
+                                                onViewCampaign(campaign)
+                                            }
+                                        >
+                                            <Eye className="h-4 w-4" />
+                                        </Button>
+                                        <Button
                                             size="sm"
-                                            onClick={() => onStartOutreach(campaign)}
+                                            onClick={() =>
+                                                onStartOutreach(campaign)
+                                            }
                                         >
                                             <Play className="mr-1.5 h-4 w-4" />
                                             Start Outreach
