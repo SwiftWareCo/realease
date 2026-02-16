@@ -1,6 +1,19 @@
-import type { UserJSON } from "@clerk/backend";
-import { v, type Validator } from "convex/values";
+import { v } from "convex/values";
 import { internalMutation, query, type QueryCtx } from "./_generated/server";
+
+const clerkUserSchema = v.object({
+    id: v.string(),
+    first_name: v.union(v.string(), v.null()),
+    last_name: v.union(v.string(), v.null()),
+    image_url: v.optional(v.string()),
+    email_addresses: v.optional(
+        v.array(
+            v.object({
+                email_address: v.string(),
+            }),
+        ),
+    ),
+});
 
 export const current = query({
     args: {},
@@ -10,7 +23,8 @@ export const current = query({
 });
 
 export const upsertFromClerk = internalMutation({
-    args: { data: v.any() as Validator<UserJSON> },
+    args: { data: clerkUserSchema },
+    returns: v.null(),
     handler: async (ctx, args) => {
         const user = args.data;
         const name = `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim();
@@ -25,7 +39,7 @@ export const upsertFromClerk = internalMutation({
                 email,
                 imageUrl,
             });
-            return;
+            return null;
         }
 
         await ctx.db.insert("users", {
@@ -34,17 +48,22 @@ export const upsertFromClerk = internalMutation({
             email,
             imageUrl,
         });
+
+        return null;
     },
 });
 
 export const deleteFromClerk = internalMutation({
     args: { clerkUserId: v.string() },
+    returns: v.null(),
     handler: async (ctx, args) => {
         const existing = await userByExternalId(ctx, args.clerkUserId);
 
         if (existing) {
             await ctx.db.delete(existing._id);
         }
+
+        return null;
     },
 });
 

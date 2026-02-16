@@ -108,6 +108,18 @@ Convex functions are located in the `/convex` directory. See the [Convex documen
 - Ensure all components support dark mode
 - Follow the Single Responsibility Principle (SRP)
 
+## AI Skills (Convex)
+
+We use Convex skills locally across Codex, Claude Code, and OpenCode. These are installed locally and intentionally **not** committed to git.
+
+**Local install locations (gitignored):**
+- `~/.codex/skills` (Codex)
+- `~/.claude/skills` (Claude Code)
+- `~/.agents/skills` (OpenCode)
+
+Install from:
+https://github.com/waynesutton/convexskills
+
 ## Learn More
 
 - [Next.js Documentation](https://nextjs.org/docs) - Learn about Next.js features and API

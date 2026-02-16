@@ -4,11 +4,7 @@ import { TopBar } from "../../components/layout/TopBar";
 import { Toaster } from "sonner";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 
-export default function AppLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
         <ConvexClientProvider>
             <SidebarProvider className="h-svh overflow-hidden">

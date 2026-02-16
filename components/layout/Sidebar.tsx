@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, Home, ChevronRight, Users, Network, UserCheck, ShoppingCart, Store } from 'lucide-react';
+import { CalendarDays, Home, ChevronRight, Users, Network, UserCheck, ShoppingCart, Store, TrendingUp, Settings } from 'lucide-react';
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -55,6 +55,11 @@ const navigation: NavItem[] = [
     ],
   },
   {
+    name: 'Insights',
+    href: '/insights',
+    icon: TrendingUp,
+  },
+  {
     name: 'Calendar',
     href: '/calendar',
     icon: CalendarDays,
@@ -63,6 +68,11 @@ const navigation: NavItem[] = [
     name: 'Listings',
     href: '/listings',
     icon: Home,
+  },
+  {
+    name: 'Settings',
+    href: '/settings',
+    icon: Settings,
   },
 ];
 
