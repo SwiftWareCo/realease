@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { outreachCallOutcomeSchema } from "../outreach/outreach.schema";
 
 export const leadsTable = defineTable({
     name: v.string(),
@@ -60,9 +61,15 @@ export const leadsTable = defineTable({
     last_message_content: v.optional(v.string()),
     message_count: v.optional(v.number()), // Track number of messages exchanged
     tags: v.optional(v.array(v.string())), // Custom tags for filtering/organization
+    do_not_call: v.optional(v.boolean()),
+    sms_opt_out: v.optional(v.boolean()),
+    last_outreach_call_id: v.optional(v.id("outreachCalls")),
+    last_call_outcome: v.optional(outreachCallOutcomeSchema),
     created_at: v.number(),
 })
     .index("by_status", ["status"])
     .index("by_source", ["source"])
-    .index("by_lead_type", ["lead_type"]);
-
+    .index("by_lead_type", ["lead_type"])
+    .index("by_do_not_call", ["do_not_call"])
+    .index("by_sms_opt_out", ["sms_opt_out"])
+    .index("by_last_call_outcome", ["last_call_outcome"]);
