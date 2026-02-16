@@ -1,6 +1,47 @@
-# Outreach Campaigns Schema (MVP)
+# Outbound Lead Qualification (MVP)
 
-## What this covers
+## Feature overview
+
+This feature is end-to-end outbound lead qualification for RealEase using Retell AI voice calls and Twilio SMS follow-up.
+
+MVP goal:
+- Automatically place outbound qualification calls to eligible leads
+- Capture call outcomes in a normalized format
+- Update lead funnel status/stage based on campaign routing rules
+- Send follow-up SMS when allowed and configured
+
+Runtime components for this feature:
+- Campaign configuration and call/outcome persistence (schema in this document)
+- Call initiation logic (scheduler + manual triggers)
+- Retell webhook ingestion and outcome mapping
+- Lead routing updates and optional Twilio follow-up SMS
+
+As of February 16, 2026, this document is focused on the schema contracts for that feature. Schema is one part of the full implementation.
+
+## Current implementation status (February 16, 2026)
+
+- Retell outbound qualification agent has been created in the Retell dashboard.
+- Agent behavior has been tested in `Test LLM` and validated with real call tests.
+- Post-call extraction has been configured to support normalized outcomes and CRM updates.
+- Outbound Retell phone number has not been purchased/configured yet, so production outbound calling is not ready.
+- Webhook processing and cron-based outbound automation are the next backend milestones.
+
+## Retell agent contract (for future development)
+
+The current Retell agent is expected to:
+- Start with a short introduction and confirm if it is a good time to talk.
+- Qualify lead intent and readiness (buyer/seller/investor, timeline, core context).
+- Handle negative/compliance outcomes safely (`do_not_call`, `wrong_number`, no-interest flows).
+- Detect voicemail/no-answer style outcomes and close quickly.
+- Produce post-call analysis outputs used by backend routing.
+
+Expected post-call analysis payloads used by RealEase:
+- Built-in analysis: `call_summary`, `call_successful`, `user_sentiment`
+- Custom analysis: `normalized_outcome`, `qualification_notes`, `best_callback_time` (and optional enrichment fields)
+
+Backend should treat `normalized_outcome` as the primary routing signal and use other analysis fields as supporting context.
+
+## Schema scope in this document
 
 This document describes the condensed schema for outbound calling with Retell AI and follow-up SMS with Twilio.
 
