@@ -1,7 +1,7 @@
 "use node";
 
 import type { Id } from "../_generated/dataModel";
-import { internal } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { normalizePhoneNumber } from "./phone";
@@ -72,7 +72,7 @@ export const startCampaignOutreach = action({
     },
     handler: async (ctx, args): Promise<StartOutreachActionResult> => {
         const queueResult = (await ctx.runMutation(
-            internal.outreach.mutations.queueCampaignOutreach,
+            api.outreach.mutations.startCampaignOutreach,
             args,
         )) as QueueOutreachResult;
 

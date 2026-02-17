@@ -1,6 +1,6 @@
-import { internalQuery, query } from "../_generated/server";
+import { internalQuery, query, type QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { isValidPhoneNumber } from "./phone";
 
 type EligibilityReason =
@@ -20,6 +20,25 @@ type CampaignLeadCallStats = {
 
 const ACTIVE_CALL_STATUSES: ReadonlySet<Doc<"outreachCalls">["call_status"]> =
     new Set(["queued", "ringing", "in_progress"]);
+
+async function getCurrentUserIdOrThrow(ctx: QueryCtx): Promise<Id<"users">> {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+        throw new Error("Unauthorized");
+    }
+
+    const user = await ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) =>
+            q.eq("externalId", identity.subject),
+        )
+        .unique();
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    return user._id;
+}
 
 function getSelectableReasons(
     lead: Doc<"leads">,
@@ -64,8 +83,12 @@ export const getCampaignLeadPicker = query({
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const campaign = await ctx.db.get(args.campaignId);
         if (!campaign) {
+            throw new Error("Campaign not found");
+        }
+        if (campaign.created_by_user_id !== userId) {
             throw new Error("Campaign not found");
         }
 
@@ -142,7 +165,26 @@ export const getCampaignsForPicker = query({
         includeInactive: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
-        const campaigns = await ctx.db.query("outreachCampaigns").collect();
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        const campaigns = await ctx.db
+            .query("outreachCampaigns")
+            .withIndex("by_created_by_user_id", (q) =>
+                q.eq("created_by_user_id", userId),
+            )
+            .collect();
+        const hasCallHistoryByCampaignId = new Map<string, boolean>();
+        for (const campaign of campaigns) {
+            const existingCall = await ctx.db
+                .query("outreachCalls")
+                .withIndex("by_campaign_id", (q) =>
+                    q.eq("campaign_id", campaign._id),
+                )
+                .first();
+            hasCallHistoryByCampaignId.set(
+                String(campaign._id),
+                Boolean(existingCall),
+            );
+        }
         const includeInactive = args.includeInactive ?? false;
 
         return campaigns
@@ -169,6 +211,9 @@ export const getCampaignsForPicker = query({
                 retryPolicy: campaign.retry_policy,
                 callingWindow: campaign.calling_window,
                 updatedAt: campaign.updated_at,
+                hasCallHistory:
+                    hasCallHistoryByCampaignId.get(String(campaign._id)) ??
+                    false,
             }));
     },
 });
@@ -179,8 +224,12 @@ export const getCampaignCallAttempts = query({
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const campaign = await ctx.db.get(args.campaignId);
         if (!campaign) {
+            throw new Error("Campaign not found");
+        }
+        if (campaign.created_by_user_id !== userId) {
             throw new Error("Campaign not found");
         }
 
@@ -243,6 +292,154 @@ export const getCampaignCallAttempts = query({
                     errorMessage: call.error_message ?? null,
                 };
             }),
+        };
+    },
+});
+
+export const getCampaignCallAttemptDetails = query({
+    args: {
+        campaignId: v.id("outreachCampaigns"),
+        callId: v.id("outreachCalls"),
+    },
+    handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        const campaign = await ctx.db.get(args.campaignId);
+        if (!campaign) {
+            throw new Error("Campaign not found");
+        }
+        if (campaign.created_by_user_id !== userId) {
+            throw new Error("Campaign not found");
+        }
+
+        const call = await ctx.db.get(args.callId);
+        if (!call || call.campaign_id !== args.campaignId) {
+            throw new Error("Call attempt not found");
+        }
+
+        const lead = await ctx.db.get(call.lead_id);
+
+        const byCallIdEvents = await ctx.db
+            .query("outreachWebhookEvents")
+            .withIndex("by_call_id", (q) => q.eq("call_id", call._id))
+            .collect();
+        const byRetellCallIdEvents = call.retell_call_id
+            ? await ctx.db
+                  .query("outreachWebhookEvents")
+                  .withIndex("by_retell_call_id", (q) =>
+                      q.eq("retell_call_id", call.retell_call_id!),
+                  )
+                  .collect()
+            : [];
+
+        const eventsById = new Map<string, Doc<"outreachWebhookEvents">>();
+        for (const event of byCallIdEvents) {
+            eventsById.set(String(event._id), event);
+        }
+        for (const event of byRetellCallIdEvents) {
+            eventsById.set(String(event._id), event);
+        }
+        const webhookEvents = Array.from(eventsById.values())
+            .sort((a, b) => {
+                const aTime = a.event_timestamp ?? a.received_at;
+                const bTime = b.event_timestamp ?? b.received_at;
+                return aTime - bTime;
+            })
+            .map((event) => ({
+                eventId: event._id,
+                retellEventId: event.retell_event_id ?? null,
+                retellCallId: event.retell_call_id ?? null,
+                eventType: event.event_type,
+                eventTimestamp: event.event_timestamp ?? null,
+                processingStatus: event.processing_status,
+                processingError: event.processing_error ?? null,
+                receivedAt: event.received_at,
+                processedAt: event.processed_at ?? null,
+                payload: event.payload,
+            }));
+
+        const leadCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_lead_id", (q) => q.eq("lead_id", call.lead_id))
+            .collect();
+        const historyCampaignDocs = new Map<
+            Id<"outreachCampaigns">,
+            Doc<"outreachCampaigns"> | null
+        >();
+        const historyCampaignIds = new Set(
+            leadCalls
+                .map((historyCall) => historyCall.campaign_id)
+                .filter((campaignId): campaignId is Id<"outreachCampaigns"> =>
+                    Boolean(campaignId),
+                ),
+        );
+        for (const campaignId of historyCampaignIds) {
+            historyCampaignDocs.set(campaignId, await ctx.db.get(campaignId));
+        }
+
+        const leadHistoryCalls = leadCalls
+            .filter((historyCall) => {
+                if (!historyCall.campaign_id) {
+                    return false;
+                }
+                const historyCampaign = historyCampaignDocs.get(
+                    historyCall.campaign_id,
+                );
+                return historyCampaign?.created_by_user_id === userId;
+            })
+            .sort((a, b) => b.initiated_at - a.initiated_at)
+            .slice(0, 12);
+
+        return {
+            campaign: {
+                _id: campaign._id,
+                name: campaign.name,
+                status: campaign.status,
+                timezone: campaign.timezone,
+            },
+            call: {
+                callId: call._id,
+                leadId: call.lead_id,
+                leadName: lead?.name ?? "Deleted lead",
+                leadPhone: lead?.phone ?? "Unknown",
+                leadStatus: lead?.status ?? null,
+                leadDoNotCall: lead?.do_not_call ?? false,
+                leadSmsOptOut: lead?.sms_opt_out ?? false,
+                callStatus: call.call_status,
+                callDirection: call.call_direction,
+                initiatedAt: call.initiated_at,
+                startedAt: call.started_at ?? null,
+                endedAt: call.ended_at ?? null,
+                durationSeconds: call.duration_seconds ?? null,
+                retellCallId: call.retell_call_id ?? null,
+                retellConversationId: call.retell_conversation_id ?? null,
+                recordingUrl: call.recording_url ?? null,
+                transcript: call.transcript ?? null,
+                summary: call.summary ?? null,
+                extractedData: call.extracted_data ?? null,
+                outcome: call.outcome ?? null,
+                outcomeReason: call.outcome_reason ?? null,
+                followUpSmsStatus: call.follow_up_sms_status ?? null,
+                followUpSmsSentAt: call.follow_up_sms_sent_at ?? null,
+                followUpSmsSid: call.follow_up_sms_sid ?? null,
+                followUpSmsError: call.follow_up_sms_error ?? null,
+                errorMessage: call.error_message ?? null,
+                createdAt: call.created_at,
+                updatedAt: call.updated_at,
+            },
+            webhookEvents,
+            leadHistory: leadHistoryCalls.map((historyCall) => ({
+                callId: historyCall._id,
+                campaignId: historyCall.campaign_id ?? null,
+                campaignName: historyCall.campaign_id
+                    ? (historyCampaignDocs.get(historyCall.campaign_id)?.name ??
+                      "Campaign")
+                    : null,
+                callStatus: historyCall.call_status,
+                outcome: historyCall.outcome ?? null,
+                initiatedAt: historyCall.initiated_at,
+                retellCallId: historyCall.retell_call_id ?? null,
+                errorMessage: historyCall.error_message ?? null,
+            })),
         };
     },
 });

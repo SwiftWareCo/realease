@@ -12,6 +12,9 @@ type CampaignLeadPickerResult = FunctionReturnType<
 export type CampaignCallsData = FunctionReturnType<
     typeof api.outreach.queries.getCampaignCallAttempts
 >;
+export type CampaignCallAttemptDetails = FunctionReturnType<
+    typeof api.outreach.queries.getCampaignCallAttemptDetails
+>;
 
 export type StartOutreachResult = FunctionReturnType<
     typeof api.outreach.actions.startCampaignOutreach

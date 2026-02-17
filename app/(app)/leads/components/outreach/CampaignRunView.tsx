@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +17,11 @@ import {
 import { ArrowLeft } from "lucide-react";
 import { OUTCOME_LABELS, getCampaignStatusBadge } from "./constants";
 import type { CampaignCallsData } from "./types";
-import { formatDateHumanReadable, formatHourTo12Hour } from "@/utils/dateandtimes";
+import {
+    formatDateHumanReadable,
+    formatHourTo12Hour,
+} from "@/utils/dateandtimes";
+import { CallAttemptDetailsDrawer } from "./CallAttemptDetailsDrawer";
 
 function formatDateTime(timestamp: number): string {
     const date = new Date(timestamp);
@@ -31,6 +37,9 @@ export function CampaignRunView({
     data: CampaignCallsData;
     onBack: () => void;
 }) {
+    const [selectedCallId, setSelectedCallId] =
+        useState<Id<"outreachCalls"> | null>(null);
+
     return (
         <div className="space-y-4">
             <Card>
@@ -57,19 +66,31 @@ export function CampaignRunView({
                         </p>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                        <Badge variant="outline" className="justify-center py-1.5">
+                        <Badge
+                            variant="outline"
+                            className="justify-center py-1.5"
+                        >
                             Total: {data.summary.total}
                         </Badge>
-                        <Badge variant="outline" className="justify-center py-1.5">
+                        <Badge
+                            variant="outline"
+                            className="justify-center py-1.5"
+                        >
                             Active:{" "}
                             {data.summary.queued +
                                 data.summary.ringing +
                                 data.summary.in_progress}
                         </Badge>
-                        <Badge variant="outline" className="justify-center py-1.5">
+                        <Badge
+                            variant="outline"
+                            className="justify-center py-1.5"
+                        >
                             Completed: {data.summary.completed}
                         </Badge>
-                        <Badge variant="outline" className="justify-center py-1.5">
+                        <Badge
+                            variant="outline"
+                            className="justify-center py-1.5"
+                        >
                             Failed: {data.summary.failed}
                         </Badge>
                     </div>
@@ -95,7 +116,13 @@ export function CampaignRunView({
                             </TableHeader>
                             <TableBody>
                                 {data.calls.map((call) => (
-                                    <TableRow key={call.callId}>
+                                    <TableRow
+                                        key={call.callId}
+                                        className="cursor-pointer hover:bg-muted/40"
+                                        onClick={() =>
+                                            setSelectedCallId(call.callId)
+                                        }
+                                    >
                                         <TableCell>
                                             <div className="font-medium">
                                                 {call.leadName}
@@ -112,8 +139,9 @@ export function CampaignRunView({
                                         <TableCell>
                                             {call.outcome ? (
                                                 <Badge variant="secondary">
-                                                    {OUTCOME_LABELS[call.outcome] ??
-                                                        call.outcome}
+                                                    {OUTCOME_LABELS[
+                                                        call.outcome
+                                                    ] ?? call.outcome}
                                                 </Badge>
                                             ) : (
                                                 <span className="text-muted-foreground">
@@ -142,6 +170,18 @@ export function CampaignRunView({
                     </ScrollArea>
                 </CardContent>
             </Card>
+
+            <CallAttemptDetailsDrawer
+                campaignId={data.campaign._id}
+                callId={selectedCallId}
+                open={selectedCallId !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setSelectedCallId(null);
+                    }
+                }}
+                onSelectCall={setSelectedCallId}
+            />
         </div>
     );
 }

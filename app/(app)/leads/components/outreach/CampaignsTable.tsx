@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Edit3, Eye, Play } from "lucide-react";
+import { Archive, Edit3, Eye, Play, Trash2 } from "lucide-react";
 import { WEEKDAYS, getCampaignStatusBadge } from "./constants";
 import type { CampaignRow } from "./types";
 import {
@@ -30,12 +31,14 @@ export function CampaignsTable({
     campaigns,
     onEditCampaign,
     onStartOutreach,
-    onViewCampaign,
+    onDeleteCampaign,
+    isDeletingCampaign,
 }: {
     campaigns: CampaignRow[];
     onEditCampaign: (campaign: CampaignRow) => void;
     onStartOutreach: (campaign: CampaignRow) => void;
-    onViewCampaign: (campaign: CampaignRow) => void;
+    onDeleteCampaign: (campaign: CampaignRow) => void;
+    isDeletingCampaign: boolean;
 }) {
     if (campaigns.length === 0) {
         return (
@@ -75,9 +78,12 @@ export function CampaignsTable({
                         {campaigns.map((campaign) => (
                             <TableRow key={campaign._id}>
                                 <TableCell>
-                                    <div className="font-medium">
+                                    <Link
+                                        href={`/leads/outreach/${campaign._id}`}
+                                        className="font-medium hover:underline"
+                                    >
                                         {campaign.name}
-                                    </div>
+                                    </Link>
                                     <div className="text-xs text-muted-foreground">
                                         {campaign.description ||
                                             campaign.timezone}
@@ -126,29 +132,68 @@ export function CampaignsTable({
                                         <Button
                                             size="icon"
                                             variant="ghost"
+                                            className={
+                                                campaign.hasCallHistory
+                                                    ? "text-muted-foreground hover:text-foreground"
+                                                    : "text-destructive hover:text-destructive"
+                                            }
                                             onClick={() =>
-                                                onEditCampaign(campaign)
+                                                onDeleteCampaign(campaign)
+                                            }
+                                            disabled={isDeletingCampaign}
+                                            aria-label={
+                                                campaign.hasCallHistory
+                                                    ? `Archive ${campaign.name}`
+                                                    : `Delete ${campaign.name}`
                                             }
                                         >
-                                            <Edit3 className="h-4 w-4" />
+                                            {campaign.hasCallHistory ? (
+                                                <Archive className="h-4 w-4" />
+                                            ) : (
+                                                <Trash2 className="h-4 w-4" />
+                                            )}
                                         </Button>
                                         <Button
                                             size="icon"
                                             variant="ghost"
                                             onClick={() =>
-                                                onViewCampaign(campaign)
+                                                onEditCampaign(campaign)
                                             }
+                                            disabled={isDeletingCampaign}
                                         >
-                                            <Eye className="h-4 w-4" />
+                                            <Edit3 className="h-4 w-4" />
                                         </Button>
                                         <Button
                                             size="sm"
                                             onClick={() =>
                                                 onStartOutreach(campaign)
                                             }
+                                            disabled={isDeletingCampaign}
                                         >
                                             <Play className="mr-1.5 h-4 w-4" />
                                             Start Outreach
+                                        </Button>
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            asChild
+                                        >
+                                            <Link
+                                                href={`/leads/outreach/${campaign._id}`}
+                                                aria-disabled={
+                                                    isDeletingCampaign
+                                                }
+                                                tabIndex={
+                                                    isDeletingCampaign ? -1 : 0
+                                                }
+                                                className={
+                                                    isDeletingCampaign
+                                                        ? "pointer-events-none opacity-50"
+                                                        : ""
+                                                }
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                            </Link>
                                         </Button>
                                     </div>
                                 </TableCell>

@@ -49,6 +49,25 @@ type CampaignLeadCallStats = {
     latestInitiatedAt?: number;
 };
 
+async function getCurrentUserIdOrThrow(ctx: MutationCtx): Promise<Id<"users">> {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+        throw new Error("Unauthorized");
+    }
+
+    const user = await ctx.db
+        .query("users")
+        .withIndex("by_external_id", (q) =>
+            q.eq("externalId", identity.subject),
+        )
+        .unique();
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    return user._id;
+}
+
 function getLocalWeekdayHour(
     timestamp: number,
     timeZone: string,
@@ -95,6 +114,62 @@ function isInsideCallingWindow(
     return hour >= start || hour < end;
 }
 
+function normalizeOptionalString(value?: string): string | undefined {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : undefined;
+}
+
+async function resolveOutreachCallId(
+    ctx: MutationCtx,
+    rawId?: string,
+): Promise<Id<"outreachCalls"> | undefined> {
+    const normalized = normalizeOptionalString(rawId);
+    if (!normalized) {
+        return undefined;
+    }
+    try {
+        const callId = normalized as Id<"outreachCalls">;
+        const call = await ctx.db.get(callId);
+        return call ? callId : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+async function resolveCampaignId(
+    ctx: MutationCtx,
+    rawId?: string,
+): Promise<Id<"outreachCampaigns"> | undefined> {
+    const normalized = normalizeOptionalString(rawId);
+    if (!normalized) {
+        return undefined;
+    }
+    try {
+        const campaignId = normalized as Id<"outreachCampaigns">;
+        const campaign = await ctx.db.get(campaignId);
+        return campaign ? campaignId : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+async function resolveLeadId(
+    ctx: MutationCtx,
+    rawId?: string,
+): Promise<Id<"leads"> | undefined> {
+    const normalized = normalizeOptionalString(rawId);
+    if (!normalized) {
+        return undefined;
+    }
+    try {
+        const leadId = normalized as Id<"leads">;
+        const lead = await ctx.db.get(leadId);
+        return lead ? leadId : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 export const createCampaign = mutation({
     args: {
         name: v.string(),
@@ -114,6 +189,7 @@ export const createCampaign = mutation({
         timezone: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const now = Date.now();
         const envRetellAgentId = process.env.RETELL_DEFAULT_AGENT_ID?.trim();
         const envRetellPhoneNumberId =
@@ -163,6 +239,7 @@ export const createCampaign = mutation({
                 enabled: true,
                 delay_minutes: 10,
             },
+            created_by_user_id: userId,
             created_at: now,
             updated_at: now,
         });
@@ -202,8 +279,12 @@ export const updateCampaignSettings = mutation({
         ),
     },
     handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const campaign = await ctx.db.get(args.campaignId);
         if (!campaign) {
+            throw new Error("Campaign not found");
+        }
+        if (campaign.created_by_user_id !== userId) {
             throw new Error("Campaign not found");
         }
 
@@ -246,16 +327,52 @@ export const updateCampaignSettings = mutation({
     },
 });
 
+export const deleteCampaign = mutation({
+    args: {
+        campaignId: v.id("outreachCampaigns"),
+    },
+    returns: v.null(),
+    handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        const campaign = await ctx.db.get(args.campaignId);
+        if (!campaign) {
+            throw new Error("Campaign not found");
+        }
+        if (campaign.created_by_user_id !== userId) {
+            throw new Error("Campaign not found");
+        }
+
+        const existingCall = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_campaign_id", (q) =>
+                q.eq("campaign_id", args.campaignId),
+            )
+            .first();
+        if (existingCall) {
+            throw new Error(
+                "Cannot delete campaign with call history. Archive it instead.",
+            );
+        }
+
+        await ctx.db.delete(args.campaignId);
+        return null;
+    },
+});
+
 async function queueCampaignOutreachCalls(
     ctx: MutationCtx,
     args: {
         campaignId: Id<"outreachCampaigns">;
         leadIds: Id<"leads">[];
+        actorUserId?: Id<"users">;
     },
 ) {
     const now = Date.now();
     const campaign = await ctx.db.get(args.campaignId);
     if (!campaign) {
+        throw new Error("Campaign not found");
+    }
+    if (args.actorUserId && campaign.created_by_user_id !== args.actorUserId) {
         throw new Error("Campaign not found");
     }
 
@@ -404,7 +521,11 @@ export const startCampaignOutreach = mutation({
         leadIds: v.array(v.id("leads")),
     },
     handler: async (ctx, args) => {
-        return await queueCampaignOutreachCalls(ctx, args);
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        return await queueCampaignOutreachCalls(ctx, {
+            ...args,
+            actorUserId: userId,
+        });
     },
 });
 
@@ -462,5 +583,468 @@ export const recordCallDispatchResult = internalMutation({
 
         await ctx.db.patch(args.callId, updates);
         return await ctx.db.get(args.callId);
+    },
+});
+
+type NormalizedOutcome = Exclude<Doc<"outreachCalls">["outcome"], undefined>;
+
+const SUPPORTED_RETELL_FINAL_EVENT_TYPES = new Set([
+    "call_ended",
+    "call_analyzed",
+]);
+
+const OUTCOME_ALIAS_MAP: Record<string, NormalizedOutcome> = {
+    connected_interested: "connected_interested",
+    interested: "connected_interested",
+    qualified: "connected_interested",
+    connected_not_interested: "connected_not_interested",
+    not_interested: "connected_not_interested",
+    uninterested: "connected_not_interested",
+    no_interest: "connected_not_interested",
+    callback_requested: "callback_requested",
+    callback: "callback_requested",
+    call_back: "callback_requested",
+    voicemail_left: "voicemail_left",
+    voicemail: "voicemail_left",
+    no_answer: "no_answer",
+    unanswered: "no_answer",
+    wrong_number: "wrong_number",
+    do_not_call: "do_not_call",
+    dnc: "do_not_call",
+    failed: "failed",
+    failure: "failed",
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return null;
+    }
+    return value as Record<string, unknown>;
+}
+
+function asString(value: unknown): string | undefined {
+    if (typeof value !== "string") {
+        return undefined;
+    }
+    const normalized = value.trim();
+    return normalized ? normalized : undefined;
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+    return typeof value === "boolean" ? value : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+    }
+    if (typeof value !== "string") {
+        return undefined;
+    }
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function asTimestampMs(value: unknown): number | undefined {
+    const rawNumber = asNumber(value);
+    if (rawNumber === undefined) {
+        return undefined;
+    }
+    if (rawNumber < 10_000_000_000) {
+        return Math.trunc(rawNumber * 1000);
+    }
+    return Math.trunc(rawNumber);
+}
+
+function normalizeOutcomeKey(value: string): string {
+    return value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+}
+
+function normalizeOutcomeCandidate(
+    rawOutcome?: string,
+): NormalizedOutcome | undefined {
+    if (!rawOutcome) {
+        return undefined;
+    }
+    const key = normalizeOutcomeKey(rawOutcome);
+    return OUTCOME_ALIAS_MAP[key];
+}
+
+function resolveOutcome(args: {
+    normalizedOutcome?: string;
+    disconnectionReason?: string;
+    callSuccessful?: boolean;
+    inVoicemail?: boolean;
+    callStatus?: string;
+}): NormalizedOutcome {
+    const normalized = normalizeOutcomeCandidate(args.normalizedOutcome);
+    if (normalized) {
+        return normalized;
+    }
+
+    const reason = args.disconnectionReason?.toLowerCase() ?? "";
+    if (reason.includes("wrong_number") || reason.includes("wrong number")) {
+        return "wrong_number";
+    }
+    if (
+        reason.includes("do_not_call") ||
+        reason.includes("do not call") ||
+        reason.includes("dnc")
+    ) {
+        return "do_not_call";
+    }
+    if (reason.includes("voicemail") || reason.includes("machine")) {
+        return "voicemail_left";
+    }
+    if (
+        reason.includes("no_answer") ||
+        reason.includes("no answer") ||
+        reason.includes("busy") ||
+        reason.includes("unanswered")
+    ) {
+        return "no_answer";
+    }
+    if (reason.includes("user_hangup") || reason.includes("agent_hangup")) {
+        return args.callSuccessful
+            ? "connected_interested"
+            : "connected_not_interested";
+    }
+
+    if (args.inVoicemail) {
+        return "voicemail_left";
+    }
+    if (args.callSuccessful) {
+        return "connected_interested";
+    }
+
+    const status = args.callStatus?.toLowerCase();
+    if (status === "error" || status === "failed" || status === "canceled") {
+        return "failed";
+    }
+    return "failed";
+}
+
+function mapRetellCallStatus(
+    status?: string,
+    eventType?: string,
+): Doc<"outreachCalls">["call_status"] {
+    switch (status?.toLowerCase()) {
+        case "registered":
+        case "not_connected":
+            return "queued";
+        case "ongoing":
+        case "in_progress":
+            return "in_progress";
+        case "ended":
+            return "completed";
+        case "error":
+        case "failed":
+            return "failed";
+        case "canceled":
+        case "cancelled":
+            return "canceled";
+        default:
+            return SUPPORTED_RETELL_FINAL_EVENT_TYPES.has(eventType ?? "")
+                ? "completed"
+                : "queued";
+    }
+}
+
+function toErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message;
+    }
+    return "Unexpected webhook processing error";
+}
+
+function extractRetellCallPayload(
+    payload: unknown,
+): Record<string, unknown> | null {
+    const root = asRecord(payload);
+    const rootData = asRecord(root?.data);
+    return asRecord(root?.call) ?? asRecord(rootData?.call);
+}
+
+function buildExtractedData(
+    callPayload: Record<string, unknown>,
+    callAnalysis: Record<string, unknown> | null,
+    customAnalysisData: Record<string, unknown> | null,
+): Record<string, unknown> | undefined {
+    const extractedData: Record<string, unknown> = {};
+    if (callAnalysis) {
+        extractedData.call_analysis = callAnalysis;
+    }
+    if (customAnalysisData) {
+        extractedData.custom_analysis_data = customAnalysisData;
+    }
+
+    const passthroughKeys = [
+        "latency",
+        "llm_token_usage",
+        "call_cost",
+        "disconnection_reason",
+        "transcript_object",
+        "transcript_with_tool_calls",
+        "public_log_url",
+        "recording_multi_channel_url",
+        "from_number",
+        "to_number",
+    ] as const;
+    for (const key of passthroughKeys) {
+        const value = callPayload[key];
+        if (value !== undefined) {
+            extractedData[key] = value;
+        }
+    }
+
+    return Object.keys(extractedData).length > 0 ? extractedData : undefined;
+}
+
+async function applyRetellCallEventToOutreachState(
+    ctx: MutationCtx,
+    args: {
+        callId: Id<"outreachCalls">;
+        leadId?: Id<"leads">;
+        retellCallId?: string;
+        eventType: string;
+        eventTimestamp?: number;
+        payload: unknown;
+    },
+): Promise<{ outcome: NormalizedOutcome }> {
+    const callRecord = await ctx.db.get(args.callId);
+    if (!callRecord) {
+        throw new Error("Outreach call not found");
+    }
+
+    const callPayload = extractRetellCallPayload(args.payload);
+    if (!callPayload) {
+        throw new Error("Retell payload missing call object");
+    }
+
+    const callAnalysis = asRecord(callPayload.call_analysis);
+    const customAnalysisData =
+        asRecord(callAnalysis?.custom_analysis_data) ??
+        asRecord(callPayload.custom_analysis_data);
+    const disconnectionReason = asString(callPayload.disconnection_reason);
+    const outcome = resolveOutcome({
+        normalizedOutcome: asString(customAnalysisData?.normalized_outcome),
+        disconnectionReason,
+        callSuccessful: asBoolean(callAnalysis?.call_successful),
+        inVoicemail: asBoolean(callAnalysis?.in_voicemail),
+        callStatus: asString(callPayload.call_status),
+    });
+    const durationMs = asNumber(callPayload.duration_ms);
+    const durationSeconds =
+        durationMs !== undefined
+            ? Math.max(0, Math.round(durationMs / 1000))
+            : undefined;
+    const startedAt = asTimestampMs(callPayload.start_timestamp);
+    const endedAt =
+        asTimestampMs(callPayload.end_timestamp) ?? args.eventTimestamp;
+    const mappedCallStatus = mapRetellCallStatus(
+        asString(callPayload.call_status),
+        args.eventType,
+    );
+
+    const updates: Partial<Doc<"outreachCalls">> = {
+        updated_at: Date.now(),
+        call_status: mappedCallStatus,
+        outcome,
+        outcome_reason: disconnectionReason ?? undefined,
+    };
+    if (startedAt !== undefined) {
+        updates.started_at = startedAt;
+    }
+    if (endedAt !== undefined) {
+        updates.ended_at = endedAt;
+    }
+    if (durationSeconds !== undefined) {
+        updates.duration_seconds = durationSeconds;
+    }
+    const summary = asString(callAnalysis?.call_summary);
+    if (summary !== undefined) {
+        updates.summary = summary;
+    }
+    const transcript = asString(callPayload.transcript);
+    if (transcript !== undefined) {
+        updates.transcript = transcript;
+    }
+    const recordingUrl = asString(callPayload.recording_url);
+    if (recordingUrl !== undefined) {
+        updates.recording_url = recordingUrl;
+    }
+    const retellConversationId =
+        asString(callPayload.conversation_id) ??
+        asString(callPayload.retell_conversation_id);
+    if (retellConversationId !== undefined) {
+        updates.retell_conversation_id = retellConversationId;
+    }
+    const resolvedRetellCallId =
+        args.retellCallId ?? asString(callPayload.call_id);
+    if (resolvedRetellCallId !== undefined) {
+        updates.retell_call_id = resolvedRetellCallId;
+    }
+    const extractedData = buildExtractedData(
+        callPayload,
+        callAnalysis,
+        customAnalysisData,
+    );
+    if (extractedData !== undefined) {
+        updates.extracted_data = extractedData;
+    }
+
+    await ctx.db.patch(args.callId, updates);
+
+    const targetLeadId = args.leadId ?? callRecord.lead_id;
+    const lead = await ctx.db.get(targetLeadId);
+    if (lead) {
+        const leadUpdates: Partial<Doc<"leads">> = {
+            last_outreach_call_id: args.callId,
+            last_call_outcome: outcome,
+        };
+        await ctx.db.patch(targetLeadId, leadUpdates);
+    }
+
+    return { outcome };
+}
+
+export const ingestRetellWebhookEvent = internalMutation({
+    args: {
+        retell_event_id: v.optional(v.string()),
+        retell_call_id: v.optional(v.string()),
+        event_type: v.string(),
+        event_timestamp: v.optional(v.number()),
+        payload: v.any(),
+        call_id: v.optional(v.string()),
+        campaign_id: v.optional(v.string()),
+        lead_id: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        const eventType =
+            normalizeOptionalString(args.event_type)?.toLowerCase() ??
+            "unknown";
+        const retellEventId = normalizeOptionalString(args.retell_event_id);
+        const retellCallId = normalizeOptionalString(args.retell_call_id);
+
+        const existingEvent = retellEventId
+            ? await ctx.db
+                  .query("outreachWebhookEvents")
+                  .withIndex("by_retell_event_id", (q) =>
+                      q.eq("retell_event_id", retellEventId),
+                  )
+                  .first()
+            : null;
+        const isDuplicate = existingEvent !== null;
+
+        let callId = await resolveOutreachCallId(ctx, args.call_id);
+        if (!callId && retellCallId) {
+            const matchedCall = await ctx.db
+                .query("outreachCalls")
+                .withIndex("by_retell_call_id", (q) =>
+                    q.eq("retell_call_id", retellCallId),
+                )
+                .first();
+            callId = matchedCall?._id;
+        }
+
+        const matchedCall = callId ? await ctx.db.get(callId) : null;
+        const campaignId =
+            (await resolveCampaignId(ctx, args.campaign_id)) ??
+            matchedCall?.campaign_id;
+        const leadId =
+            (await resolveLeadId(ctx, args.lead_id)) ?? matchedCall?.lead_id;
+
+        const processingStatus = isDuplicate ? "ignored" : "received";
+        const processingError = isDuplicate
+            ? "Duplicate Retell event delivery"
+            : undefined;
+        const processedAt = isDuplicate ? now : undefined;
+
+        const eventId = await ctx.db.insert("outreachWebhookEvents", {
+            call_id: callId,
+            campaign_id: campaignId,
+            lead_id: leadId,
+            retell_call_id: retellCallId,
+            retell_event_id: retellEventId,
+            event_type: eventType,
+            event_timestamp: args.event_timestamp,
+            payload: args.payload,
+            processing_status: processingStatus,
+            processing_error: processingError,
+            received_at: now,
+            processed_at: processedAt,
+        });
+
+        if (!isDuplicate) {
+            if (!SUPPORTED_RETELL_FINAL_EVENT_TYPES.has(eventType)) {
+                await ctx.db.patch(eventId, {
+                    processing_status: "ignored",
+                    processing_error: `Unsupported Retell event type: ${eventType}`,
+                    processed_at: Date.now(),
+                });
+                return {
+                    eventId,
+                    processingStatus: "ignored",
+                    isDuplicate,
+                };
+            }
+
+            if (!callId) {
+                await ctx.db.patch(eventId, {
+                    processing_status: "failed",
+                    processing_error:
+                        "Unable to resolve outreach call from webhook payload",
+                    processed_at: Date.now(),
+                });
+                return {
+                    eventId,
+                    processingStatus: "failed",
+                    isDuplicate,
+                };
+            }
+
+            try {
+                await applyRetellCallEventToOutreachState(ctx, {
+                    callId,
+                    leadId,
+                    retellCallId,
+                    eventType,
+                    eventTimestamp: args.event_timestamp,
+                    payload: args.payload,
+                });
+                await ctx.db.patch(eventId, {
+                    processing_status: "processed",
+                    processing_error: undefined,
+                    processed_at: Date.now(),
+                });
+                return {
+                    eventId,
+                    processingStatus: "processed",
+                    isDuplicate,
+                };
+            } catch (error) {
+                await ctx.db.patch(eventId, {
+                    processing_status: "failed",
+                    processing_error: toErrorMessage(error),
+                    processed_at: Date.now(),
+                });
+                return {
+                    eventId,
+                    processingStatus: "failed",
+                    isDuplicate,
+                };
+            }
+        }
+
+        return {
+            eventId,
+            processingStatus,
+            isDuplicate,
+        };
     },
 });

@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
     Table,
     TableBody,
@@ -65,17 +64,24 @@ export function StartOutreachWizardModal({
         setSelectedLeadIds(new Set());
     };
 
-    const pickerDataRaw = useQuery(
-        api.outreach.queries.getCampaignLeadPicker,
-        open && campaign
+    const pickerQueryArgs = open
+        ? campaign
             ? {
                   campaignId: campaign._id,
                   limit: 500,
               }
-            : "skip",
+            : "skip"
+        : "skip";
+    const pickerDataRaw = useQuery(
+        api.outreach.queries.getCampaignLeadPicker,
+        pickerQueryArgs,
     );
     const pickerData = pickerDataRaw as PickerData | undefined;
-    const isLoadingPicker = open && campaign && pickerData === undefined;
+    const isLoadingPicker = open
+        ? campaign
+            ? pickerData === undefined
+            : false
+        : false;
 
     const filteredLeads = useMemo(() => {
         if (!pickerData) return [];
@@ -161,10 +167,7 @@ export function StartOutreachWizardModal({
                 onOpenChange(nextOpen);
             }}
         >
-            <DialogContent
-                key={campaign?._id ?? "no-campaign"}
-                className="max-h-[92vh] overflow-hidden sm:max-w-[1100px]"
-            >
+            <DialogContent className="max-h-[92vh] overflow-hidden sm:max-w-[1100px]">
                 <DialogHeader>
                     <DialogTitle>
                         Start Outreach: {campaign?.name ?? "Campaign"}
@@ -188,171 +191,194 @@ export function StartOutreachWizardModal({
                     />
                 </div>
 
-                {isLoadingPicker && (
-                    <div className="space-y-3">
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-[420px] w-full" />
+                {isLoadingPicker ? (
+                    <div className="flex h-[460px] items-center justify-center">
+                        <Loader2
+                            className="h-7 w-7 animate-spin text-muted-foreground"
+                            aria-label="Loading campaign leads"
+                        />
                     </div>
-                )}
-
-                {!isLoadingPicker && wizardStep === 1 && pickerData && (
-                    <div className="space-y-3">
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <Badge variant="outline" className="gap-1.5 py-0.5">
-                                <Users className="h-3.5 w-3.5" />
-                                In View: {filteredLeads.length}
-                            </Badge>
-                            <Badge variant="outline" className="gap-1.5 py-0.5">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                                Selectable:{" "}
-                                {
-                                    filteredLeads.filter(
-                                        (lead) => lead.selectable,
-                                    ).length
-                                }
-                            </Badge>
-                            <Badge variant="outline" className="gap-1.5 py-0.5">
-                                <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
-                                Skipped:{" "}
-                                {
-                                    filteredLeads.filter(
-                                        (lead) => !lead.selectable,
-                                    ).length
-                                }
-                            </Badge>
-                            <Badge variant="outline" className="gap-1.5 py-0.5">
-                                <Phone className="h-3.5 w-3.5 text-blue-600" />
-                                Selected: {selectedInView}
-                            </Badge>
-                        </div>
-
-                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div className="flex items-center gap-2">
-                                <Checkbox
-                                    checked={allSelectableChecked}
-                                    onCheckedChange={toggleAllSelectable}
-                                    aria-label="Select all selectable leads"
-                                />
-                                <span className="text-sm text-muted-foreground">
-                                    Select all selectable leads in current view
-                                </span>
-                            </div>
-                            <div className="relative w-full md:w-[280px]">
-                                <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    value={search}
-                                    onChange={(event) =>
-                                        setSearch(event.target.value)
+                ) : wizardStep === 1 ? (
+                    pickerData ? (
+                        <div className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <Badge
+                                    variant="outline"
+                                    className="gap-1.5 py-0.5"
+                                >
+                                    <Users className="h-3.5 w-3.5" />
+                                    In View: {filteredLeads.length}
+                                </Badge>
+                                <Badge
+                                    variant="outline"
+                                    className="gap-1.5 py-0.5"
+                                >
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                    Selectable:{" "}
+                                    {
+                                        filteredLeads.filter(
+                                            (lead) => lead.selectable,
+                                        ).length
                                     }
-                                    placeholder="Search by name or phone"
-                                    className="pl-8"
-                                />
+                                </Badge>
+                                <Badge
+                                    variant="outline"
+                                    className="gap-1.5 py-0.5"
+                                >
+                                    <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                                    Skipped:{" "}
+                                    {
+                                        filteredLeads.filter(
+                                            (lead) => !lead.selectable,
+                                        ).length
+                                    }
+                                </Badge>
+                                <Badge
+                                    variant="outline"
+                                    className="gap-1.5 py-0.5"
+                                >
+                                    <Phone className="h-3.5 w-3.5 text-blue-600" />
+                                    Selected: {selectedInView}
+                                </Badge>
                             </div>
-                        </div>
 
-                        <ScrollArea className="h-[420px] rounded-md border">
-                            <Table>
-                                <TableHeader className="sticky top-0 z-10 bg-background">
-                                    <TableRow>
-                                        <TableHead className="w-12" />
-                                        <TableHead>Lead</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Attempts</TableHead>
-                                        <TableHead>Latest Outcome</TableHead>
-                                        <TableHead>Eligibility</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {filteredLeads.map((lead) => {
-                                        const leadId = String(lead.leadId);
-                                        const checked =
-                                            selectedLeadIds.has(leadId);
-                                        return (
-                                            <TableRow key={leadId}>
-                                                <TableCell className="align-top">
-                                                    <Checkbox
-                                                        checked={checked}
-                                                        onCheckedChange={() =>
-                                                            toggleLead(leadId)
-                                                        }
-                                                        disabled={
-                                                            !lead.selectable
-                                                        }
-                                                        aria-label={`Select ${lead.name}`}
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="align-top">
-                                                    <div className="font-medium">
-                                                        {lead.name}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {lead.phone}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="align-top">
-                                                    <Badge variant="outline">
-                                                        {lead.status}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="align-top">
-                                                    {lead.attemptsInCampaign}
-                                                </TableCell>
-                                                <TableCell className="align-top">
-                                                    {lead.latestCampaignOutcome ? (
-                                                        <Badge variant="secondary">
-                                                            {OUTCOME_LABELS[
-                                                                lead
-                                                                    .latestCampaignOutcome
-                                                            ] ??
-                                                                lead.latestCampaignOutcome}
-                                                        </Badge>
-                                                    ) : (
-                                                        <span className="text-muted-foreground">
-                                                            -
-                                                        </span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="align-top">
-                                                    {lead.selectable ? (
-                                                        <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                                                            Selectable
-                                                        </Badge>
-                                                    ) : (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {lead.reasons.map(
-                                                                (reason) => (
-                                                                    <Badge
-                                                                        key={
-                                                                            reason
-                                                                        }
-                                                                        variant="destructive"
-                                                                        className="text-[11px]"
-                                                                    >
-                                                                        {REASON_LABELS[
-                                                                            reason
-                                                                        ] ??
-                                                                            reason}
-                                                                    </Badge>
-                                                                ),
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
-                            {filteredLeads.length === 0 && (
-                                <div className="p-8 text-center text-sm text-muted-foreground">
-                                    No leads match your search.
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        checked={allSelectableChecked}
+                                        onCheckedChange={toggleAllSelectable}
+                                        aria-label="Select all selectable leads"
+                                    />
+                                    <span className="text-sm text-muted-foreground">
+                                        Select all selectable leads in current
+                                        view
+                                    </span>
                                 </div>
-                            )}
-                        </ScrollArea>
-                    </div>
-                )}
+                                <div className="relative w-full md:w-[280px]">
+                                    <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        value={search}
+                                        onChange={(event) =>
+                                            setSearch(event.target.value)
+                                        }
+                                        placeholder="Search by name or phone"
+                                        className="pl-8"
+                                    />
+                                </div>
+                            </div>
 
-                {!isLoadingPicker && wizardStep === 2 && pickerData && (
+                            <ScrollArea className="h-[420px] rounded-md border">
+                                <Table>
+                                    <TableHeader className="sticky top-0 z-10 bg-background">
+                                        <TableRow>
+                                            <TableHead className="w-12" />
+                                            <TableHead>Lead</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Attempts</TableHead>
+                                            <TableHead>
+                                                Latest Outcome
+                                            </TableHead>
+                                            <TableHead>Eligibility</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredLeads.map((lead) => {
+                                            const leadId = String(lead.leadId);
+                                            const checked =
+                                                selectedLeadIds.has(leadId);
+                                            return (
+                                                <TableRow key={leadId}>
+                                                    <TableCell className="align-top">
+                                                        <Checkbox
+                                                            checked={checked}
+                                                            onCheckedChange={() =>
+                                                                toggleLead(
+                                                                    leadId,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                !lead.selectable
+                                                            }
+                                                            aria-label={`Select ${lead.name}`}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="align-top">
+                                                        <div className="font-medium">
+                                                            {lead.name}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {lead.phone}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="align-top">
+                                                        <Badge variant="outline">
+                                                            {lead.status}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="align-top">
+                                                        {
+                                                            lead.attemptsInCampaign
+                                                        }
+                                                    </TableCell>
+                                                    <TableCell className="align-top">
+                                                        {lead.latestCampaignOutcome ? (
+                                                            <Badge variant="secondary">
+                                                                {OUTCOME_LABELS[
+                                                                    lead
+                                                                        .latestCampaignOutcome
+                                                                ] ??
+                                                                    lead.latestCampaignOutcome}
+                                                            </Badge>
+                                                        ) : (
+                                                            <span className="text-muted-foreground">
+                                                                -
+                                                            </span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="align-top">
+                                                        {lead.selectable ? (
+                                                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                                                                Selectable
+                                                            </Badge>
+                                                        ) : (
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {lead.reasons.map(
+                                                                    (
+                                                                        reason,
+                                                                    ) => (
+                                                                        <Badge
+                                                                            key={
+                                                                                reason
+                                                                            }
+                                                                            variant="destructive"
+                                                                            className="text-[11px]"
+                                                                        >
+                                                                            {REASON_LABELS[
+                                                                                reason
+                                                                            ] ??
+                                                                                reason}
+                                                                        </Badge>
+                                                                    ),
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                                {filteredLeads.length === 0 && (
+                                    <div className="p-8 text-center text-sm text-muted-foreground">
+                                        No leads match your search.
+                                    </div>
+                                )}
+                            </ScrollArea>
+                        </div>
+                    ) : (
+                        <div className="h-[460px]" />
+                    )
+                ) : pickerData ? (
                     <div className="space-y-3">
                         <Card>
                             <CardHeader className="pb-2">
@@ -454,6 +480,8 @@ export function StartOutreachWizardModal({
                             </CardContent>
                         </Card>
                     </div>
+                ) : (
+                    <div className="h-[460px]" />
                 )}
 
                 <div className="flex items-center justify-between gap-2 border-t pt-4">

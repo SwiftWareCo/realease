@@ -8,6 +8,16 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -39,9 +49,12 @@ export function OutreachLeadPicker({
         useState<Id<"outreachCampaigns"> | null>(null);
     const [wizardCampaignId, setWizardCampaignId] =
         useState<Id<"outreachCampaigns"> | null>(null);
+    const [deleteCampaignId, setDeleteCampaignId] =
+        useState<Id<"outreachCampaigns"> | null>(null);
 
     const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
     const [isSavingCampaign, setIsSavingCampaign] = useState(false);
+    const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
     const [isStarting, setIsStarting] = useState(false);
     const [lastStartResult, setLastStartResult] =
         useState<StartOutreachResult | null>(null);
@@ -55,6 +68,7 @@ export function OutreachLeadPicker({
     const updateCampaign = useMutation(
         api.outreach.mutations.updateCampaignSettings,
     );
+    const deleteCampaign = useMutation(api.outreach.mutations.deleteCampaign);
     const startOutreach = useAction(api.outreach.actions.startCampaignOutreach);
 
     const editingCampaign =
@@ -62,6 +76,9 @@ export function OutreachLeadPicker({
         null;
     const wizardCampaign =
         campaigns?.find((campaign) => campaign._id === wizardCampaignId) ??
+        null;
+    const campaignPendingDelete =
+        campaigns?.find((campaign) => campaign._id === deleteCampaignId) ??
         null;
 
     const handleCreateCampaign = async (input: CreateCampaignInput) => {
@@ -160,6 +177,67 @@ export function OutreachLeadPicker({
         }
     };
 
+    const handleDeleteCampaign = (campaign: CampaignRow) => {
+        setDeleteCampaignId(campaign._id);
+    };
+
+    const getCampaignActionErrorMessage = (error: unknown): string => {
+        if (!(error instanceof Error)) {
+            return "Failed to update campaign.";
+        }
+
+        if (
+            error.message.includes(
+                "Cannot delete campaign with call history. Archive it instead.",
+            )
+        ) {
+            return "This campaign has call history and cannot be deleted. Archive it instead.";
+        }
+
+        return error.message || "Failed to update campaign.";
+    };
+
+    const handleConfirmDeleteCampaign = async () => {
+        if (!campaignPendingDelete || isDeletingCampaign) {
+            return;
+        }
+
+        const targetCampaign = campaignPendingDelete;
+        const shouldArchive = targetCampaign.hasCallHistory;
+        setIsDeletingCampaign(true);
+        try {
+            await toast.promise(
+                shouldArchive
+                    ? updateCampaign({
+                          campaignId: targetCampaign._id,
+                          status: "archived",
+                      })
+                    : deleteCampaign({ campaignId: targetCampaign._id }),
+                {
+                    loading: shouldArchive
+                        ? `Archiving "${targetCampaign.name}"...`
+                        : `Deleting "${targetCampaign.name}"...`,
+                    success: shouldArchive
+                        ? `Campaign "${targetCampaign.name}" archived.`
+                        : `Campaign "${targetCampaign.name}" deleted.`,
+                    error: getCampaignActionErrorMessage,
+                },
+            );
+
+            if (editingCampaignId === targetCampaign._id) {
+                setEditingCampaignId(null);
+            }
+            if (wizardCampaignId === targetCampaign._id) {
+                setWizardCampaignId(null);
+            }
+            setDeleteCampaignId(null);
+        } catch (error) {
+            console.error("Failed to delete campaign", error);
+        } finally {
+            setIsDeletingCampaign(false);
+        }
+    };
+
     if (campaigns === undefined) {
         return (
             <div className="space-y-4">
@@ -179,10 +257,57 @@ export function OutreachLeadPicker({
                 onStartOutreach={(campaign) =>
                     setWizardCampaignId(campaign._id)
                 }
-                onViewCampaign={(campaign) =>
-                    router.push(`/leads/outreach/${campaign._id}`)
-                }
+                onDeleteCampaign={handleDeleteCampaign}
+                isDeletingCampaign={isDeletingCampaign}
             />
+
+            <AlertDialog
+                open={deleteCampaignId !== null}
+                onOpenChange={(open) => {
+                    if (!open && !isDeletingCampaign) {
+                        setDeleteCampaignId(null);
+                    }
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {campaignPendingDelete?.hasCallHistory
+                                ? "Archive Campaign?"
+                                : "Delete Campaign?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {campaignPendingDelete
+                                ? campaignPendingDelete.hasCallHistory
+                                    ? `Archive "${campaignPendingDelete.name}"? It has call history and will be hidden from active views.`
+                                    : `Delete "${campaignPendingDelete.name}" permanently? This cannot be undone.`
+                                : "Are you sure?"}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeletingCampaign}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleConfirmDeleteCampaign}
+                            disabled={isDeletingCampaign}
+                            className={
+                                campaignPendingDelete?.hasCallHistory
+                                    ? undefined
+                                    : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            }
+                        >
+                            {isDeletingCampaign
+                                ? campaignPendingDelete?.hasCallHistory
+                                    ? "Archiving..."
+                                    : "Deleting..."
+                                : campaignPendingDelete?.hasCallHistory
+                                  ? "Archive"
+                                  : "Delete"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {lastStartResult && (
                 <Card>
