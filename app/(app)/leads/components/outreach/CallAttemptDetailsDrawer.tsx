@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import { OUTCOME_LABELS } from "./constants";
 import type { CampaignCallAttemptDetails } from "./types";
-import { formatDateHumanReadable } from "@/utils/dateandtimes";
+import { formatDateTimeHumanReadable } from "@/utils/dateandtimes";
 import { RecordingPlayer } from "./RecordingPlayer";
 
 const EXPECTED_MVP_EVENTS = ["call_started", "call_ended", "call_analyzed"];
@@ -29,14 +29,7 @@ function formatDateTime(timestamp: number | null): string {
     if (!timestamp) {
         return "-";
     }
-    const date = new Date(timestamp);
-    return `${formatDateHumanReadable(date)} • ${date.toLocaleTimeString(
-        "en-US",
-        {
-            hour: "numeric",
-            minute: "2-digit",
-        },
-    )}`;
+    return formatDateTimeHumanReadable(timestamp);
 }
 
 function formatDuration(durationSeconds: number | null): string {

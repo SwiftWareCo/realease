@@ -592,6 +592,10 @@ const SUPPORTED_RETELL_FINAL_EVENT_TYPES = new Set([
     "call_ended",
     "call_analyzed",
 ]);
+const SUPPORTED_RETELL_EVENT_TYPES = new Set([
+    "call_started",
+    ...SUPPORTED_RETELL_FINAL_EVENT_TYPES,
+]);
 
 const OUTCOME_ALIAS_MAP: Record<string, NormalizedOutcome> = {
     connected_interested: "connected_interested",
@@ -912,6 +916,59 @@ async function applyRetellCallEventToOutreachState(
     return { outcome };
 }
 
+async function applyRetellCallStartedEventToOutreachState(
+    ctx: MutationCtx,
+    args: {
+        callId: Id<"outreachCalls">;
+        retellCallId?: string;
+        eventType: string;
+        eventTimestamp?: number;
+        payload: unknown;
+    },
+): Promise<void> {
+    const callRecord = await ctx.db.get(args.callId);
+    if (!callRecord) {
+        throw new Error("Outreach call not found");
+    }
+
+    const callPayload = extractRetellCallPayload(args.payload);
+    if (!callPayload) {
+        throw new Error("Retell payload missing call object");
+    }
+
+    const startedAt =
+        asTimestampMs(callPayload.start_timestamp) ?? args.eventTimestamp;
+    const mappedCallStatus = mapRetellCallStatus(
+        asString(callPayload.call_status),
+        args.eventType,
+    );
+
+    const updates: Partial<Doc<"outreachCalls">> = {
+        updated_at: Date.now(),
+        call_status: mappedCallStatus,
+    };
+    if (startedAt !== undefined) {
+        updates.started_at = startedAt;
+    }
+    const resolvedRetellCallId =
+        args.retellCallId ?? asString(callPayload.call_id);
+    if (resolvedRetellCallId !== undefined) {
+        updates.retell_call_id = resolvedRetellCallId;
+    }
+    const retellConversationId =
+        asString(callPayload.conversation_id) ??
+        asString(callPayload.retell_conversation_id);
+    if (retellConversationId !== undefined) {
+        updates.retell_conversation_id = retellConversationId;
+    }
+    const extractedData = buildExtractedData(callPayload, null, null);
+    if (extractedData !== undefined) {
+        updates.extracted_data = extractedData;
+    }
+
+    await ctx.db.patch(args.callId, updates);
+}
+
 export const ingestRetellWebhookEvent = internalMutation({
     args: {
         retell_event_id: v.optional(v.string()),
@@ -981,7 +1038,7 @@ export const ingestRetellWebhookEvent = internalMutation({
         });
 
         if (!isDuplicate) {
-            if (!SUPPORTED_RETELL_FINAL_EVENT_TYPES.has(eventType)) {
+            if (!SUPPORTED_RETELL_EVENT_TYPES.has(eventType)) {
                 await ctx.db.patch(eventId, {
                     processing_status: "ignored",
                     processing_error: `Unsupported Retell event type: ${eventType}`,
@@ -1009,14 +1066,24 @@ export const ingestRetellWebhookEvent = internalMutation({
             }
 
             try {
-                await applyRetellCallEventToOutreachState(ctx, {
-                    callId,
-                    leadId,
-                    retellCallId,
-                    eventType,
-                    eventTimestamp: args.event_timestamp,
-                    payload: args.payload,
-                });
+                if (eventType === "call_started") {
+                    await applyRetellCallStartedEventToOutreachState(ctx, {
+                        callId,
+                        retellCallId,
+                        eventType,
+                        eventTimestamp: args.event_timestamp,
+                        payload: args.payload,
+                    });
+                } else {
+                    await applyRetellCallEventToOutreachState(ctx, {
+                        callId,
+                        leadId,
+                        retellCallId,
+                        eventType,
+                        eventTimestamp: args.event_timestamp,
+                        payload: args.payload,
+                    });
+                }
                 await ctx.db.patch(eventId, {
                     processing_status: "processed",
                     processing_error: undefined,

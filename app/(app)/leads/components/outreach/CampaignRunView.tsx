@@ -17,17 +17,11 @@ import {
 import { ArrowLeft } from "lucide-react";
 import { OUTCOME_LABELS, getCampaignStatusBadge } from "./constants";
 import type { CampaignCallsData } from "./types";
-import {
-    formatDateHumanReadable,
-    formatHourTo12Hour,
-} from "@/utils/dateandtimes";
+import { formatDateTimeHumanReadable } from "@/utils/dateandtimes";
 import { CallAttemptDetailsDrawer } from "./CallAttemptDetailsDrawer";
 
 function formatDateTime(timestamp: number): string {
-    const date = new Date(timestamp);
-    return `${formatDateHumanReadable(date)} • ${formatHourTo12Hour(
-        date.getHours(),
-    )}`;
+    return formatDateTimeHumanReadable(timestamp);
 }
 
 export function CampaignRunView({

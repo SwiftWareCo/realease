@@ -16,15 +16,12 @@ import { Archive, Edit3, Eye, Play, Trash2 } from "lucide-react";
 import { WEEKDAYS, getCampaignStatusBadge } from "./constants";
 import type { CampaignRow } from "./types";
 import {
-    formatDateHumanReadable,
+    formatDateTimeHumanReadable,
     formatHourTo12Hour,
 } from "@/utils/dateandtimes";
 
 function formatUpdatedAt(timestamp: number): string {
-    const date = new Date(timestamp);
-    return `${formatDateHumanReadable(date)} • ${formatHourTo12Hour(
-        date.getHours(),
-    )}`;
+    return formatDateTimeHumanReadable(timestamp);
 }
 
 export function CampaignsTable({
