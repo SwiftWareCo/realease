@@ -19,6 +19,22 @@ Out of scope (for this plan):
 - Separate funnel transition audit table
 - Complex retry queue beyond `outreachCalls` records
 
+## Current status snapshot (from commits `d3d62ad`, `ae4d408` on February 16, 2026)
+
+Implemented in code:
+- Manual campaign start and call queue/dispatch path
+- Retell webhook endpoint with signature verification
+- Webhook persistence + idempotency handling in `outreachWebhookEvents`
+- Processing of `call_started`, `call_ended`, `call_analyzed`
+- Outcome normalization to enum + call record updates
+- Lead shortcut updates (`last_outreach_call_id`, `last_call_outcome`)
+
+Still open:
+- Apply `campaign.outcome_routing` to lead `status` / pipeline stages
+- Stale active-call cleanup guard for stuck `queued`/`ringing`/`in_progress`
+- Milestone 5 follow-up SMS orchestration + persistence for outreach calls
+- Milestone 6 outreach cron automation
+
 ## MVP Milestones And Acceptance Gates
 
 ### Milestone 0: Environment Readiness
@@ -105,6 +121,12 @@ Build:
 - Update lead shortcuts (`last_outreach_call_id`, `last_call_outcome`)
 - Apply campaign `outcome_routing` to lead status/pipeline stage
 
+Outcome routing application definition:
+- Yes, this means lead movement after a call.
+- On final call outcome, find matching `outcome_routing` rule and patch `leads.status`, `leads.buyer_pipeline_stage`, and/or `leads.seller_pipeline_stage` when configured.
+- Always persist lead shortcuts regardless of whether a route rule exists.
+- Enforce compliance overrides (`do_not_call` outcome sets `leads.do_not_call=true`; `sms_opt_out=true` blocks follow-up SMS).
+
 Acceptance checklist:
 - [ ] Each normalized outcome can be produced by at least one tested scenario
 - [ ] `outreachCalls` and `leads` updates are consistent for the same call
@@ -113,11 +135,30 @@ Acceptance checklist:
 Exit criteria:
 - Outcomes are deterministic and funnel updates are automated from webhook data.
 
+### Milestone 4.5: Stale Active-Call Cleanup Guard
+
+Build:
+- Add cleanup guard that scans for stale `queued`/`ringing`/`in_progress` calls.
+- Auto-close stale calls to a terminal state (`failed`) with `ended_at` + `error_message`.
+- Ensure cleanup clears lead eligibility deadlocks caused by missing provider/webhook completion events.
+
+Acceptance checklist:
+- [ ] Stale active calls transition to a terminal state by timeout policy
+- [ ] Leads blocked only by stale active call become selectable again
+- [ ] Cleanup is auditable (rows updated, not deleted)
+
+Exit criteria:
+- Active-call locks are self-healing and do not require manual DB intervention.
+
 ### Milestone 5: Follow-Up SMS Integration
 
 Build:
 - Send SMS only when allowed by campaign + compliance flags + outcome rules
 - Store Twilio results back to `outreachCalls` (`follow_up_sms_status`, sid/error)
+
+Channel note:
+- Twilio is the MVP channel for follow-up because schema/env conventions already model Twilio artifacts.
+- Retell SMS/chat can be revisited after MVP, but that is a provider-contract expansion, not a milestone-5 prerequisite.
 
 Acceptance checklist:
 - [ ] `sms_opt_out=true` prevents SMS sends
@@ -132,6 +173,7 @@ Exit criteria:
 Build:
 - Add cron job that selects eligible leads per campaign window/timezone/retry policy
 - Cron reuses manual call-placement logic (no duplicate orchestration path)
+- Cron also evaluates pending follow-up SMS timing/rules and triggers the same milestone-5 SMS path
 - Add safety cap per run to control spend and blast radius
 
 Acceptance checklist:
@@ -139,9 +181,10 @@ Acceptance checklist:
 - [ ] Retry spacing and max attempts are respected
 - [ ] Run cap prevents unexpected large batches
 - [ ] Manual trigger and cron produce identical `outreachCalls` behavior
+- [ ] SMS decisions from cron match manual/start-flow routing rules
 
 Exit criteria:
-- Automated calling is safe to run unattended in production windows.
+- Automated call + SMS orchestration is safe to run unattended in production windows.
 
 ## Validation Matrix (Minimum)
 
