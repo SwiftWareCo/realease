@@ -194,130 +194,173 @@ export function CallAttemptDetailsDrawer({
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3 text-sm">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Badge variant="outline">
-                                            Lead: {details.call.leadName}
-                                        </Badge>
-                                        <Badge variant="outline">
-                                            {details.call.leadPhone}
-                                        </Badge>
-                                        <Badge variant="outline">
-                                            Status: {details.call.callStatus}
-                                        </Badge>
-                                        <Badge variant="secondary">
-                                            Outcome:{" "}
-                                            {details.call.outcome
-                                                ? (OUTCOME_LABELS[
-                                                      details.call.outcome
-                                                  ] ?? details.call.outcome)
-                                                : "-"}
-                                        </Badge>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                                        <div>
-                                            Initiated:{" "}
-                                            {formatDateTime(
-                                                details.call.initiatedAt,
-                                            )}
-                                        </div>
-                                        <div>
-                                            Started:{" "}
-                                            {formatDateTime(
-                                                details.call.startedAt,
-                                            )}
-                                        </div>
-                                        <div>
-                                            Ended:{" "}
-                                            {formatDateTime(
-                                                details.call.endedAt,
-                                            )}
-                                        </div>
-                                        <div>
-                                            Duration:{" "}
-                                            {formatDuration(
-                                                details.call.durationSeconds,
-                                            )}
-                                        </div>
-                                        <div>
-                                            Retell Call ID:{" "}
-                                            {details.call.retellCallId ?? "-"}
-                                        </div>
-                                        <div>
-                                            Conversation ID:{" "}
-                                            {details.call
-                                                .retellConversationId ?? "-"}
-                                        </div>
-                                    </div>
-                                    {details.call.errorMessage && (
-                                        <p className="text-xs text-destructive">
-                                            Error: {details.call.errorMessage}
-                                        </p>
-                                    )}
-                                    <div className="flex flex-wrap gap-2">
-                                        <Badge variant="outline">
-                                            Sentiment: {sentiment ?? "-"}
-                                        </Badge>
-                                        <Badge variant="outline">
-                                            Disconnect:{" "}
-                                            {disconnectionReason ?? "-"}
-                                        </Badge>
-                                        <Badge variant="outline">
-                                            E2E Latency p50:{" "}
-                                            {e2eLatencyP50 !== null
-                                                ? `${Math.round(e2eLatencyP50)}ms`
-                                                : "-"}
-                                        </Badge>
-                                        <Badge variant="outline">
-                                            LLM Avg Tokens:{" "}
-                                            {llmAvgTokens !== null
-                                                ? Math.round(llmAvgTokens)
-                                                : "-"}
-                                        </Badge>
-                                        <Badge variant="outline">
-                                            Cost:{" "}
-                                            {combinedCost !== null
-                                                ? `$${combinedCost.toFixed(3)}`
-                                                : "-"}
-                                        </Badge>
-                                        <Badge variant="outline">
-                                            Follow-up SMS:{" "}
-                                            {details.call.followUpSmsStatus
-                                                ? (FOLLOW_UP_SMS_STATUS_LABELS[
-                                                      details.call
-                                                          .followUpSmsStatus
-                                                  ] ??
-                                                  details.call
-                                                      .followUpSmsStatus)
-                                                : "-"}
-                                        </Badge>
-                                    </div>
-                                    {(details.call.followUpSmsSentAt ||
-                                        details.call.followUpSmsSid ||
-                                        details.call.followUpSmsError) && (
-                                        <div className="space-y-1 rounded-md border bg-muted/20 p-2 text-xs text-muted-foreground">
-                                            <div>
-                                                SMS Sent At:{" "}
-                                                {formatDateTime(
-                                                    details.call
-                                                        .followUpSmsSentAt,
+                                    {(() => {
+                                        const showFollowUpSmsError =
+                                            details.call.followUpSmsStatus ===
+                                                "failed" &&
+                                            Boolean(
+                                                details.call.followUpSmsError,
+                                            );
+                                        const showFollowUpSmsDetails =
+                                            Boolean(
+                                                details.call.followUpSmsSentAt,
+                                            ) ||
+                                            Boolean(
+                                                details.call.followUpSmsSid,
+                                            ) ||
+                                            showFollowUpSmsError;
+                                        return (
+                                            <>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <Badge variant="outline">
+                                                        Lead:{" "}
+                                                        {details.call.leadName}
+                                                    </Badge>
+                                                    <Badge variant="outline">
+                                                        {details.call.leadPhone}
+                                                    </Badge>
+                                                    <Badge variant="outline">
+                                                        Status:{" "}
+                                                        {
+                                                            details.call
+                                                                .callStatus
+                                                        }
+                                                    </Badge>
+                                                    <Badge variant="secondary">
+                                                        Outcome:{" "}
+                                                        {details.call.outcome
+                                                            ? (OUTCOME_LABELS[
+                                                                  details.call
+                                                                      .outcome
+                                                              ] ??
+                                                              details.call
+                                                                  .outcome)
+                                                            : "-"}
+                                                    </Badge>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                                    <div>
+                                                        Initiated:{" "}
+                                                        {formatDateTime(
+                                                            details.call
+                                                                .initiatedAt,
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        Started:{" "}
+                                                        {formatDateTime(
+                                                            details.call
+                                                                .startedAt,
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        Ended:{" "}
+                                                        {formatDateTime(
+                                                            details.call
+                                                                .endedAt,
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        Duration:{" "}
+                                                        {formatDuration(
+                                                            details.call
+                                                                .durationSeconds,
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        Retell Call ID:{" "}
+                                                        {details.call
+                                                            .retellCallId ??
+                                                            "-"}
+                                                    </div>
+                                                    <div>
+                                                        Conversation ID:{" "}
+                                                        {details.call
+                                                            .retellConversationId ??
+                                                            "-"}
+                                                    </div>
+                                                </div>
+                                                {details.call.errorMessage && (
+                                                    <p className="text-xs text-destructive">
+                                                        Error:{" "}
+                                                        {
+                                                            details.call
+                                                                .errorMessage
+                                                        }
+                                                    </p>
                                                 )}
-                                            </div>
-                                            <div>
-                                                SMS SID:{" "}
-                                                {details.call.followUpSmsSid ??
-                                                    "-"}
-                                            </div>
-                                            {details.call.followUpSmsError && (
-                                                <p className="text-destructive">
-                                                    SMS Error:{" "}
-                                                    {
-                                                        details.call
-                                                            .followUpSmsError
-                                                    }
-                                                </p>
-                                            )}
-                                        </div>
-                                    )}
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Badge variant="outline">
+                                                        Sentiment:{" "}
+                                                        {sentiment ?? "-"}
+                                                    </Badge>
+                                                    <Badge variant="outline">
+                                                        Disconnect:{" "}
+                                                        {disconnectionReason ??
+                                                            "-"}
+                                                    </Badge>
+                                                    <Badge variant="outline">
+                                                        E2E Latency p50:{" "}
+                                                        {e2eLatencyP50 !== null
+                                                            ? `${Math.round(e2eLatencyP50)}ms`
+                                                            : "-"}
+                                                    </Badge>
+                                                    <Badge variant="outline">
+                                                        LLM Avg Tokens:{" "}
+                                                        {llmAvgTokens !== null
+                                                            ? Math.round(
+                                                                  llmAvgTokens,
+                                                              )
+                                                            : "-"}
+                                                    </Badge>
+                                                    <Badge variant="outline">
+                                                        Cost:{" "}
+                                                        {combinedCost !== null
+                                                            ? `$${combinedCost.toFixed(3)}`
+                                                            : "-"}
+                                                    </Badge>
+                                                    <Badge variant="outline">
+                                                        Follow-up SMS:{" "}
+                                                        {details.call
+                                                            .followUpSmsStatus
+                                                            ? (FOLLOW_UP_SMS_STATUS_LABELS[
+                                                                  details.call
+                                                                      .followUpSmsStatus
+                                                              ] ??
+                                                              details.call
+                                                                  .followUpSmsStatus)
+                                                            : "-"}
+                                                    </Badge>
+                                                </div>
+                                                {showFollowUpSmsDetails && (
+                                                    <div className="space-y-1 rounded-md border bg-muted/20 p-2 text-xs text-muted-foreground">
+                                                        <div>
+                                                            SMS Sent At:{" "}
+                                                            {formatDateTime(
+                                                                details.call
+                                                                    .followUpSmsSentAt,
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            SMS SID:{" "}
+                                                            {details.call
+                                                                .followUpSmsSid ??
+                                                                "-"}
+                                                        </div>
+                                                        {showFollowUpSmsError && (
+                                                            <p className="text-destructive">
+                                                                SMS Error:{" "}
+                                                                {
+                                                                    details.call
+                                                                        .followUpSmsError
+                                                                }
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                     {details.call.recordingUrl && (
                                         <RecordingPlayer
                                             key={details.call.recordingUrl}

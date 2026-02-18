@@ -167,6 +167,7 @@ export const outreachCallsTable = defineTable({
     .index("by_campaign_id", ["campaign_id"])
     .index("by_retell_call_id", ["retell_call_id"])
     .index("by_call_status", ["call_status"])
+    .index("by_follow_up_sms_status", ["follow_up_sms_status"])
     .index("by_outcome", ["outcome"])
     .index("by_campaign_id_and_initiated_at", ["campaign_id", "initiated_at"]);
 

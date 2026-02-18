@@ -9,7 +9,8 @@ type EligibilityReason =
     | "status_not_eligible"
     | "active_call_in_progress"
     | "max_attempts_reached"
-    | "blocked_by_terminal_outcome";
+    | "blocked_by_terminal_outcome"
+    | "in_other_active_campaign";
 
 type CampaignLeadCallStats = {
     attemptsInCampaign: number;
@@ -40,38 +41,42 @@ async function getCurrentUserIdOrThrow(ctx: QueryCtx): Promise<Id<"users">> {
     return user._id;
 }
 
-function getSelectableReasons(
-    lead: Doc<"leads">,
-    stats: CampaignLeadCallStats | undefined,
-    maxAttempts: number,
-): EligibilityReason[] {
+function getSelectableReasons(args: {
+    lead: Doc<"leads">;
+    stats: CampaignLeadCallStats | undefined;
+    maxAttempts: number;
+    inOtherActiveCampaign: boolean;
+}): EligibilityReason[] {
     const reasons: EligibilityReason[] = [];
 
-    if (!isValidPhoneNumber(lead.phone)) {
+    if (!isValidPhoneNumber(args.lead.phone)) {
         reasons.push("invalid_phone");
     }
 
-    if (lead.do_not_call === true) {
+    if (args.lead.do_not_call === true) {
         reasons.push("do_not_call");
     }
 
-    if (lead.status !== "new" && lead.status !== "contacted") {
+    if (args.lead.status !== "new" && args.lead.status !== "contacted") {
         reasons.push("status_not_eligible");
     }
 
-    if (stats?.hasActiveCall) {
+    if (args.stats?.hasActiveCall) {
         reasons.push("active_call_in_progress");
     }
 
-    if ((stats?.attemptsInCampaign ?? 0) >= maxAttempts) {
+    if ((args.stats?.attemptsInCampaign ?? 0) >= args.maxAttempts) {
         reasons.push("max_attempts_reached");
     }
 
     if (
-        stats?.latestOutcome === "do_not_call" ||
-        stats?.latestOutcome === "wrong_number"
+        args.stats?.latestOutcome === "do_not_call" ||
+        args.stats?.latestOutcome === "wrong_number"
     ) {
         reasons.push("blocked_by_terminal_outcome");
+    }
+    if (args.inOtherActiveCampaign) {
+        reasons.push("in_other_active_campaign");
     }
 
     return reasons;
@@ -130,12 +135,48 @@ export const getCampaignLeadPicker = query({
                 : undefined;
         const leads = limit !== undefined ? allLeads.slice(0, limit) : allLeads;
 
-        const leadCandidates = leads.map((lead) => {
+        const campaignCache = new Map<
+            Id<"outreachCampaigns">,
+            Doc<"outreachCampaigns"> | null
+        >();
+        const leadCandidates = [];
+        for (const lead of leads) {
             const stats = statsByLead.get(String(lead._id));
-            const reasons = getSelectableReasons(lead, stats, maxAttempts);
+            const leadCalls = await ctx.db
+                .query("outreachCalls")
+                .withIndex("by_lead_id", (q) => q.eq("lead_id", lead._id))
+                .collect();
+            let inOtherActiveCampaign = false;
+            for (const call of leadCalls) {
+                const otherCampaignId = call.campaign_id;
+                if (!otherCampaignId || otherCampaignId === args.campaignId) {
+                    continue;
+                }
+
+                let otherCampaign = campaignCache.get(otherCampaignId) ?? null;
+                if (!campaignCache.has(otherCampaignId)) {
+                    otherCampaign = await ctx.db.get(otherCampaignId);
+                    campaignCache.set(otherCampaignId, otherCampaign);
+                }
+                if (
+                    otherCampaign?.status === "active" &&
+                    otherCampaign.created_by_user_id ===
+                        campaign.created_by_user_id
+                ) {
+                    inOtherActiveCampaign = true;
+                    break;
+                }
+            }
+
+            const reasons = getSelectableReasons({
+                lead,
+                stats,
+                maxAttempts,
+                inOtherActiveCampaign,
+            });
             const selectable = reasons.length === 0;
 
-            return {
+            leadCandidates.push({
                 leadId: lead._id,
                 name: lead.name,
                 phone: lead.phone,
@@ -145,8 +186,8 @@ export const getCampaignLeadPicker = query({
                 reasons,
                 attemptsInCampaign: stats?.attemptsInCampaign ?? 0,
                 latestCampaignOutcome: stats?.latestOutcome ?? null,
-            };
-        });
+            });
+        }
         const leadCandidatesForOutreach = leadCandidates.filter(
             (lead) => lead.attemptsInCampaign === 0,
         );
@@ -612,6 +653,234 @@ export const getCampaignCallAttemptDetails = query({
     },
 });
 
+export const getActiveCampaignsForAutomation = internalQuery({
+    args: {},
+    handler: async (ctx) => {
+        const activeCampaigns = await ctx.db
+            .query("outreachCampaigns")
+            .withIndex("by_status", (q) => q.eq("status", "active"))
+            .collect();
+        const startedCampaigns: Array<{
+            campaignId: Id<"outreachCampaigns">;
+            campaignName: string;
+            updatedAt: number;
+        }> = [];
+        for (const campaign of activeCampaigns) {
+            const hasCallHistory = await ctx.db
+                .query("outreachCalls")
+                .withIndex("by_campaign_id", (q) =>
+                    q.eq("campaign_id", campaign._id),
+                )
+                .first();
+            if (!hasCallHistory) {
+                continue;
+            }
+            startedCampaigns.push({
+                campaignId: campaign._id,
+                campaignName: campaign.name,
+                updatedAt: campaign.updated_at,
+            });
+        }
+
+        return startedCampaigns
+            .sort((a, b) => a.updatedAt - b.updatedAt)
+            .map(({ campaignId, campaignName }) => ({
+                campaignId,
+                campaignName,
+            }));
+    },
+});
+
+export const getCronLeadCandidatesForCampaign = internalQuery({
+    args: {
+        campaignId: v.id("outreachCampaigns"),
+        limit: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const campaign = await ctx.db.get(args.campaignId);
+        if (!campaign || campaign.status !== "active") {
+            return [] as Id<"leads">[];
+        }
+
+        const limit = Math.max(1, Math.floor(args.limit));
+        const campaignCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_campaign_id", (q) =>
+                q.eq("campaign_id", args.campaignId),
+            )
+            .collect();
+        if (campaignCalls.length === 0) {
+            return [] as Id<"leads">[];
+        }
+
+        const queuedCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_call_status", (q) => q.eq("call_status", "queued"))
+            .collect();
+        const ringingCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_call_status", (q) => q.eq("call_status", "ringing"))
+            .collect();
+        const inProgressCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_call_status", (q) =>
+                q.eq("call_status", "in_progress"),
+            )
+            .collect();
+        const activeLeadIds = new Set(
+            [...queuedCalls, ...ringingCalls, ...inProgressCalls].map((call) =>
+                String(call.lead_id),
+            ),
+        );
+        const latestAttemptByLead = new Map<string, number>();
+        for (const call of campaignCalls) {
+            const leadKey = String(call.lead_id);
+            const currentLatest = latestAttemptByLead.get(leadKey);
+            if (
+                currentLatest === undefined ||
+                call.initiated_at > currentLatest
+            ) {
+                latestAttemptByLead.set(leadKey, call.initiated_at);
+            }
+        }
+        const sortedLeadIds = Array.from(latestAttemptByLead.entries())
+            .sort((a, b) => a[1] - b[1])
+            .map(([leadId]) => leadId as Id<"leads">);
+        const candidateLeadIds: Id<"leads">[] = [];
+        const campaignCache = new Map<
+            Id<"outreachCampaigns">,
+            Doc<"outreachCampaigns"> | null
+        >();
+        for (const leadId of sortedLeadIds) {
+            if (candidateLeadIds.length >= limit) {
+                break;
+            }
+
+            const leadKey = String(leadId);
+            if (activeLeadIds.has(leadKey)) {
+                continue;
+            }
+
+            const leadCalls = await ctx.db
+                .query("outreachCalls")
+                .withIndex("by_lead_id", (q) => q.eq("lead_id", leadId))
+                .collect();
+            let inOtherActiveCampaign = false;
+            for (const call of leadCalls) {
+                const otherCampaignId = call.campaign_id;
+                if (!otherCampaignId || otherCampaignId === args.campaignId) {
+                    continue;
+                }
+
+                let otherCampaign = campaignCache.get(otherCampaignId) ?? null;
+                if (!campaignCache.has(otherCampaignId)) {
+                    otherCampaign = await ctx.db.get(otherCampaignId);
+                    campaignCache.set(otherCampaignId, otherCampaign);
+                }
+                if (
+                    otherCampaign?.status === "active" &&
+                    otherCampaign.created_by_user_id ===
+                        campaign.created_by_user_id
+                ) {
+                    inOtherActiveCampaign = true;
+                    break;
+                }
+            }
+            if (inOtherActiveCampaign) {
+                continue;
+            }
+            candidateLeadIds.push(leadId);
+        }
+
+        return candidateLeadIds;
+    },
+});
+
+export const getActiveOutreachCallCount = internalQuery({
+    args: {},
+    handler: async (ctx) => {
+        const queuedCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_call_status", (q) => q.eq("call_status", "queued"))
+            .collect();
+        const ringingCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_call_status", (q) => q.eq("call_status", "ringing"))
+            .collect();
+        const inProgressCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_call_status", (q) =>
+                q.eq("call_status", "in_progress"),
+            )
+            .collect();
+
+        return {
+            queued: queuedCalls.length,
+            ringing: ringingCalls.length,
+            in_progress: inProgressCalls.length,
+            totalActive:
+                queuedCalls.length +
+                ringingCalls.length +
+                inProgressCalls.length,
+        };
+    },
+});
+
+export const getPendingFollowUpSmsCallIdsForAutomation = internalQuery({
+    args: {
+        now_ms: v.optional(v.number()),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const now = args.now_ms ?? Date.now();
+        const limit =
+            args.limit !== undefined ? Math.max(1, Math.floor(args.limit)) : 50;
+
+        const pendingCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_follow_up_sms_status", (q) =>
+                q.eq("follow_up_sms_status", "pending"),
+            )
+            .collect();
+        const campaignDocs = new Map<
+            Id<"outreachCampaigns">,
+            Doc<"outreachCampaigns"> | null
+        >();
+        const dueCalls: Array<{
+            callId: Id<"outreachCalls">;
+            dueAt: number;
+        }> = [];
+
+        for (const call of pendingCalls) {
+            let campaign: Doc<"outreachCampaigns"> | null = null;
+            if (call.campaign_id) {
+                campaign = campaignDocs.get(call.campaign_id) ?? null;
+                if (!campaignDocs.has(call.campaign_id)) {
+                    campaign = await ctx.db.get(call.campaign_id);
+                    campaignDocs.set(call.campaign_id, campaign);
+                }
+            }
+
+            const delayMinutes = campaign?.follow_up_sms?.delay_minutes ?? 3;
+            const referenceTimestamp =
+                call.ended_at ?? call.updated_at ?? call.initiated_at;
+            const dueAt = referenceTimestamp + delayMinutes * 60 * 1000;
+
+            if (dueAt <= now) {
+                dueCalls.push({
+                    callId: call._id,
+                    dueAt,
+                });
+            }
+        }
+
+        return dueCalls
+            .sort((a, b) => a.dueAt - b.dueAt)
+            .slice(0, limit)
+            .map((item) => item.callId);
+    },
+});
+
 export const getCampaignDispatchConfig = internalQuery({
     args: {
         campaignId: v.id("outreachCampaigns"),
@@ -646,16 +915,17 @@ export const getFollowUpSmsDispatchContext = internalQuery({
         const campaign = call.campaign_id
             ? await ctx.db.get(call.campaign_id)
             : null;
-        let noAnswerAttemptsInCampaign = 0;
+        let followUpAttemptsInCampaign = 0;
         if (lead && campaign) {
             const leadCalls = await ctx.db
                 .query("outreachCalls")
                 .withIndex("by_lead_id", (q) => q.eq("lead_id", lead._id))
                 .collect();
-            noAnswerAttemptsInCampaign = leadCalls.filter(
+            followUpAttemptsInCampaign = leadCalls.filter(
                 (leadCall) =>
                     leadCall.campaign_id === campaign._id &&
-                    leadCall.outcome === "no_answer",
+                    (leadCall.outcome === "no_answer" ||
+                        leadCall.outcome === "voicemail_left"),
             ).length;
         }
 
@@ -668,7 +938,7 @@ export const getFollowUpSmsDispatchContext = internalQuery({
                 summary: call.summary ?? null,
                 follow_up_sms_status: call.follow_up_sms_status ?? null,
             },
-            no_answer_attempts_in_campaign: noAnswerAttemptsInCampaign,
+            follow_up_attempts_in_campaign: followUpAttemptsInCampaign,
             lead: lead
                 ? {
                       _id: lead._id,

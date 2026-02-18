@@ -55,6 +55,7 @@ export function OutreachLeadPicker({
     const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
     const [isSavingCampaign, setIsSavingCampaign] = useState(false);
     const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
+    const [isTogglingOutreach, setIsTogglingOutreach] = useState(false);
     const [isStarting, setIsStarting] = useState(false);
     const [lastStartResult, setLastStartResult] =
         useState<StartOutreachResult | null>(null);
@@ -124,7 +125,7 @@ export function OutreachLeadPicker({
                     default_template:
                         input.followUpSmsDefaultTemplate.trim() || undefined,
                     send_only_on_outcomes: input.followUpSmsEnabled
-                        ? ["no_answer"]
+                        ? ["no_answer", "voicemail_left"]
                         : [],
                 },
             });
@@ -179,6 +180,44 @@ export function OutreachLeadPicker({
         } finally {
             setIsStarting(false);
         }
+    };
+
+    const handleCampaignPrimaryAction = async (campaign: CampaignRow) => {
+        if (campaign.hasCallHistory && campaign.status === "active") {
+            setIsTogglingOutreach(true);
+            try {
+                await updateCampaign({
+                    campaignId: campaign._id,
+                    status: "paused",
+                });
+                toast.success(`Outreach stopped for "${campaign.name}".`);
+            } catch (error) {
+                console.error("Failed to stop outreach", error);
+                toast.error("Failed to stop outreach.");
+            } finally {
+                setIsTogglingOutreach(false);
+            }
+            return;
+        }
+
+        if (campaign.hasCallHistory && campaign.status === "paused") {
+            setIsTogglingOutreach(true);
+            try {
+                await updateCampaign({
+                    campaignId: campaign._id,
+                    status: "active",
+                });
+                toast.success(`Outreach resumed for "${campaign.name}".`);
+            } catch (error) {
+                console.error("Failed to resume outreach", error);
+                toast.error("Failed to resume outreach.");
+            } finally {
+                setIsTogglingOutreach(false);
+            }
+            return;
+        }
+
+        setWizardCampaignId(campaign._id);
     };
 
     const handleDeleteCampaign = (campaign: CampaignRow) => {
@@ -261,11 +300,9 @@ export function OutreachLeadPicker({
                 onEditCampaign={(campaign) =>
                     setEditingCampaignId(campaign._id)
                 }
-                onStartOutreach={(campaign) =>
-                    setWizardCampaignId(campaign._id)
-                }
+                onStartOutreach={handleCampaignPrimaryAction}
                 onDeleteCampaign={handleDeleteCampaign}
-                isDeletingCampaign={isDeletingCampaign}
+                isDeletingCampaign={isDeletingCampaign || isTogglingOutreach}
             />
 
             <AlertDialog

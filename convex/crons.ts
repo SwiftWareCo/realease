@@ -35,4 +35,15 @@ crons.interval(
     {},
 );
 
+/**
+ * Outreach automation orchestrator (every 5 minutes)
+ * Selects callable leads, dispatches calls, and sweeps due follow-up SMS.
+ */
+crons.interval(
+    "run-outreach-automation",
+    { minutes: 5 },
+    internal.outreach.actions.runOutreachAutomation,
+    {},
+);
+
 export default crons;

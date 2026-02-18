@@ -32,6 +32,7 @@ type StartSkipReason =
     | "do_not_call"
     | "status_not_eligible"
     | "active_call_in_progress"
+    | "in_other_active_campaign"
     | "max_attempts_reached"
     | "blocked_by_terminal_outcome"
     | "outside_calling_window"
@@ -217,6 +218,65 @@ function normalizeSmsStatus(
     }
 }
 
+const OUTBOUND_SMS_SUCCESS_TERMINAL_STATUSES = new Set<
+    Doc<"outreachSmsMessages">["status"]
+>(["delivered", "read"]);
+const OUTBOUND_SMS_FAILURE_TERMINAL_STATUSES = new Set<
+    Doc<"outreachSmsMessages">["status"]
+>(["undelivered", "failed", "canceled"]);
+const OUTBOUND_SMS_PROGRESS_ORDER: Partial<
+    Record<Doc<"outreachSmsMessages">["status"], number>
+> = {
+    unknown: 0,
+    queued: 1,
+    accepted: 1,
+    sending: 2,
+    sent: 3,
+};
+
+function resolveSmsStatusTransition(args: {
+    currentStatus: Doc<"outreachSmsMessages">["status"];
+    incomingStatus: Doc<"outreachSmsMessages">["status"];
+    direction: Doc<"outreachSmsMessages">["direction"];
+}): Doc<"outreachSmsMessages">["status"] {
+    const { currentStatus, incomingStatus, direction } = args;
+    if (currentStatus === incomingStatus) {
+        return currentStatus;
+    }
+    if (direction === "inbound") {
+        if (currentStatus === "read" || incomingStatus === "read") {
+            return "read";
+        }
+        if (currentStatus === "received" || incomingStatus === "received") {
+            return "received";
+        }
+        if (currentStatus === "unknown") {
+            return incomingStatus;
+        }
+        if (incomingStatus === "unknown") {
+            return currentStatus;
+        }
+        return incomingStatus;
+    }
+
+    if (
+        OUTBOUND_SMS_SUCCESS_TERMINAL_STATUSES.has(currentStatus) ||
+        OUTBOUND_SMS_FAILURE_TERMINAL_STATUSES.has(currentStatus)
+    ) {
+        return currentStatus;
+    }
+    if (
+        OUTBOUND_SMS_SUCCESS_TERMINAL_STATUSES.has(incomingStatus) ||
+        OUTBOUND_SMS_FAILURE_TERMINAL_STATUSES.has(incomingStatus)
+    ) {
+        return incomingStatus;
+    }
+
+    const currentOrder = OUTBOUND_SMS_PROGRESS_ORDER[currentStatus] ?? -1;
+    const incomingOrder = OUTBOUND_SMS_PROGRESS_ORDER[incomingStatus] ?? -1;
+    return incomingOrder >= currentOrder ? incomingStatus : currentStatus;
+}
+
 function resolveInboundOptOutUpdate(messageBody: string): boolean | undefined {
     const keyword = messageBody.trim().split(/\s+/)[0]?.toLowerCase();
     if (!keyword) {
@@ -369,7 +429,7 @@ export const createCampaign = mutation({
                 default_template:
                     args.follow_up_sms?.default_template?.trim() || undefined,
                 send_only_on_outcomes: args.follow_up_sms
-                    ?.send_only_on_outcomes ?? ["no_answer"],
+                    ?.send_only_on_outcomes ?? ["no_answer", "voicemail_left"],
             },
             outcome_routing: args.outcome_routing,
             created_by_user_id: userId,
@@ -561,6 +621,10 @@ async function queueCampaignOutreachCalls(
         dialToNumber: string;
     }> = [];
     const skipped: Array<{ leadId: Id<"leads">; reason: StartSkipReason }> = [];
+    const campaignCache = new Map<
+        Id<"outreachCampaigns">,
+        Doc<"outreachCampaigns"> | null
+    >();
 
     for (const leadId of uniqueLeadIds) {
         if (campaign.status !== "active") {
@@ -592,6 +656,30 @@ async function queueCampaignOutreachCalls(
             .query("outreachCalls")
             .withIndex("by_lead_id", (q) => q.eq("lead_id", leadId))
             .collect();
+        let inOtherActiveCampaign = false;
+        for (const leadCall of leadCalls) {
+            const otherCampaignId = leadCall.campaign_id;
+            if (!otherCampaignId || otherCampaignId === args.campaignId) {
+                continue;
+            }
+
+            let otherCampaign = campaignCache.get(otherCampaignId) ?? null;
+            if (!campaignCache.has(otherCampaignId)) {
+                otherCampaign = await ctx.db.get(otherCampaignId);
+                campaignCache.set(otherCampaignId, otherCampaign);
+            }
+            if (
+                otherCampaign?.status === "active" &&
+                otherCampaign.created_by_user_id === campaign.created_by_user_id
+            ) {
+                inOtherActiveCampaign = true;
+                break;
+            }
+        }
+        if (inOtherActiveCampaign) {
+            skipped.push({ leadId, reason: "in_other_active_campaign" });
+            continue;
+        }
         const hasAnyActiveCall = leadCalls.some((call) =>
             ACTIVE_CALL_STATUSES.has(call.call_status),
         );
@@ -969,7 +1057,10 @@ async function queueFollowUpSmsAfterFinalOutcome(
     if (!latestCall) {
         return;
     }
-    if (latestCall.follow_up_sms_status !== undefined) {
+    if (
+        latestCall.follow_up_sms_status !== undefined &&
+        latestCall.follow_up_sms_status !== "not_needed"
+    ) {
         return;
     }
 
@@ -1009,18 +1100,28 @@ async function queueFollowUpSmsAfterFinalOutcome(
         return;
     }
 
-    if (args.outcome !== "no_answer") {
+    const isSmsTriggerOutcome =
+        args.outcome === "no_answer" || args.outcome === "voicemail_left";
+    if (!isSmsTriggerOutcome) {
         await ctx.db.patch(args.callId, {
             follow_up_sms_status: "not_needed",
             follow_up_sms_error:
-                "Follow-up SMS policy requires no_answer outcome.",
+                "Follow-up SMS policy requires no_answer or voicemail_left outcome.",
             updated_at: now,
         });
         return;
     }
 
     const allowedOutcomes = campaignFollowUpConfig.send_only_on_outcomes;
-    if (allowedOutcomes && !allowedOutcomes.includes(args.outcome)) {
+    const expandedAllowedOutcomes = new Set(allowedOutcomes ?? []);
+    if (expandedAllowedOutcomes.has("no_answer")) {
+        expandedAllowedOutcomes.add("voicemail_left");
+    }
+    if (
+        allowedOutcomes &&
+        allowedOutcomes.length > 0 &&
+        !expandedAllowedOutcomes.has(args.outcome)
+    ) {
         await ctx.db.patch(args.callId, {
             follow_up_sms_status: "not_needed",
             follow_up_sms_error:
@@ -1047,15 +1148,15 @@ async function queueFollowUpSmsAfterFinalOutcome(
         .query("outreachCalls")
         .withIndex("by_lead_id", (q) => q.eq("lead_id", lead._id))
         .collect();
-    const noAnswerAttemptsInCampaign = leadCalls.filter(
+    const followUpAttemptsInCampaign = leadCalls.filter(
         (call) =>
             call.campaign_id === args.campaign?._id &&
-            call.outcome === "no_answer",
+            (call.outcome === "no_answer" || call.outcome === "voicemail_left"),
     ).length;
-    if (noAnswerAttemptsInCampaign < 3) {
+    if (followUpAttemptsInCampaign < 3) {
         await ctx.db.patch(args.callId, {
             follow_up_sms_status: "not_needed",
-            follow_up_sms_error: `Follow-up SMS policy requires at least 3 no_answer attempts in campaign (current: ${noAnswerAttemptsInCampaign}).`,
+            follow_up_sms_error: `Follow-up SMS policy requires at least 3 no_answer/voicemail_left attempts in campaign (current: ${followUpAttemptsInCampaign}).`,
             updated_at: now,
         });
         return;
@@ -1304,6 +1405,11 @@ export const upsertOutreachSmsMessage = internalMutation({
         const body = args.body.trim();
 
         if (existingMessage) {
+            const nextStatus = resolveSmsStatusTransition({
+                currentStatus: existingMessage.status,
+                incomingStatus: args.status,
+                direction: existingMessage.direction,
+            });
             const updates: Partial<Doc<"outreachSmsMessages">> = {
                 lead_id: leadId ?? existingMessage.lead_id,
                 campaign_id: campaignId ?? existingMessage.campaign_id,
@@ -1320,7 +1426,7 @@ export const upsertOutreachSmsMessage = internalMutation({
                 body: body || existingMessage.body,
                 from_number: fromNumber || existingMessage.from_number,
                 to_number: toNumber || existingMessage.to_number,
-                status: args.status,
+                status: nextStatus,
                 updated_at: now,
             };
 
@@ -1464,6 +1570,11 @@ export const ingestTwilioMessagingWebhook = internalMutation({
         );
 
         if (existing) {
+            const nextStatus = resolveSmsStatusTransition({
+                currentStatus: existing.status,
+                incomingStatus: messageStatus,
+                direction: existing.direction,
+            });
             await ctx.db.patch(existing._id, {
                 lead_id: resolvedLeadId ?? existing.lead_id,
                 campaign_id: resolvedCampaignId ?? existing.campaign_id,
@@ -1474,7 +1585,7 @@ export const ingestTwilioMessagingWebhook = internalMutation({
                 provider_messaging_service_sid:
                     normalizeOptionalString(args.messaging_service_sid) ??
                     existing.provider_messaging_service_sid,
-                status: messageStatus,
+                status: nextStatus,
                 error_code: normalizedErrorCode ?? existing.error_code,
                 error_message: normalizedErrorMessage ?? existing.error_message,
                 body: body || existing.body,

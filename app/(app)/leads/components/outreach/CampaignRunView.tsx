@@ -220,7 +220,7 @@ export function CampaignRunView({
             </Card>
 
             <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-                <Card className="border-muted-foreground/20 shadow-sm lg:sticky lg:top-4 lg:flex lg:h-[calc(100vh-220px)] lg:flex-col">
+                <Card className="border-muted-foreground/20 shadow-sm lg:sticky lg:top-4 lg:flex lg:h-[calc(100vh-220px)] lg:flex-col lg:min-h-0">
                     <CardHeader className="space-y-2 pb-2">
                         <CardTitle className="text-base">
                             Contacted Leads
@@ -238,8 +238,8 @@ export function CampaignRunView({
                             {data.campaignLeads.length} leads.
                         </p>
                     </CardHeader>
-                    <CardContent className="lg:flex-1">
-                        <ScrollArea className="h-full rounded-md border">
+                    <CardContent className="lg:flex-1 lg:min-h-0">
+                        <ScrollArea className="h-[320px] rounded-md border lg:h-full">
                             <div className="space-y-1 p-2">
                                 {filteredCampaignLeads.length === 0 && (
                                     <div className="p-4 text-sm text-muted-foreground">

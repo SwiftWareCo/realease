@@ -11,7 +11,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Archive, Edit3, Play, Trash2 } from "lucide-react";
+import { Archive, Edit3, Play, Square, Trash2 } from "lucide-react";
 import { WEEKDAYS, getCampaignStatusBadge } from "./constants";
 import type { CampaignRow } from "./types";
 import {
@@ -189,6 +189,12 @@ export function CampaignsTable({
                                                 onStartOutreach(campaign);
                                             }}
                                             disabled={isDeletingCampaign}
+                                            variant={
+                                                campaign.hasCallHistory &&
+                                                campaign.status === "active"
+                                                    ? "destructive"
+                                                    : "default"
+                                            }
                                             onMouseDown={(event) =>
                                                 event.stopPropagation()
                                             }
@@ -198,9 +204,32 @@ export function CampaignsTable({
                                             onKeyDown={(event) =>
                                                 event.stopPropagation()
                                             }
+                                            aria-label={
+                                                campaign.hasCallHistory &&
+                                                campaign.status === "active"
+                                                    ? "Stop Outreach"
+                                                    : campaign.hasCallHistory &&
+                                                        campaign.status ===
+                                                            "paused"
+                                                      ? "Resume Outreach"
+                                                      : "Start Outreach"
+                                            }
                                         >
-                                            <Play className="mr-1.5 h-4 w-4" />
-                                            Start Outreach
+                                            {campaign.hasCallHistory &&
+                                            campaign.status === "active" ? (
+                                                <>
+                                                    <Square className="mr-1.5 h-4 w-4" />
+                                                    Stop Outreach
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Play className="mr-1.5 h-4 w-4" />
+                                                    {campaign.hasCallHistory &&
+                                                    campaign.status === "paused"
+                                                        ? "Resume Outreach"
+                                                        : "Start Outreach"}
+                                                </>
+                                            )}
                                         </Button>
                                     </div>
                                 </TableCell>

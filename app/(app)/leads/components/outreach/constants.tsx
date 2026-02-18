@@ -19,6 +19,7 @@ export const REASON_LABELS: Record<string, string> = {
     do_not_call: "Do Not Call",
     status_not_eligible: "Status Not Eligible",
     active_call_in_progress: "Active Call",
+    in_other_active_campaign: "In Another Active Campaign",
     max_attempts_reached: "Max Attempts Reached",
     blocked_by_terminal_outcome: "Terminal Outcome",
     campaign_not_active: "Campaign Not Active",

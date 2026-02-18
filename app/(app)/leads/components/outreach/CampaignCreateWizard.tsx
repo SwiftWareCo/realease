@@ -40,7 +40,9 @@ export function CampaignCreateWizard({
                 delay_minutes: 3,
                 default_template:
                     followUpSmsDefaultTemplate.trim() || undefined,
-                send_only_on_outcomes: followUpSmsEnabled ? ["no_answer"] : [],
+                send_only_on_outcomes: followUpSmsEnabled
+                    ? ["no_answer", "voicemail_left"]
+                    : [],
             },
         });
 
