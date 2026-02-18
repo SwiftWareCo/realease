@@ -24,6 +24,13 @@ import { formatDateTimeHumanReadable } from "@/utils/dateandtimes";
 import { RecordingPlayer } from "./RecordingPlayer";
 
 const EXPECTED_MVP_EVENTS = ["call_started", "call_ended", "call_analyzed"];
+const FOLLOW_UP_SMS_STATUS_LABELS: Record<string, string> = {
+    not_needed: "Not needed",
+    pending: "Pending",
+    sent: "Sent",
+    failed: "Failed",
+    opted_out: "Opted out",
+};
 
 function formatDateTime(timestamp: number | null): string {
     if (!timestamp) {
@@ -272,7 +279,45 @@ export function CallAttemptDetailsDrawer({
                                                 ? `$${combinedCost.toFixed(3)}`
                                                 : "-"}
                                         </Badge>
+                                        <Badge variant="outline">
+                                            Follow-up SMS:{" "}
+                                            {details.call.followUpSmsStatus
+                                                ? (FOLLOW_UP_SMS_STATUS_LABELS[
+                                                      details.call
+                                                          .followUpSmsStatus
+                                                  ] ??
+                                                  details.call
+                                                      .followUpSmsStatus)
+                                                : "-"}
+                                        </Badge>
                                     </div>
+                                    {(details.call.followUpSmsSentAt ||
+                                        details.call.followUpSmsSid ||
+                                        details.call.followUpSmsError) && (
+                                        <div className="space-y-1 rounded-md border bg-muted/20 p-2 text-xs text-muted-foreground">
+                                            <div>
+                                                SMS Sent At:{" "}
+                                                {formatDateTime(
+                                                    details.call
+                                                        .followUpSmsSentAt,
+                                                )}
+                                            </div>
+                                            <div>
+                                                SMS SID:{" "}
+                                                {details.call.followUpSmsSid ??
+                                                    "-"}
+                                            </div>
+                                            {details.call.followUpSmsError && (
+                                                <p className="text-destructive">
+                                                    SMS Error:{" "}
+                                                    {
+                                                        details.call
+                                                            .followUpSmsError
+                                                    }
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                     {details.call.recordingUrl && (
                                         <RecordingPlayer
                                             key={details.call.recordingUrl}

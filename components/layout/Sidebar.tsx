@@ -102,6 +102,13 @@ const navigation: NavItem[] = [
     },
 ];
 
+function isRouteActive(pathname: string, href: string): boolean {
+    if (href === "/") {
+        return pathname === "/";
+    }
+    return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function Sidebar() {
     const pathname = usePathname();
 
@@ -124,13 +131,18 @@ export function Sidebar() {
                     <SidebarGroupContent>
                         <SidebarMenu>
                             {navigation.map((item) => {
-                                const isActive = pathname === item.href;
+                                const isActive = isRouteActive(
+                                    pathname,
+                                    item.href,
+                                );
                                 const isChildActive = item.children?.some(
                                     (child) =>
-                                        pathname === child.href ||
-                                        child.children?.some(
-                                            (grandchild) =>
-                                                pathname === grandchild.href,
+                                        isRouteActive(pathname, child.href) ||
+                                        child.children?.some((grandchild) =>
+                                            isRouteActive(
+                                                pathname,
+                                                grandchild.href,
+                                            ),
                                         ),
                                 );
 
@@ -164,15 +176,19 @@ export function Sidebar() {
                                                         {item.children.map(
                                                             (child) => {
                                                                 const isChildItemActive =
-                                                                    pathname ===
-                                                                    child.href;
+                                                                    isRouteActive(
+                                                                        pathname,
+                                                                        child.href,
+                                                                    );
                                                                 const isGrandchildActive =
                                                                     child.children?.some(
                                                                         (
                                                                             grandchild,
                                                                         ) =>
-                                                                            pathname ===
-                                                                            grandchild.href,
+                                                                            isRouteActive(
+                                                                                pathname,
+                                                                                grandchild.href,
+                                                                            ),
                                                                     );
 
                                                                 // Child items with their own children (nested collapsible)
@@ -229,10 +245,10 @@ export function Sidebar() {
                                                                                                 >
                                                                                                     <SidebarMenuSubButton
                                                                                                         asChild
-                                                                                                        isActive={
-                                                                                                            pathname ===
-                                                                                                            grandchild.href
-                                                                                                        }
+                                                                                                        isActive={isRouteActive(
+                                                                                                            pathname,
+                                                                                                            grandchild.href,
+                                                                                                        )}
                                                                                                     >
                                                                                                         <Link
                                                                                                             href={
@@ -268,10 +284,10 @@ export function Sidebar() {
                                                                     >
                                                                         <SidebarMenuSubButton
                                                                             asChild
-                                                                            isActive={
-                                                                                pathname ===
-                                                                                child.href
-                                                                            }
+                                                                            isActive={isRouteActive(
+                                                                                pathname,
+                                                                                child.href,
+                                                                            )}
                                                                         >
                                                                             <Link
                                                                                 href={

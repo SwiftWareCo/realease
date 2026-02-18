@@ -7,9 +7,51 @@ import { Webhook } from "svix";
 const http = httpRouter();
 const RETELL_SIGNATURE_HEADER = "x-retell-signature";
 const RETELL_WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
+const TWILIO_SIGNATURE_HEADER = "x-twilio-signature";
 const textEncoder = new TextEncoder();
 
 type JsonObject = Record<string, unknown>;
+
+http.route({
+    path: "/twilio-messaging-webhook",
+    method: "POST",
+    handler: httpAction(async (ctx, request) => {
+        const rawBody = await request.text();
+        const signature = request.headers.get(TWILIO_SIGNATURE_HEADER);
+        const payload = parseTwilioFormPayload(rawBody);
+
+        const signatureValid = await verifyTwilioSignature({
+            requestUrl: request.url,
+            signature,
+            payload,
+        });
+        if (!signatureValid) {
+            return new Response("Invalid Twilio signature", { status: 401 });
+        }
+
+        await ctx.runMutation(
+            internal.outreach.mutations.ingestTwilioMessagingWebhook,
+            {
+                message_sid: payload.MessageSid ?? payload.SmsSid,
+                account_sid: payload.AccountSid,
+                messaging_service_sid: payload.MessagingServiceSid,
+                message_status: payload.MessageStatus ?? payload.SmsStatus,
+                from_number: payload.From,
+                to_number: payload.To,
+                body: payload.Body,
+                error_code: payload.ErrorCode,
+                error_message: payload.ErrorMessage,
+                raw_payload: payload,
+                received_at: Date.now(),
+            },
+        );
+
+        return new Response(JSON.stringify({ accepted: true }), {
+            status: 202,
+            headers: { "Content-Type": "application/json" },
+        });
+    }),
+});
 
 http.route({
     path: "/clerk-users-webhook",
@@ -98,6 +140,72 @@ async function validateRequest(req: Request): Promise<WebhookEvent | null> {
         console.error("Error verifying webhook event", error);
         return null;
     }
+}
+
+function parseTwilioFormPayload(rawBody: string): Record<string, string> {
+    const searchParams = new URLSearchParams(rawBody);
+    const payload: Record<string, string> = {};
+    for (const [key, value] of searchParams.entries()) {
+        payload[key] = value;
+    }
+    return payload;
+}
+
+function areStringsEqualConstantTime(left: string, right: string): boolean {
+    if (left.length !== right.length) {
+        return false;
+    }
+    let mismatch = 0;
+    for (let index = 0; index < left.length; index += 1) {
+        mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
+    }
+    return mismatch === 0;
+}
+
+function bytesToBase64(bytes: ArrayBuffer): string {
+    let binary = "";
+    for (const value of new Uint8Array(bytes)) {
+        binary += String.fromCharCode(value);
+    }
+    return btoa(binary);
+}
+
+async function verifyTwilioSignature(args: {
+    requestUrl: string;
+    signature: string | null;
+    payload: Record<string, string>;
+}): Promise<boolean> {
+    if (process.env.TWILIO_SKIP_WEBHOOK_SIGNATURE_VALIDATION === "true") {
+        return true;
+    }
+
+    const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+    if (!authToken || !args.signature) {
+        return false;
+    }
+
+    const sortedKeys = Object.keys(args.payload).sort((a, b) =>
+        a.localeCompare(b),
+    );
+    let data = args.requestUrl;
+    for (const key of sortedKeys) {
+        data += key + args.payload[key];
+    }
+
+    const hmacKey = await crypto.subtle.importKey(
+        "raw",
+        textEncoder.encode(authToken),
+        { name: "HMAC", hash: "SHA-1" },
+        false,
+        ["sign"],
+    );
+    const digest = await crypto.subtle.sign(
+        "HMAC",
+        hmacKey,
+        textEncoder.encode(data),
+    );
+    const expected = bytesToBase64(digest);
+    return areStringsEqualConstantTime(expected, args.signature);
 }
 
 function normalizeString(value: unknown): string | undefined {

@@ -29,10 +29,12 @@ This document tracks both schema contracts and runtime implementation status for
   - webhook payloads persist to `outreachWebhookEvents`
   - `outreachCalls` status/outcome/transcript/summary fields are updated
   - lead shortcut fields (`last_outreach_call_id`, `last_call_outcome`) are updated
-- `outcome_routing` application is not implemented yet (lead `status` / pipeline stage does not change from routing rules yet).
-- Stale active-call cleanup guard is not implemented yet (stuck `queued` / `ringing` / `in_progress` can block new attempts).
+- `outcome_routing` application is implemented for final outcomes and patches lead funnel fields when rule fields are configured.
+- Compliance override is implemented: `do_not_call` outcome enforces `leads.do_not_call = true`.
+- Stale active-call cleanup guard is implemented (`internal.outreach.mutations.cleanupStaleActiveCalls`).
+- Stale cleanup is scheduled in cron every 10 minutes (`convex/crons.ts`) to prevent permanent active-call lockouts.
 - Follow-up SMS send logic for outreach calls is not implemented yet.
-- Outreach cron automation is not implemented yet (`convex/crons.ts` has no outreach jobs).
+- Full outreach campaign orchestration cron is not implemented yet (lead selection/dispatch remains manual-triggered).
 - Outbound Retell phone number is still a readiness dependency for production calling.
 
 ## Retell agent contract (for future development)
@@ -206,10 +208,9 @@ The goal is one shared decision engine reused by manual triggers and cron, not t
 
 ## Immediate next steps (February 17, 2026)
 
-1. Implement outcome routing application (`campaign.outcome_routing` -> lead status/pipeline updates).
-2. Add stale active-call cleanup guard (timeout auto-close/fail for stuck active calls).
-3. Implement Milestone 5 SMS rules + Twilio result persistence on `outreachCalls`.
-4. Run the full validation matrix and confirm each scenario maps to expected outcome + lead/UI state.
+1. Implement Milestone 5 SMS rules + Twilio result persistence on `outreachCalls`.
+2. Run the full validation matrix and confirm each outcome scenario maps to expected call + lead state.
+3. Implement Milestone 6 campaign orchestration cron (lead selection + dispatch reuse of manual path).
 
 ## Deferred for later phases
 

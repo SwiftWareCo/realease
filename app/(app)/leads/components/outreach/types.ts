@@ -15,6 +15,9 @@ export type CampaignCallsData = FunctionReturnType<
 export type CampaignCallAttemptDetails = FunctionReturnType<
     typeof api.outreach.queries.getCampaignCallAttemptDetails
 >;
+export type CampaignLeadConversationDetails = FunctionReturnType<
+    typeof api.outreach.queries.getCampaignLeadConversation
+>;
 
 export type StartOutreachResult = FunctionReturnType<
     typeof api.outreach.actions.startCampaignOutreach
@@ -42,7 +45,6 @@ export type CampaignSettingsInput = {
     allowedWeekdays: Weekday[];
     maxAttempts: number;
     cooldownMinutes: number;
-    retellAgentId: string;
-    retellPhoneNumberId: string;
-    twilioMessagingServiceSid: string;
+    followUpSmsEnabled: boolean;
+    followUpSmsDefaultTemplate: string;
 };

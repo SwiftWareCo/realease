@@ -34,7 +34,12 @@ import {
     Users,
 } from "lucide-react";
 import { OUTCOME_LABELS, REASON_LABELS, WizardStep } from "./constants";
-import type { CampaignRow, PickerData } from "./types";
+import type { PickerData } from "./types";
+
+type StartOutreachCampaign = {
+    _id: Id<"outreachCampaigns">;
+    name: string;
+};
 
 export function StartOutreachWizardModal({
     campaign,
@@ -43,7 +48,7 @@ export function StartOutreachWizardModal({
     onOpenChange,
     onStart,
 }: {
-    campaign: CampaignRow | null;
+    campaign: StartOutreachCampaign | null;
     open: boolean;
     isStarting: boolean;
     onOpenChange: (open: boolean) => void;

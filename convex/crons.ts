@@ -24,4 +24,15 @@ crons.weekly(
     {},
 );
 
+/**
+ * Outreach stale call cleanup guard (every 10 minutes)
+ * Closes stuck queued/ringing/in_progress calls into terminal failed state.
+ */
+crons.interval(
+    "cleanup-stale-outreach-calls",
+    { minutes: 10 },
+    internal.outreach.mutations.cleanupStaleActiveCalls,
+    {},
+);
+
 export default crons;

@@ -67,6 +67,7 @@ export const leadsTable = defineTable({
     last_call_outcome: v.optional(outreachCallOutcomeSchema),
     created_at: v.number(),
 })
+    .index("by_phone", ["phone"])
     .index("by_status", ["status"])
     .index("by_source", ["source"])
     .index("by_lead_type", ["lead_type"])

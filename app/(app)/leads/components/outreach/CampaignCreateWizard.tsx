@@ -2,14 +2,9 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,11 +21,8 @@ export function CampaignCreateWizard({
     const [step, setStep] = useState<1 | 2>(1);
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
-    const [status, setStatus] = useState<"active" | "draft">("active");
-    const [timezone, setTimezone] = useState("");
-    const [retellAgentId, setRetellAgentId] = useState("");
-    const [retellPhoneNumberId, setRetellPhoneNumberId] = useState("");
-    const [twilioMessagingServiceSid, setTwilioMessagingServiceSid] =
+    const [followUpSmsEnabled, setFollowUpSmsEnabled] = useState(true);
+    const [followUpSmsDefaultTemplate, setFollowUpSmsDefaultTemplate] =
         useState("");
 
     const canContinue = name.trim().length > 0;
@@ -40,26 +32,23 @@ export function CampaignCreateWizard({
             toast.error("Campaign name is required.");
             return;
         }
-
         await onCreate({
             name: name.trim(),
             description: description.trim() || undefined,
-            status,
-            timezone: timezone.trim() || undefined,
-            retell_agent_id: retellAgentId.trim() || undefined,
-            retell_phone_number_id: retellPhoneNumberId.trim() || undefined,
-            twilio_messaging_service_sid:
-                twilioMessagingServiceSid.trim() || undefined,
+            follow_up_sms: {
+                enabled: followUpSmsEnabled,
+                delay_minutes: 3,
+                default_template:
+                    followUpSmsDefaultTemplate.trim() || undefined,
+                send_only_on_outcomes: followUpSmsEnabled ? ["no_answer"] : [],
+            },
         });
 
         setStep(1);
         setName("");
         setDescription("");
-        setStatus("active");
-        setTimezone("");
-        setRetellAgentId("");
-        setRetellPhoneNumberId("");
-        setTwilioMessagingServiceSid("");
+        setFollowUpSmsEnabled(true);
+        setFollowUpSmsDefaultTemplate("");
     };
 
     return (
@@ -73,7 +62,7 @@ export function CampaignCreateWizard({
                 <WizardStep
                     active={step === 2}
                     done={false}
-                    label="Providers"
+                    label="Follow-up SMS"
                 />
             </div>
 
@@ -90,59 +79,59 @@ export function CampaignCreateWizard({
                         onChange={(event) => setDescription(event.target.value)}
                         rows={2}
                     />
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <Select
-                            value={status}
-                            onValueChange={(value) =>
-                                setStatus(value as "active" | "draft")
-                            }
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Initial status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="draft">Draft</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Input
-                            placeholder="Timezone override (optional)"
-                            value={timezone}
-                            onChange={(event) =>
-                                setTimezone(event.target.value)
-                            }
-                        />
-                    </div>
                 </div>
             )}
 
             {step === 2 && (
                 <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground">
-                        Optional overrides. Leave blank to use shared defaults
-                        from environment variables.
+                    <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                        <div className="space-y-1">
+                            <Label
+                                htmlFor="create-follow-up-sms-enabled"
+                                className="text-sm font-medium"
+                            >
+                                Enable follow-up SMS
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                                Sends only after 3 no-answer attempts in this
+                                campaign.
+                            </p>
+                        </div>
+                        <Checkbox
+                            id="create-follow-up-sms-enabled"
+                            checked={followUpSmsEnabled}
+                            onCheckedChange={(checked) =>
+                                setFollowUpSmsEnabled(checked === true)
+                            }
+                        />
+                    </div>
+                    <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                        Follow-up SMS sends 3 minutes after final call outcome.
                     </p>
-                    <Input
-                        placeholder="Retell agent ID override (optional)"
-                        value={retellAgentId}
-                        onChange={(event) =>
-                            setRetellAgentId(event.target.value)
-                        }
-                    />
-                    <Input
-                        placeholder="Retell outbound number override (E.164, optional)"
-                        value={retellPhoneNumberId}
-                        onChange={(event) =>
-                            setRetellPhoneNumberId(event.target.value)
-                        }
-                    />
-                    <Input
-                        placeholder="Twilio messaging service SID override (optional)"
-                        value={twilioMessagingServiceSid}
-                        onChange={(event) =>
-                            setTwilioMessagingServiceSid(event.target.value)
-                        }
-                    />
+                    <div className="space-y-2">
+                        <Label
+                            htmlFor="create-follow-up-sms-template"
+                            className="text-xs text-muted-foreground"
+                        >
+                            Default SMS template
+                        </Label>
+                        <Textarea
+                            id="create-follow-up-sms-template"
+                            rows={3}
+                            value={followUpSmsDefaultTemplate}
+                            onChange={(event) =>
+                                setFollowUpSmsDefaultTemplate(
+                                    event.target.value,
+                                )
+                            }
+                            disabled={!followUpSmsEnabled}
+                            placeholder="Hi {{lead_name}}, sorry we missed you. This is {{campaign_name}}. Reply STOP to opt out."
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                            Variables: {`{{lead_name}}`}, {`{{campaign_name}}`},{" "}
+                            {`{{outcome}}`}, {`{{call_summary}}`}.
+                        </p>
+                    </div>
                 </div>
             )}
 

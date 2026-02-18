@@ -19,7 +19,7 @@ Out of scope (for this plan):
 - Separate funnel transition audit table
 - Complex retry queue beyond `outreachCalls` records
 
-## Current status snapshot (from commits `d3d62ad`, `ae4d408` on February 16, 2026)
+## Current status snapshot (updated February 17, 2026)
 
 Implemented in code:
 - Manual campaign start and call queue/dispatch path
@@ -28,12 +28,14 @@ Implemented in code:
 - Processing of `call_started`, `call_ended`, `call_analyzed`
 - Outcome normalization to enum + call record updates
 - Lead shortcut updates (`last_outreach_call_id`, `last_call_outcome`)
+- Campaign outcome routing to lead funnel fields on final outcomes
+- Compliance override (`do_not_call` outcome sets `leads.do_not_call = true`)
+- Stale active-call cleanup mutation for `queued`/`ringing`/`in_progress`
+- Stale cleanup cron scheduled every 10 minutes in `convex/crons.ts`
 
 Still open:
-- Apply `campaign.outcome_routing` to lead `status` / pipeline stages
-- Stale active-call cleanup guard for stuck `queued`/`ringing`/`in_progress`
 - Milestone 5 follow-up SMS orchestration + persistence for outreach calls
-- Milestone 6 outreach cron automation
+- Milestone 6 full outreach orchestration cron (lead selection + dispatch path reuse)
 
 ## MVP Milestones And Acceptance Gates
 
@@ -121,6 +123,9 @@ Build:
 - Update lead shortcuts (`last_outreach_call_id`, `last_call_outcome`)
 - Apply campaign `outcome_routing` to lead status/pipeline stage
 
+Status:
+- Implemented in backend.
+
 Outcome routing application definition:
 - Yes, this means lead movement after a call.
 - On final call outcome, find matching `outcome_routing` rule and patch `leads.status`, `leads.buyer_pipeline_stage`, and/or `leads.seller_pipeline_stage` when configured.
@@ -141,6 +146,9 @@ Build:
 - Add cleanup guard that scans for stale `queued`/`ringing`/`in_progress` calls.
 - Auto-close stale calls to a terminal state (`failed`) with `ended_at` + `error_message`.
 - Ensure cleanup clears lead eligibility deadlocks caused by missing provider/webhook completion events.
+
+Status:
+- Implemented in backend and scheduled in `convex/crons.ts` (10-minute interval).
 
 Acceptance checklist:
 - [ ] Stale active calls transition to a terminal state by timeout policy

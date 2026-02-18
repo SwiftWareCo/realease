@@ -147,15 +147,19 @@ export const getCampaignLeadPicker = query({
                 latestCampaignOutcome: stats?.latestOutcome ?? null,
             };
         });
+        const leadCandidatesForOutreach = leadCandidates.filter(
+            (lead) => lead.attemptsInCampaign === 0,
+        );
 
         return {
             campaignId: campaign._id,
             campaignName: campaign.name,
             maxAttempts,
-            totalLeads: leadCandidates.length,
-            selectableCount: leadCandidates.filter((lead) => lead.selectable)
-                .length,
-            leads: leadCandidates,
+            totalLeads: leadCandidatesForOutreach.length,
+            selectableCount: leadCandidatesForOutreach.filter(
+                (lead) => lead.selectable,
+            ).length,
+            leads: leadCandidatesForOutreach,
         };
     },
 });
@@ -208,6 +212,14 @@ export const getCampaignsForPicker = query({
                 retellPhoneNumberId: campaign.retell_phone_number_id ?? null,
                 twilioMessagingServiceSid:
                     campaign.twilio_messaging_service_sid ?? null,
+                followUpSms: {
+                    enabled: campaign.follow_up_sms?.enabled ?? false,
+                    delay_minutes: campaign.follow_up_sms?.delay_minutes ?? 3,
+                    default_template:
+                        campaign.follow_up_sms?.default_template ?? null,
+                    send_only_on_outcomes:
+                        campaign.follow_up_sms?.send_only_on_outcomes ?? [],
+                },
                 retryPolicy: campaign.retry_policy,
                 callingWindow: campaign.calling_window,
                 updatedAt: campaign.updated_at,
@@ -238,7 +250,13 @@ export const getCampaignCallAttempts = query({
                 ? Math.max(1, Math.floor(args.limit))
                 : 200;
 
-        const calls = await ctx.db
+        const allCampaignCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_campaign_id", (q) =>
+                q.eq("campaign_id", args.campaignId),
+            )
+            .collect();
+        const recentCalls = await ctx.db
             .query("outreachCalls")
             .withIndex("by_campaign_id_and_initiated_at", (q) =>
                 q.eq("campaign_id", args.campaignId),
@@ -247,7 +265,7 @@ export const getCampaignCallAttempts = query({
             .take(take);
 
         const leadsById = new Map<string, Doc<"leads"> | null>();
-        for (const call of calls) {
+        for (const call of allCampaignCalls) {
             const key = String(call.lead_id);
             if (!leadsById.has(key)) {
                 leadsById.set(key, await ctx.db.get(call.lead_id));
@@ -255,7 +273,7 @@ export const getCampaignCallAttempts = query({
         }
 
         const summary = {
-            total: calls.length,
+            total: allCampaignCalls.length,
             queued: 0,
             ringing: 0,
             in_progress: 0,
@@ -264,9 +282,70 @@ export const getCampaignCallAttempts = query({
             canceled: 0,
         };
 
-        for (const call of calls) {
+        for (const call of allCampaignCalls) {
             summary[call.call_status] += 1;
         }
+
+        const leadStats = new Map<
+            string,
+            {
+                leadId: Id<"leads">;
+                attempts: number;
+                activeCalls: number;
+                latestCallId: Id<"outreachCalls">;
+                latestInitiatedAt: number;
+                latestCallStatus: Doc<"outreachCalls">["call_status"];
+                latestOutcome: Doc<"outreachCalls">["outcome"] | null;
+            }
+        >();
+        for (const call of allCampaignCalls) {
+            const leadKey = String(call.lead_id);
+            const current = leadStats.get(leadKey);
+            if (!current) {
+                leadStats.set(leadKey, {
+                    leadId: call.lead_id,
+                    attempts: 1,
+                    activeCalls: ACTIVE_CALL_STATUSES.has(call.call_status)
+                        ? 1
+                        : 0,
+                    latestCallId: call._id,
+                    latestInitiatedAt: call.initiated_at,
+                    latestCallStatus: call.call_status,
+                    latestOutcome: call.outcome ?? null,
+                });
+                continue;
+            }
+            current.attempts += 1;
+            if (ACTIVE_CALL_STATUSES.has(call.call_status)) {
+                current.activeCalls += 1;
+            }
+            if (call.initiated_at > current.latestInitiatedAt) {
+                current.latestCallId = call._id;
+                current.latestInitiatedAt = call.initiated_at;
+                current.latestCallStatus = call.call_status;
+                current.latestOutcome = call.outcome ?? null;
+            }
+        }
+
+        const campaignLeads = Array.from(leadStats.values())
+            .map((stats) => {
+                const lead = leadsById.get(String(stats.leadId)) ?? null;
+                return {
+                    leadId: stats.leadId,
+                    leadName: lead?.name ?? "Deleted lead",
+                    leadPhone: lead?.phone ?? "Unknown",
+                    leadStatus: lead?.status ?? null,
+                    leadDoNotCall: lead?.do_not_call ?? false,
+                    leadSmsOptOut: lead?.sms_opt_out ?? false,
+                    attempts: stats.attempts,
+                    activeCalls: stats.activeCalls,
+                    latestCallId: stats.latestCallId,
+                    latestInitiatedAt: stats.latestInitiatedAt,
+                    latestCallStatus: stats.latestCallStatus,
+                    latestOutcome: stats.latestOutcome,
+                };
+            })
+            .sort((a, b) => b.latestInitiatedAt - a.latestInitiatedAt);
 
         return {
             campaign: {
@@ -276,7 +355,8 @@ export const getCampaignCallAttempts = query({
                 timezone: campaign.timezone,
             },
             summary,
-            calls: calls.map((call) => {
+            campaignLeads,
+            calls: recentCalls.map((call) => {
                 const lead = leadsById.get(String(call.lead_id)) ?? null;
                 return {
                     callId: call._id,
@@ -292,6 +372,94 @@ export const getCampaignCallAttempts = query({
                     errorMessage: call.error_message ?? null,
                 };
             }),
+        };
+    },
+});
+
+export const getCampaignLeadConversation = query({
+    args: {
+        campaignId: v.id("outreachCampaigns"),
+        leadId: v.id("leads"),
+    },
+    handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        const campaign = await ctx.db.get(args.campaignId);
+        if (!campaign) {
+            throw new Error("Campaign not found");
+        }
+        if (campaign.created_by_user_id !== userId) {
+            throw new Error("Campaign not found");
+        }
+
+        const lead = await ctx.db.get(args.leadId);
+        if (!lead) {
+            throw new Error("Lead not found");
+        }
+
+        const campaignCalls = await ctx.db
+            .query("outreachCalls")
+            .withIndex("by_campaign_id_and_initiated_at", (q) =>
+                q.eq("campaign_id", args.campaignId),
+            )
+            .order("desc")
+            .collect();
+        const leadCalls = campaignCalls
+            .filter((call) => call.lead_id === args.leadId)
+            .slice(0, 50);
+
+        const smsMessagesRaw = await ctx.db
+            .query("outreachSmsMessages")
+            .withIndex("by_campaign_id_and_lead_id_and_created_at", (q) =>
+                q.eq("campaign_id", args.campaignId).eq("lead_id", args.leadId),
+            )
+            .order("desc")
+            .take(200);
+        const smsConversation = [...smsMessagesRaw]
+            .reverse()
+            .map((message) => ({
+                messageId: message._id,
+                direction: message.direction,
+                status: message.status,
+                body: message.body,
+                fromNumber: message.from_number,
+                toNumber: message.to_number,
+                provider: message.provider,
+                providerMessageSid: message.provider_message_sid ?? null,
+                sentAt: message.sent_at ?? null,
+                receivedAt: message.received_at ?? null,
+                errorCode: message.error_code ?? null,
+                errorMessage: message.error_message ?? null,
+                callId: message.call_id ?? null,
+                createdAt: message.created_at,
+                updatedAt: message.updated_at,
+            }));
+
+        return {
+            campaign: {
+                _id: campaign._id,
+                name: campaign.name,
+                status: campaign.status,
+                twilioMessagingServiceSid:
+                    campaign.twilio_messaging_service_sid ?? null,
+            },
+            lead: {
+                _id: lead._id,
+                name: lead.name,
+                phone: lead.phone,
+                status: lead.status,
+                doNotCall: lead.do_not_call ?? false,
+                smsOptOut: lead.sms_opt_out ?? false,
+            },
+            latestCallId: leadCalls[0]?._id ?? null,
+            communicationAttempts: leadCalls.map((call) => ({
+                callId: call._id,
+                callStatus: call.call_status,
+                outcome: call.outcome ?? null,
+                initiatedAt: call.initiated_at,
+                retellCallId: call.retell_call_id ?? null,
+                errorMessage: call.error_message ?? null,
+            })),
+            smsConversation,
         };
     },
 });
@@ -460,6 +628,66 @@ export const getCampaignDispatchConfig = internalQuery({
             retellAgentId: campaign.retell_agent_id,
             // Legacy field name kept in schema; value is used as outbound caller number.
             retellOutboundNumber: campaign.retell_phone_number_id ?? null,
+        };
+    },
+});
+
+export const getFollowUpSmsDispatchContext = internalQuery({
+    args: {
+        callId: v.id("outreachCalls"),
+    },
+    handler: async (ctx, args) => {
+        const call = await ctx.db.get(args.callId);
+        if (!call) {
+            return null;
+        }
+
+        const lead = await ctx.db.get(call.lead_id);
+        const campaign = call.campaign_id
+            ? await ctx.db.get(call.campaign_id)
+            : null;
+        let noAnswerAttemptsInCampaign = 0;
+        if (lead && campaign) {
+            const leadCalls = await ctx.db
+                .query("outreachCalls")
+                .withIndex("by_lead_id", (q) => q.eq("lead_id", lead._id))
+                .collect();
+            noAnswerAttemptsInCampaign = leadCalls.filter(
+                (leadCall) =>
+                    leadCall.campaign_id === campaign._id &&
+                    leadCall.outcome === "no_answer",
+            ).length;
+        }
+
+        return {
+            call: {
+                _id: call._id,
+                lead_id: call.lead_id,
+                campaign_id: call.campaign_id ?? null,
+                outcome: call.outcome ?? null,
+                summary: call.summary ?? null,
+                follow_up_sms_status: call.follow_up_sms_status ?? null,
+            },
+            no_answer_attempts_in_campaign: noAnswerAttemptsInCampaign,
+            lead: lead
+                ? {
+                      _id: lead._id,
+                      name: lead.name,
+                      phone: lead.phone,
+                      do_not_call: lead.do_not_call ?? false,
+                      sms_opt_out: lead.sms_opt_out ?? false,
+                  }
+                : null,
+            campaign: campaign
+                ? {
+                      _id: campaign._id,
+                      name: campaign.name,
+                      twilio_messaging_service_sid:
+                          campaign.twilio_messaging_service_sid ?? null,
+                      follow_up_sms: campaign.follow_up_sms ?? null,
+                      outcome_routing: campaign.outcome_routing ?? null,
+                  }
+                : null,
         };
     },
 });

@@ -69,6 +69,26 @@ const followUpSmsStatusSchema = v.union(
     v.literal("opted_out"),
 );
 
+const outreachSmsDirectionSchema = v.union(
+    v.literal("inbound"),
+    v.literal("outbound"),
+);
+
+const outreachSmsStatusSchema = v.union(
+    v.literal("queued"),
+    v.literal("accepted"),
+    v.literal("sending"),
+    v.literal("sent"),
+    v.literal("delivered"),
+    v.literal("undelivered"),
+    v.literal("failed"),
+    v.literal("receiving"),
+    v.literal("received"),
+    v.literal("read"),
+    v.literal("canceled"),
+    v.literal("unknown"),
+);
+
 export const outreachCampaignsTable = defineTable({
     name: v.string(),
     description: v.optional(v.string()),
@@ -91,7 +111,9 @@ export const outreachCampaignsTable = defineTable({
             enabled: v.boolean(),
             delay_minutes: v.number(),
             default_template: v.optional(v.string()),
-            send_only_on_outcomes: v.optional(v.array(outreachCallOutcomeSchema)),
+            send_only_on_outcomes: v.optional(
+                v.array(outreachCallOutcomeSchema),
+            ),
         }),
     ),
     outcome_routing: v.optional(
@@ -100,7 +122,9 @@ export const outreachCampaignsTable = defineTable({
                 outcome: outreachCallOutcomeSchema,
                 next_lead_status: v.optional(leadStatusSchema),
                 next_buyer_pipeline_stage: v.optional(buyerPipelineStageSchema),
-                next_seller_pipeline_stage: v.optional(sellerPipelineStageSchema),
+                next_seller_pipeline_stage: v.optional(
+                    sellerPipelineStageSchema,
+                ),
                 send_follow_up_sms: v.optional(v.boolean()),
                 custom_sms_template: v.optional(v.string()),
             }),
@@ -173,3 +197,35 @@ export const outreachWebhookEventsTable = defineTable({
     .index("by_event_type", ["event_type"])
     .index("by_processing_status", ["processing_status"])
     .index("by_received_at", ["received_at"]);
+
+export const outreachSmsMessagesTable = defineTable({
+    lead_id: v.optional(v.id("leads")),
+    campaign_id: v.optional(v.id("outreachCampaigns")),
+    call_id: v.optional(v.id("outreachCalls")),
+    provider: v.literal("twilio"),
+    provider_message_sid: v.optional(v.string()),
+    provider_account_sid: v.optional(v.string()),
+    provider_messaging_service_sid: v.optional(v.string()),
+    direction: outreachSmsDirectionSchema,
+    body: v.string(),
+    from_number: v.string(),
+    to_number: v.string(),
+    status: outreachSmsStatusSchema,
+    error_code: v.optional(v.string()),
+    error_message: v.optional(v.string()),
+    sent_at: v.optional(v.number()),
+    received_at: v.optional(v.number()),
+    raw_payload: v.optional(v.any()),
+    created_at: v.number(),
+    updated_at: v.number(),
+})
+    .index("by_lead_id", ["lead_id"])
+    .index("by_campaign_id", ["campaign_id"])
+    .index("by_call_id", ["call_id"])
+    .index("by_provider_message_sid", ["provider_message_sid"])
+    .index("by_lead_id_and_created_at", ["lead_id", "created_at"])
+    .index("by_campaign_id_and_lead_id_and_created_at", [
+        "campaign_id",
+        "lead_id",
+        "created_at",
+    ]);

@@ -118,11 +118,15 @@ export function OutreachLeadPicker({
                     max_attempts: input.maxAttempts,
                     min_minutes_between_attempts: input.cooldownMinutes,
                 },
-                retell_agent_id: input.retellAgentId.trim() || null,
-                retell_phone_number_id:
-                    input.retellPhoneNumberId.trim() || null,
-                twilio_messaging_service_sid:
-                    input.twilioMessagingServiceSid.trim() || null,
+                follow_up_sms: {
+                    enabled: input.followUpSmsEnabled,
+                    delay_minutes: 3,
+                    default_template:
+                        input.followUpSmsDefaultTemplate.trim() || undefined,
+                    send_only_on_outcomes: input.followUpSmsEnabled
+                        ? ["no_answer"]
+                        : [],
+                },
             });
             toast.success("Campaign settings updated.");
             setEditingCampaignId(null);
@@ -251,6 +255,9 @@ export function OutreachLeadPicker({
         <div className="space-y-4">
             <CampaignsTable
                 campaigns={campaigns}
+                onOpenCampaign={(campaign) =>
+                    router.push(`/leads/outreach/${campaign._id}`)
+                }
                 onEditCampaign={(campaign) =>
                     setEditingCampaignId(campaign._id)
                 }
@@ -340,8 +347,8 @@ export function OutreachLeadPicker({
                     <DialogHeader>
                         <DialogTitle>Create Campaign</DialogTitle>
                         <DialogDescription>
-                            Shared provider defaults are applied unless you
-                            override them.
+                            Provider defaults come from environment config. You
+                            only set campaign behavior here.
                         </DialogDescription>
                     </DialogHeader>
                     <CampaignCreateWizard
@@ -363,8 +370,8 @@ export function OutreachLeadPicker({
                     <DialogHeader>
                         <DialogTitle>Edit Campaign</DialogTitle>
                         <DialogDescription>
-                            Update campaign settings, windows, and provider
-                            overrides.
+                            Update calling windows, retry policy, and follow-up
+                            SMS behavior.
                         </DialogDescription>
                     </DialogHeader>
                     {editingCampaign && (

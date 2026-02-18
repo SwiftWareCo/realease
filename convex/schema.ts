@@ -9,6 +9,7 @@ import {
 import {
     outreachCampaignsTable,
     outreachCallsTable,
+    outreachSmsMessagesTable,
     outreachWebhookEventsTable,
 } from "./outreach/outreach.schema";
 
@@ -21,4 +22,5 @@ export default defineSchema({
     outreachCampaigns: outreachCampaignsTable,
     outreachCalls: outreachCallsTable,
     outreachWebhookEvents: outreachWebhookEventsTable,
+    outreachSmsMessages: outreachSmsMessagesTable,
 });
