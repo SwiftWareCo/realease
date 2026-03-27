@@ -7,7 +7,10 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
         <ConvexClientProvider>
-            <SidebarProvider className="h-svh overflow-hidden">
+            <SidebarProvider
+                defaultOpen={false}
+                className="h-svh overflow-hidden"
+            >
                 <Sidebar />
                 <SidebarInset className="min-h-0">
                     <TopBar />

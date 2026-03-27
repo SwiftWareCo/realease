@@ -7,36 +7,12 @@ import {
 } from "../_generated/server";
 import { v } from "convex/values";
 import { normalizePhoneNumber } from "./phone";
-
-const ACTIVE_CALL_STATUSES: ReadonlySet<Doc<"outreachCalls">["call_status"]> =
-    new Set(["queued", "ringing", "in_progress"]);
+import { getCurrentUserIdOrThrow } from "./auth";
 
 const STALE_QUEUED_OR_RINGING_TIMEOUT_MS = 20 * 60 * 1000;
 const STALE_IN_PROGRESS_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const FIXED_FOLLOW_UP_SMS_DELAY_MINUTES = 3;
 
-const WEEKDAY_MAP: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
-    sun: 0,
-    mon: 1,
-    tue: 2,
-    wed: 3,
-    thu: 4,
-    fri: 5,
-    sat: 6,
-};
-
-type StartSkipReason =
-    | "campaign_not_active"
-    | "lead_not_found"
-    | "invalid_phone"
-    | "do_not_call"
-    | "status_not_eligible"
-    | "active_call_in_progress"
-    | "in_other_active_campaign"
-    | "max_attempts_reached"
-    | "blocked_by_terminal_outcome"
-    | "outside_calling_window"
-    | "cooldown_active";
 
 const WEEKDAY_VALIDATOR = v.union(
     v.literal(0),
@@ -119,77 +95,6 @@ const OUTREACH_SMS_STATUS_VALIDATOR = v.union(
     v.literal("unknown"),
 );
 
-type CampaignLeadCallStats = {
-    attemptsInCampaign: number;
-    hasActiveCall: boolean;
-    latestOutcome?: Doc<"outreachCalls">["outcome"];
-    latestInitiatedAt?: number;
-};
-
-async function getCurrentUserIdOrThrow(ctx: MutationCtx): Promise<Id<"users">> {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-        throw new Error("Unauthorized");
-    }
-
-    const user = await ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) =>
-            q.eq("externalId", identity.subject),
-        )
-        .unique();
-    if (!user) {
-        throw new Error("User not found");
-    }
-
-    return user._id;
-}
-
-function getLocalWeekdayHour(
-    timestamp: number,
-    timeZone: string,
-): { weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6; hour: number } {
-    const formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone,
-        weekday: "short",
-        hour: "2-digit",
-        hour12: false,
-    });
-    const parts = formatter.formatToParts(new Date(timestamp));
-    const weekdayPart = parts.find((part) => part.type === "weekday")?.value;
-    const hourPart = parts.find((part) => part.type === "hour")?.value;
-
-    const weekdayKey = weekdayPart?.toLowerCase().slice(0, 3) ?? "sun";
-    const weekday = WEEKDAY_MAP[weekdayKey];
-    const hour = hourPart ? Number(hourPart) : 0;
-    return { weekday, hour };
-}
-
-function isInsideCallingWindow(
-    timestamp: number,
-    timeZone: string,
-    window: {
-        start_hour_local: number;
-        end_hour_local: number;
-        allowed_weekdays: Array<0 | 1 | 2 | 3 | 4 | 5 | 6>;
-    },
-): boolean {
-    const { weekday, hour } = getLocalWeekdayHour(timestamp, timeZone);
-    if (!window.allowed_weekdays.includes(weekday)) {
-        return false;
-    }
-
-    const start = window.start_hour_local;
-    const end = window.end_hour_local;
-    if (start === end) {
-        return true;
-    }
-    if (start < end) {
-        return hour >= start && hour < end;
-    }
-    // Overnight windows (example 21 -> 6)
-    return hour >= start || hour < end;
-}
 
 function normalizeOptionalString(value?: string): string | undefined {
     const trimmed = value?.trim();
@@ -567,214 +472,6 @@ export const deleteCampaign = mutation({
     },
 });
 
-async function queueCampaignOutreachCalls(
-    ctx: MutationCtx,
-    args: {
-        campaignId: Id<"outreachCampaigns">;
-        leadIds: Id<"leads">[];
-        actorUserId?: Id<"users">;
-    },
-) {
-    const now = Date.now();
-    const campaign = await ctx.db.get(args.campaignId);
-    if (!campaign) {
-        throw new Error("Campaign not found");
-    }
-    if (args.actorUserId && campaign.created_by_user_id !== args.actorUserId) {
-        throw new Error("Campaign not found");
-    }
-
-    const uniqueLeadIds = Array.from(
-        new Set(args.leadIds.map((leadId) => String(leadId))),
-    ) as Id<"leads">[];
-
-    const campaignCalls = await ctx.db
-        .query("outreachCalls")
-        .withIndex("by_campaign_id", (q) =>
-            q.eq("campaign_id", args.campaignId),
-        )
-        .collect();
-    const statsByLead = new Map<string, CampaignLeadCallStats>();
-    for (const call of campaignCalls) {
-        const leadKey = String(call.lead_id);
-        const current = statsByLead.get(leadKey) ?? {
-            attemptsInCampaign: 0,
-            hasActiveCall: false,
-        };
-        current.attemptsInCampaign += 1;
-        if (ACTIVE_CALL_STATUSES.has(call.call_status)) {
-            current.hasActiveCall = true;
-        }
-        if (
-            current.latestInitiatedAt === undefined ||
-            call.initiated_at > current.latestInitiatedAt
-        ) {
-            current.latestInitiatedAt = call.initiated_at;
-            current.latestOutcome = call.outcome;
-        }
-        statsByLead.set(leadKey, current);
-    }
-
-    const started: Array<{
-        leadId: Id<"leads">;
-        callId: Id<"outreachCalls">;
-        dialToNumber: string;
-    }> = [];
-    const skipped: Array<{ leadId: Id<"leads">; reason: StartSkipReason }> = [];
-    const campaignCache = new Map<
-        Id<"outreachCampaigns">,
-        Doc<"outreachCampaigns"> | null
-    >();
-
-    for (const leadId of uniqueLeadIds) {
-        if (campaign.status !== "active") {
-            skipped.push({ leadId, reason: "campaign_not_active" });
-            continue;
-        }
-
-        const lead = await ctx.db.get(leadId);
-        if (!lead) {
-            skipped.push({ leadId, reason: "lead_not_found" });
-            continue;
-        }
-
-        const dialToNumber = normalizePhoneNumber(lead.phone);
-        if (!dialToNumber) {
-            skipped.push({ leadId, reason: "invalid_phone" });
-            continue;
-        }
-        if (lead.do_not_call === true) {
-            skipped.push({ leadId, reason: "do_not_call" });
-            continue;
-        }
-        if (lead.status !== "new" && lead.status !== "contacted") {
-            skipped.push({ leadId, reason: "status_not_eligible" });
-            continue;
-        }
-
-        const leadCalls = await ctx.db
-            .query("outreachCalls")
-            .withIndex("by_lead_id", (q) => q.eq("lead_id", leadId))
-            .collect();
-        let inOtherActiveCampaign = false;
-        for (const leadCall of leadCalls) {
-            const otherCampaignId = leadCall.campaign_id;
-            if (!otherCampaignId || otherCampaignId === args.campaignId) {
-                continue;
-            }
-
-            let otherCampaign = campaignCache.get(otherCampaignId) ?? null;
-            if (!campaignCache.has(otherCampaignId)) {
-                otherCampaign = await ctx.db.get(otherCampaignId);
-                campaignCache.set(otherCampaignId, otherCampaign);
-            }
-            if (
-                otherCampaign?.status === "active" &&
-                otherCampaign.created_by_user_id === campaign.created_by_user_id
-            ) {
-                inOtherActiveCampaign = true;
-                break;
-            }
-        }
-        if (inOtherActiveCampaign) {
-            skipped.push({ leadId, reason: "in_other_active_campaign" });
-            continue;
-        }
-        const hasAnyActiveCall = leadCalls.some((call) =>
-            ACTIVE_CALL_STATUSES.has(call.call_status),
-        );
-        if (hasAnyActiveCall) {
-            skipped.push({ leadId, reason: "active_call_in_progress" });
-            continue;
-        }
-
-        const campaignStats = statsByLead.get(String(leadId));
-        if (
-            (campaignStats?.attemptsInCampaign ?? 0) >=
-            campaign.retry_policy.max_attempts
-        ) {
-            skipped.push({ leadId, reason: "max_attempts_reached" });
-            continue;
-        }
-        if (
-            campaignStats?.latestOutcome === "do_not_call" ||
-            campaignStats?.latestOutcome === "wrong_number"
-        ) {
-            skipped.push({ leadId, reason: "blocked_by_terminal_outcome" });
-            continue;
-        }
-
-        if (
-            !isInsideCallingWindow(
-                now,
-                campaign.timezone,
-                campaign.calling_window as {
-                    start_hour_local: number;
-                    end_hour_local: number;
-                    allowed_weekdays: Array<0 | 1 | 2 | 3 | 4 | 5 | 6>;
-                },
-            )
-        ) {
-            skipped.push({ leadId, reason: "outside_calling_window" });
-            continue;
-        }
-
-        const latestAttemptAt = campaignStats?.latestInitiatedAt;
-        if (latestAttemptAt !== undefined) {
-            const minSpacingMs =
-                campaign.retry_policy.min_minutes_between_attempts * 60 * 1000;
-            if (now - latestAttemptAt < minSpacingMs) {
-                skipped.push({ leadId, reason: "cooldown_active" });
-                continue;
-            }
-        }
-
-        const callId = await ctx.db.insert("outreachCalls", {
-            lead_id: leadId,
-            campaign_id: args.campaignId,
-            call_status: "queued",
-            call_direction: "outbound",
-            initiated_at: now,
-            created_at: now,
-            updated_at: now,
-        });
-        started.push({ leadId, callId, dialToNumber });
-    }
-
-    return {
-        campaignId: args.campaignId,
-        started,
-        skipped,
-        startedCount: started.length,
-        skippedCount: skipped.length,
-        requestedCount: uniqueLeadIds.length,
-    };
-}
-
-export const startCampaignOutreach = mutation({
-    args: {
-        campaignId: v.id("outreachCampaigns"),
-        leadIds: v.array(v.id("leads")),
-    },
-    handler: async (ctx, args) => {
-        const userId = await getCurrentUserIdOrThrow(ctx);
-        return await queueCampaignOutreachCalls(ctx, {
-            ...args,
-            actorUserId: userId,
-        });
-    },
-});
-
-export const queueCampaignOutreach = internalMutation({
-    args: {
-        campaignId: v.id("outreachCampaigns"),
-        leadIds: v.array(v.id("leads")),
-    },
-    handler: async (ctx, args) => {
-        return await queueCampaignOutreachCalls(ctx, args);
-    },
-});
-
 export const recordCallDispatchResult = internalMutation({
     args: {
         callId: v.id("outreachCalls"),
@@ -1144,15 +841,20 @@ async function queueFollowUpSmsAfterFinalOutcome(
         return;
     }
 
-    const leadCalls = await ctx.db
-        .query("outreachCalls")
-        .withIndex("by_lead_id", (q) => q.eq("lead_id", lead._id))
-        .collect();
-    const followUpAttemptsInCampaign = leadCalls.filter(
-        (call) =>
-            call.campaign_id === args.campaign?._id &&
-            (call.outcome === "no_answer" || call.outcome === "voicemail_left"),
-    ).length;
+    // Use state row count instead of unbounded call history scan.
+    let followUpAttemptsInCampaign = 0;
+    if (args.campaign) {
+        const stateRow = await ctx.db
+            .query("outreachCampaignLeadStates")
+            .withIndex("by_campaign_id_and_lead_id", (q) =>
+                q
+                    .eq("campaign_id", args.campaign!._id)
+                    .eq("lead_id", lead._id),
+            )
+            .first();
+        followUpAttemptsInCampaign =
+            stateRow?.no_answer_or_voicemail_count ?? 0;
+    }
     if (followUpAttemptsInCampaign < 3) {
         await ctx.db.patch(args.callId, {
             follow_up_sms_status: "not_needed",
@@ -1172,6 +874,132 @@ async function queueFollowUpSmsAfterFinalOutcome(
         delayMinutes * 60 * 1000,
         internal.outreach.actions.dispatchFollowUpSms,
         { callId: args.callId },
+    );
+}
+
+type NormalizedOutcomeOrUndefined =
+    | "connected_interested"
+    | "connected_not_interested"
+    | "callback_requested"
+    | "voicemail_left"
+    | "no_answer"
+    | "wrong_number"
+    | "do_not_call"
+    | "failed"
+    | undefined;
+
+/**
+ * Inline helper to drive the outreachCampaignLeadStates state machine
+ * from within webhook-processing mutations (same transaction).
+ */
+async function transitionStateOnCallEventImpl(
+    ctx: MutationCtx,
+    args: {
+        callId: Id<"outreachCalls">;
+        campaignId: Id<"outreachCampaigns">;
+        leadId: Id<"leads">;
+        eventType: string;
+        outcome: NormalizedOutcomeOrUndefined;
+    },
+): Promise<void> {
+    const stateRow = await ctx.db
+        .query("outreachCampaignLeadStates")
+        .withIndex("by_campaign_id_and_lead_id", (q) =>
+            q
+                .eq("campaign_id", args.campaignId)
+                .eq("lead_id", args.leadId),
+        )
+        .first();
+    if (!stateRow) return;
+
+    // Only process if state is queued or in_progress.
+    if (stateRow.state !== "queued" && stateRow.state !== "in_progress") {
+        return;
+    }
+
+    if (args.eventType === "call_started") {
+        await ctx.db.patch(stateRow._id, { state: "in_progress" });
+        return;
+    }
+
+    // call_ended or call_analyzed.
+    if (args.eventType !== "call_ended" && args.eventType !== "call_analyzed") {
+        return;
+    }
+
+    const outcome = args.outcome;
+    const campaign = await ctx.db.get(args.campaignId);
+    const now = Date.now();
+
+    const newAttempts = stateRow.attempts_in_campaign + 1;
+    let newNoAnswerCount = stateRow.no_answer_or_voicemail_count;
+    if (outcome === "no_answer" || outcome === "voicemail_left") {
+        newNoAnswerCount += 1;
+    }
+
+    const baseUpdates: Partial<Doc<"outreachCampaignLeadStates">> = {
+        attempts_in_campaign: newAttempts,
+        no_answer_or_voicemail_count: newNoAnswerCount,
+        last_attempt_at: now,
+        last_outcome: outcome,
+        active_call_id: undefined,
+    };
+
+    if (outcome === "connected_interested") {
+        await ctx.db.patch(stateRow._id, {
+            ...baseUpdates,
+            state: "done",
+            next_action_at_ms: undefined,
+        });
+        return;
+    }
+
+    if (outcome === "do_not_call" || outcome === "wrong_number") {
+        await ctx.db.patch(stateRow._id, {
+            ...baseUpdates,
+            state: "terminal_blocked",
+            next_action_at_ms: undefined,
+        });
+        return;
+    }
+
+    const smsEnabled = campaign?.follow_up_sms?.enabled === true;
+    if (
+        (outcome === "no_answer" || outcome === "voicemail_left") &&
+        newNoAnswerCount >= 3 &&
+        smsEnabled
+    ) {
+        await ctx.db.patch(stateRow._id, {
+            ...baseUpdates,
+            state: "sms_pending",
+            next_action_at_ms: undefined,
+        });
+        return;
+    }
+
+    const maxAttempts = campaign?.retry_policy.max_attempts ?? 3;
+    if (newAttempts >= maxAttempts) {
+        await ctx.db.patch(stateRow._id, {
+            ...baseUpdates,
+            state: "done",
+            next_action_at_ms: undefined,
+        });
+        return;
+    }
+
+    const cooldownMs =
+        (campaign?.retry_policy.min_minutes_between_attempts ?? 60) * 60 * 1000;
+    const nextActionAtMs = now + cooldownMs;
+    await ctx.db.patch(stateRow._id, {
+        ...baseUpdates,
+        state: "cooldown",
+        next_action_at_ms: nextActionAtMs,
+    });
+
+    await ctx.scheduler.runAt(
+        nextActionAtMs,
+        internal.outreach.campaignLeadState.evaluateCampaignLeadState,
+        { stateId: stateRow._id },
     );
 }
 
@@ -1307,6 +1135,17 @@ async function applyRetellCallEventToOutreachState(
         outcome,
     });
 
+    // Drive the new state machine for campaign lead state.
+    if (callRecord.campaign_id) {
+        await transitionStateOnCallEventImpl(ctx, {
+            callId: args.callId,
+            campaignId: callRecord.campaign_id,
+            leadId: targetLeadId,
+            eventType: args.eventType,
+            outcome,
+        });
+    }
+
     return { outcome };
 }
 
@@ -1356,6 +1195,53 @@ export const recordFollowUpSmsDispatchResult = internalMutation({
         }
 
         await ctx.db.patch(args.callId, updates);
+
+        // Drive state machine on SMS completion (sent or failed).
+        if (
+            call.campaign_id &&
+            (args.follow_up_sms_status === "sent" ||
+                args.follow_up_sms_status === "failed")
+        ) {
+            // Find the state row and transition from sms_pending.
+            const stateRow = await ctx.db
+                .query("outreachCampaignLeadStates")
+                .withIndex("by_campaign_id_and_lead_id", (q) =>
+                    q
+                        .eq("campaign_id", call.campaign_id!)
+                        .eq("lead_id", call.lead_id),
+                )
+                .first();
+            if (stateRow && stateRow.state === "sms_pending") {
+                const campaign = await ctx.db.get(call.campaign_id);
+                const maxAttempts =
+                    campaign?.retry_policy.max_attempts ?? 3;
+
+                if (stateRow.attempts_in_campaign >= maxAttempts) {
+                    await ctx.db.patch(stateRow._id, {
+                        state: "done",
+                        next_action_at_ms: undefined,
+                    });
+                } else {
+                    const cooldownMs =
+                        (campaign?.retry_policy
+                            .min_minutes_between_attempts ?? 60) *
+                        60 *
+                        1000;
+                    const nextActionAtMs = Date.now() + cooldownMs;
+                    await ctx.db.patch(stateRow._id, {
+                        state: "cooldown",
+                        next_action_at_ms: nextActionAtMs,
+                    });
+                    await ctx.scheduler.runAt(
+                        nextActionAtMs,
+                        internal.outreach.campaignLeadState
+                            .evaluateCampaignLeadState,
+                        { stateId: stateRow._id },
+                    );
+                }
+            }
+        }
+
         return await ctx.db.get(args.callId);
     },
 });
@@ -1656,17 +1542,17 @@ export const cleanupStaleActiveCalls = internalMutation({
         const queuedCalls = await ctx.db
             .query("outreachCalls")
             .withIndex("by_call_status", (q) => q.eq("call_status", "queued"))
-            .collect();
+            .take(200);
         const ringingCalls = await ctx.db
             .query("outreachCalls")
             .withIndex("by_call_status", (q) => q.eq("call_status", "ringing"))
-            .collect();
+            .take(200);
         const inProgressCalls = await ctx.db
             .query("outreachCalls")
             .withIndex("by_call_status", (q) =>
                 q.eq("call_status", "in_progress"),
             )
-            .collect();
+            .take(200);
 
         const activeCalls = [
             ...queuedCalls,
@@ -1780,6 +1666,17 @@ async function applyRetellCallStartedEventToOutreachState(
     }
 
     await ctx.db.patch(args.callId, updates);
+
+    // Drive the new state machine for call_started events.
+    if (callRecord.campaign_id) {
+        await transitionStateOnCallEventImpl(ctx, {
+            callId: args.callId,
+            campaignId: callRecord.campaign_id,
+            leadId: callRecord.lead_id,
+            eventType: args.eventType,
+            outcome: undefined,
+        });
+    }
 }
 
 export const ingestRetellWebhookEvent = internalMutation({

@@ -37,54 +37,7 @@ function toErrorMessage(error: unknown): string {
     return "Unexpected provider error";
 }
 
-type QueueOutreachResult = {
-    campaignId: Id<"outreachCampaigns">;
-    started: Array<{
-        leadId: Id<"leads">;
-        callId: Id<"outreachCalls">;
-        dialToNumber: string;
-    }>;
-    skipped: Array<{ leadId: Id<"leads">; reason: string }>;
-    startedCount: number;
-    skippedCount: number;
-    requestedCount: number;
-};
 
-type StartOutreachActionResult = QueueOutreachResult & {
-    dispatchedCount: number;
-    dispatchFailedCount: number;
-    dispatchStarted: Array<{
-        leadId: Id<"leads">;
-        callId: Id<"outreachCalls">;
-        retellCallId: string;
-    }>;
-    dispatchFailed: Array<{
-        leadId: Id<"leads">;
-        callId: Id<"outreachCalls">;
-        error: string;
-    }>;
-};
-
-type DispatchQueuedCallsResult = {
-    dispatchedCount: number;
-    dispatchFailedCount: number;
-    dispatchStarted: Array<{
-        leadId: Id<"leads">;
-        callId: Id<"outreachCalls">;
-        retellCallId: string;
-    }>;
-    dispatchFailed: Array<{
-        leadId: Id<"leads">;
-        callId: Id<"outreachCalls">;
-        error: string;
-    }>;
-};
-
-const DEFAULT_OUTREACH_CRON_MAX_CALLS_PER_RUN = 20;
-const DEFAULT_OUTREACH_CRON_MAX_SMS_PER_RUN = 50;
-const MAX_OUTREACH_CRON_MAX_CALLS_PER_RUN = 20;
-const MAX_OUTREACH_CRON_MAX_SMS_PER_RUN = 500;
-const MAX_RETELL_CONCURRENT_CALLS = 20;
 
 type FollowUpSmsDispatchContext = {
     call: {
@@ -261,58 +214,59 @@ function renderSmsTemplate(
         .replace(/\{\{\s*call_summary\s*\}\}/gi, context.callSummary);
 }
 
-function parseNonNegativeInteger(rawValue?: string): number | undefined {
-    if (!rawValue) {
-        return undefined;
-    }
+type EnrollBatchResult = {
+    enrolled: Array<{ lead_id: Id<"leads">; stateId: string }>;
+    skipped: Array<{ lead_id: Id<"leads">; reason: string }>;
+};
 
-    const parsed = Number(rawValue);
-    if (!Number.isFinite(parsed)) {
-        return undefined;
-    }
-
-    return Math.max(0, Math.floor(parsed));
-}
-
-function resolveRunCap(args: {
-    override?: number;
-    envValue?: string;
-    fallback: number;
-    maximum: number;
-}): number {
-    const fromOverride =
-        args.override !== undefined && Number.isFinite(args.override)
-            ? Math.max(0, Math.floor(args.override))
-            : undefined;
-    const fromEnv = parseNonNegativeInteger(args.envValue);
-    const resolved = fromOverride ?? fromEnv ?? args.fallback;
-    return Math.min(args.maximum, resolved);
-}
-
-export const dispatchQueuedCampaignCalls = internalAction({
+export const startCampaignOutreach = action({
     args: {
         campaignId: v.id("outreachCampaigns"),
-        queuedCalls: v.array(
-            v.object({
-                leadId: v.id("leads"),
-                callId: v.id("outreachCalls"),
-                dialToNumber: v.string(),
-            }),
-        ),
+        leadIds: v.array(v.id("leads")),
     },
-    handler: async (ctx, args): Promise<DispatchQueuedCallsResult> => {
-        const dispatchStarted: DispatchQueuedCallsResult["dispatchStarted"] =
-            [];
-        const dispatchFailed: DispatchQueuedCallsResult["dispatchFailed"] = [];
+    handler: async (ctx, args) => {
+        // Auth: verify the calling user owns this campaign.
+        await ctx.runQuery(
+            internal.outreach.auth.validateCampaignOwnership,
+            { campaignId: args.campaignId },
+        );
 
-        if (args.queuedCalls.length === 0) {
-            return {
-                dispatchedCount: 0,
-                dispatchFailedCount: 0,
-                dispatchStarted,
-                dispatchFailed,
-            };
-        }
+        // Enroll leads via the new state-driven flow.
+        // Enrollment creates state rows and schedules evaluation — no immediate dispatch.
+        const enrollResult = (await ctx.runMutation(
+            internal.outreach.campaignLeadState.enrollLeadsInCampaignBatch,
+            {
+                campaign_id: args.campaignId,
+                lead_ids: args.leadIds,
+            },
+        )) as EnrollBatchResult;
+
+        return {
+            campaignId: args.campaignId,
+            enrolledCount: enrollResult.enrolled.length,
+            skippedCount: enrollResult.skipped.length,
+            requestedCount: args.leadIds.length,
+            enrolled: enrollResult.enrolled,
+            skipped: enrollResult.skipped,
+        };
+    },
+});
+
+export const dispatchQueuedCampaignCall = internalAction({
+    args: {
+        stateId: v.id("outreachCampaignLeadStates"),
+        callId: v.id("outreachCalls"),
+        campaignId: v.id("outreachCampaigns"),
+        leadId: v.id("leads"),
+        dialToNumber: v.string(),
+    },
+    handler: async (ctx, args) => {
+        // Pre-flight ownership check: bail if reconciliation already moved on.
+        const stillValid = await ctx.runQuery(
+            internal.outreach.campaignLeadState.isDispatchStillValid,
+            { stateId: args.stateId, callId: args.callId },
+        );
+        if (!stillValid) return;
 
         const dispatchConfig = await ctx.runQuery(
             internal.outreach.queries.getCampaignDispatchConfig,
@@ -329,356 +283,149 @@ export const dispatchQueuedCampaignCalls = internalAction({
             : null;
 
         if (!retellApiKey || !normalizedFromNumber) {
-            const missingConfigError =
-                "Missing Retell config for dispatch. Set RETELL_API_KEY and campaign/default outbound number in E.164 format.";
-            for (const queuedCall of args.queuedCalls) {
-                await ctx.runMutation(
-                    internal.outreach.mutations.recordCallDispatchResult,
-                    {
-                        callId: queuedCall.callId,
-                        error_message: missingConfigError,
-                    },
-                );
-                dispatchFailed.push({
-                    leadId: queuedCall.leadId,
-                    callId: queuedCall.callId,
-                    error: missingConfigError,
-                });
-            }
-
-            return {
-                dispatchedCount: 0,
-                dispatchFailedCount: dispatchFailed.length,
-                dispatchStarted,
-                dispatchFailed,
-            };
+            await ctx.runMutation(
+                internal.outreach.mutations.recordCallDispatchResult,
+                {
+                    callId: args.callId,
+                    error_message:
+                        "Missing Retell config for dispatch. Set RETELL_API_KEY and campaign/default outbound number.",
+                },
+            );
+            await ctx.runMutation(
+                internal.outreach.campaignLeadState.handleDispatchError,
+                {
+                    stateId: args.stateId,
+                    callId: args.callId,
+                    transient: false,
+                    error_message:
+                        "Missing Retell config for dispatch. Set RETELL_API_KEY and campaign/default outbound number.",
+                },
+            );
+            return;
         }
 
-        for (const queuedCall of args.queuedCalls) {
-            if (!isValidPhoneNumber(queuedCall.dialToNumber)) {
-                const errorMessage =
-                    "Skipped dispatch because destination number is invalid.";
-                await ctx.runMutation(
-                    internal.outreach.mutations.recordCallDispatchResult,
-                    {
-                        callId: queuedCall.callId,
-                        error_message: errorMessage,
-                    },
-                );
-                dispatchFailed.push({
-                    leadId: queuedCall.leadId,
-                    callId: queuedCall.callId,
-                    error: errorMessage,
-                });
-                continue;
-            }
+        if (!isValidPhoneNumber(args.dialToNumber)) {
+            await ctx.runMutation(
+                internal.outreach.mutations.recordCallDispatchResult,
+                {
+                    callId: args.callId,
+                    error_message: "Destination number is invalid.",
+                },
+            );
+            await ctx.runMutation(
+                internal.outreach.campaignLeadState.handleDispatchError,
+                {
+                    stateId: args.stateId,
+                    callId: args.callId,
+                    transient: false,
+                    error_message: "Destination number is invalid.",
+                },
+            );
+            return;
+        }
 
-            try {
-                const response = await fetch(
-                    "https://api.retellai.com/v2/create-phone-call",
-                    {
-                        method: "POST",
-                        headers: {
-                            Authorization: `Bearer ${retellApiKey}`,
-                            "Content-Type": "application/json",
+        try {
+            const response = await fetch(
+                "https://api.retellai.com/v2/create-phone-call",
+                {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${retellApiKey}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        from_number: normalizedFromNumber,
+                        to_number: args.dialToNumber,
+                        override_agent_id: dispatchConfig.retellAgentId,
+                        metadata: {
+                            campaign_id: String(args.campaignId),
+                            lead_id: String(args.leadId),
+                            outreach_call_id: String(args.callId),
                         },
-                        body: JSON.stringify({
-                            from_number: normalizedFromNumber,
-                            to_number: queuedCall.dialToNumber,
-                            override_agent_id: dispatchConfig.retellAgentId,
-                            metadata: {
-                                campaign_id: String(args.campaignId),
-                                lead_id: String(queuedCall.leadId),
-                                outreach_call_id: String(queuedCall.callId),
-                            },
-                        }),
-                    },
-                );
-
-                if (!response.ok) {
-                    const errorBody = await response.text();
-                    throw new Error(
-                        `Retell create-phone-call failed (${response.status}): ${errorBody}`,
-                    );
-                }
-
-                const data = (await response.json()) as {
-                    call_id?: string;
-                    call_status?: string;
-                };
-                if (!data.call_id) {
-                    throw new Error("Retell response missing call_id");
-                }
-
-                await ctx.runMutation(
-                    internal.outreach.mutations.recordCallDispatchResult,
-                    {
-                        callId: queuedCall.callId,
-                        retell_call_id: data.call_id,
-                        call_status: mapRetellStatus(data.call_status),
-                        error_message: null,
-                    },
-                );
-
-                dispatchStarted.push({
-                    leadId: queuedCall.leadId,
-                    callId: queuedCall.callId,
-                    retellCallId: data.call_id,
-                });
-            } catch (error) {
-                const errorMessage = toErrorMessage(error);
-                await ctx.runMutation(
-                    internal.outreach.mutations.recordCallDispatchResult,
-                    {
-                        callId: queuedCall.callId,
-                        error_message: errorMessage,
-                    },
-                );
-                dispatchFailed.push({
-                    leadId: queuedCall.leadId,
-                    callId: queuedCall.callId,
-                    error: errorMessage,
-                });
-            }
-        }
-
-        return {
-            dispatchedCount: dispatchStarted.length,
-            dispatchFailedCount: dispatchFailed.length,
-            dispatchStarted,
-            dispatchFailed,
-        };
-    },
-});
-
-export const startCampaignOutreach = action({
-    args: {
-        campaignId: v.id("outreachCampaigns"),
-        leadIds: v.array(v.id("leads")),
-    },
-    handler: async (ctx, args): Promise<StartOutreachActionResult> => {
-        const queueResult = (await ctx.runMutation(
-            api.outreach.mutations.startCampaignOutreach,
-            args,
-        )) as QueueOutreachResult;
-
-        const dispatchResult =
-            queueResult.started.length === 0
-                ? {
-                      dispatchedCount: 0,
-                      dispatchFailedCount: 0,
-                      dispatchStarted: [],
-                      dispatchFailed: [],
-                  }
-                : ((await ctx.runAction(
-                      internal.outreach.actions.dispatchQueuedCampaignCalls,
-                      {
-                          campaignId: args.campaignId,
-                          queuedCalls: queueResult.started,
-                      },
-                  )) as DispatchQueuedCallsResult);
-
-        return {
-            ...queueResult,
-            ...dispatchResult,
-        };
-    },
-});
-
-export const runOutreachAutomation = internalAction({
-    args: {
-        max_calls_per_run: v.optional(v.number()),
-        max_sms_per_run: v.optional(v.number()),
-    },
-    handler: async (ctx, args) => {
-        const now = Date.now();
-        const configuredConcurrentCap = parseNonNegativeInteger(
-            process.env.OUTREACH_RETELL_MAX_CONCURRENT_CALLS,
-        );
-        const maxConcurrentCalls = Math.min(
-            MAX_RETELL_CONCURRENT_CALLS,
-            Math.max(1, configuredConcurrentCap ?? MAX_RETELL_CONCURRENT_CALLS),
-        );
-        const maxCallsPerRun = resolveRunCap({
-            override: args.max_calls_per_run,
-            envValue: process.env.OUTREACH_CRON_MAX_CALLS_PER_RUN,
-            fallback: DEFAULT_OUTREACH_CRON_MAX_CALLS_PER_RUN,
-            maximum: MAX_OUTREACH_CRON_MAX_CALLS_PER_RUN,
-        });
-        const maxSmsPerRun = resolveRunCap({
-            override: args.max_sms_per_run,
-            envValue: process.env.OUTREACH_CRON_MAX_SMS_PER_RUN,
-            fallback: DEFAULT_OUTREACH_CRON_MAX_SMS_PER_RUN,
-            maximum: MAX_OUTREACH_CRON_MAX_SMS_PER_RUN,
-        });
-
-        const campaigns = (await ctx.runQuery(
-            internal.outreach.queries.getActiveCampaignsForAutomation,
-            {},
-        )) as Array<{
-            campaignId: Id<"outreachCampaigns">;
-            campaignName: string;
-        }>;
-        const activeCallCounts = (await ctx.runQuery(
-            internal.outreach.queries.getActiveOutreachCallCount,
-            {},
-        )) as {
-            queued: number;
-            ringing: number;
-            in_progress: number;
-            totalActive: number;
-        };
-        const availableConcurrencySlots = Math.max(
-            0,
-            maxConcurrentCalls - activeCallCounts.totalActive,
-        );
-
-        let remainingCallSlots = Math.min(
-            maxCallsPerRun,
-            availableConcurrencySlots,
-        );
-        let queuedCallsTotal = 0;
-        let skippedCallsTotal = 0;
-        let dispatchedCallsTotal = 0;
-        let dispatchFailedTotal = 0;
-        let requestedCallsTotal = 0;
-        const campaignRuns: Array<{
-            campaignId: Id<"outreachCampaigns">;
-            campaignName: string;
-            requestedCount: number;
-            queuedCount: number;
-            skippedCount: number;
-            dispatchedCount: number;
-            dispatchFailedCount: number;
-        }> = [];
-
-        for (const campaign of campaigns) {
-            if (remainingCallSlots <= 0) {
-                break;
-            }
-
-            const candidateLeadIds = (await ctx.runQuery(
-                internal.outreach.queries.getCronLeadCandidatesForCampaign,
-                {
-                    campaignId: campaign.campaignId,
-                    limit: remainingCallSlots,
+                    }),
                 },
-            )) as Id<"leads">[];
-
-            if (candidateLeadIds.length === 0) {
-                campaignRuns.push({
-                    campaignId: campaign.campaignId,
-                    campaignName: campaign.campaignName,
-                    requestedCount: 0,
-                    queuedCount: 0,
-                    skippedCount: 0,
-                    dispatchedCount: 0,
-                    dispatchFailedCount: 0,
-                });
-                continue;
-            }
-
-            const queueResult = (await ctx.runMutation(
-                internal.outreach.mutations.queueCampaignOutreach,
-                {
-                    campaignId: campaign.campaignId,
-                    leadIds: candidateLeadIds,
-                },
-            )) as QueueOutreachResult;
-            const dispatchResult =
-                queueResult.started.length === 0
-                    ? {
-                          dispatchedCount: 0,
-                          dispatchFailedCount: 0,
-                          dispatchStarted: [],
-                          dispatchFailed: [],
-                      }
-                    : ((await ctx.runAction(
-                          internal.outreach.actions.dispatchQueuedCampaignCalls,
-                          {
-                              campaignId: campaign.campaignId,
-                              queuedCalls: queueResult.started,
-                          },
-                      )) as DispatchQueuedCallsResult);
-
-            requestedCallsTotal += queueResult.requestedCount;
-            queuedCallsTotal += queueResult.startedCount;
-            skippedCallsTotal += queueResult.skippedCount;
-            dispatchedCallsTotal += dispatchResult.dispatchedCount;
-            dispatchFailedTotal += dispatchResult.dispatchFailedCount;
-            remainingCallSlots = Math.max(
-                0,
-                remainingCallSlots - queueResult.startedCount,
             );
 
-            campaignRuns.push({
-                campaignId: campaign.campaignId,
-                campaignName: campaign.campaignName,
-                requestedCount: queueResult.requestedCount,
-                queuedCount: queueResult.startedCount,
-                skippedCount: queueResult.skippedCount,
-                dispatchedCount: dispatchResult.dispatchedCount,
-                dispatchFailedCount: dispatchResult.dispatchFailedCount,
-            });
-        }
+            if (!response.ok) {
+                const errorBody = await response.text();
+                const statusCode = response.status;
+                const isTransient =
+                    statusCode === 429 || statusCode >= 500;
+                const errorMessage = `Retell create-phone-call failed (${statusCode}): ${errorBody}`;
 
-        const pendingFollowUpCallIds = (await ctx.runQuery(
-            internal.outreach.queries.getPendingFollowUpSmsCallIdsForAutomation,
-            { now_ms: now, limit: maxSmsPerRun },
-        )) as Id<"outreachCalls">[];
-        const smsStatusCounts: Record<string, number> = {};
-        const smsDispatches: Array<{
-            callId: Id<"outreachCalls">;
-            status: string;
-        }> = [];
+                await ctx.runMutation(
+                    internal.outreach.mutations.recordCallDispatchResult,
+                    {
+                        callId: args.callId,
+                        error_message: errorMessage,
+                    },
+                );
+                await ctx.runMutation(
+                    internal.outreach.campaignLeadState.handleDispatchError,
+                    {
+                        stateId: args.stateId,
+                        callId: args.callId,
+                        transient: isTransient,
+                        error_message: errorMessage,
+                    },
+                );
+                return;
+            }
 
-        for (const callId of pendingFollowUpCallIds) {
-            const dispatchResult = (await ctx.runAction(
-                internal.outreach.actions.dispatchFollowUpSms,
-                { callId },
-            )) as { status: string };
-            smsDispatches.push({
-                callId,
-                status: dispatchResult.status,
-            });
-            smsStatusCounts[dispatchResult.status] =
-                (smsStatusCounts[dispatchResult.status] ?? 0) + 1;
-        }
+            const data = (await response.json()) as {
+                call_id?: string;
+                call_status?: string;
+            };
+            if (!data.call_id) {
+                const errorMessage = "Retell response missing call_id";
+                await ctx.runMutation(
+                    internal.outreach.mutations.recordCallDispatchResult,
+                    {
+                        callId: args.callId,
+                        error_message: errorMessage,
+                    },
+                );
+                await ctx.runMutation(
+                    internal.outreach.campaignLeadState.handleDispatchError,
+                    {
+                        stateId: args.stateId,
+                        callId: args.callId,
+                        transient: false,
+                        error_message: errorMessage,
+                    },
+                );
+                return;
+            }
 
-        return {
-            ran_at: now,
-            caps: {
-                max_calls_per_run: maxCallsPerRun,
-                max_sms_per_run: maxSmsPerRun,
-            },
-            retell_concurrency: {
-                max_concurrent_calls: maxConcurrentCalls,
-                active_now: activeCallCounts.totalActive,
-                active_by_status: {
-                    queued: activeCallCounts.queued,
-                    ringing: activeCallCounts.ringing,
-                    in_progress: activeCallCounts.in_progress,
+            await ctx.runMutation(
+                internal.outreach.mutations.recordCallDispatchResult,
+                {
+                    callId: args.callId,
+                    retell_call_id: data.call_id,
+                    call_status: mapRetellStatus(data.call_status),
+                    error_message: null,
                 },
-                available_slots: availableConcurrencySlots,
-            },
-            campaigns_scanned: campaigns.length,
-            campaigns_processed: campaignRuns.length,
-            calls: {
-                requested: requestedCallsTotal,
-                queued: queuedCallsTotal,
-                skipped: skippedCallsTotal,
-                dispatched: dispatchedCallsTotal,
-                dispatch_failed: dispatchFailedTotal,
-                remaining_slots: remainingCallSlots,
-            },
-            sms: {
-                due: pendingFollowUpCallIds.length,
-                attempted: smsDispatches.length,
-                by_status: smsStatusCounts,
-            },
-            campaign_runs: campaignRuns,
-            sms_dispatches: smsDispatches,
-        };
+            );
+        } catch (error) {
+            const errorMessage = toErrorMessage(error);
+            // Treat network errors as transient.
+            await ctx.runMutation(
+                internal.outreach.mutations.recordCallDispatchResult,
+                {
+                    callId: args.callId,
+                    error_message: errorMessage,
+                },
+            );
+            await ctx.runMutation(
+                internal.outreach.campaignLeadState.handleDispatchError,
+                {
+                    stateId: args.stateId,
+                    callId: args.callId,
+                    transient: true,
+                    error_message: errorMessage,
+                },
+            );
+        }
     },
 });
 

@@ -1,7 +1,8 @@
-import { internalQuery, query, type QueryCtx } from "../_generated/server";
+import { internalQuery, query } from "../_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { isValidPhoneNumber } from "./phone";
+import { getCurrentUserIdOrThrow } from "./auth";
 
 type EligibilityReason =
     | "invalid_phone"
@@ -18,28 +19,6 @@ type CampaignLeadCallStats = {
     latestOutcome?: Doc<"outreachCalls">["outcome"];
     latestInitiatedAt?: number;
 };
-
-const ACTIVE_CALL_STATUSES: ReadonlySet<Doc<"outreachCalls">["call_status"]> =
-    new Set(["queued", "ringing", "in_progress"]);
-
-async function getCurrentUserIdOrThrow(ctx: QueryCtx): Promise<Id<"users">> {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-        throw new Error("Unauthorized");
-    }
-
-    const user = await ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) =>
-            q.eq("externalId", identity.subject),
-        )
-        .unique();
-    if (!user) {
-        throw new Error("User not found");
-    }
-
-    return user._id;
-}
 
 function getSelectableReasons(args: {
     lead: Doc<"leads">;
@@ -98,79 +77,73 @@ export const getCampaignLeadPicker = query({
         }
 
         const maxAttempts = campaign.retry_policy.max_attempts;
-        const calls = await ctx.db
-            .query("outreachCalls")
+
+        // Use state table to get enrolled leads and their stats.
+        const campaignStateRows = await ctx.db
+            .query("outreachCampaignLeadStates")
             .withIndex("by_campaign_id", (q) =>
                 q.eq("campaign_id", args.campaignId),
             )
             .collect();
-
-        const statsByLead = new Map<string, CampaignLeadCallStats>();
-        for (const call of calls) {
-            const leadKey = String(call.lead_id);
-            const current = statsByLead.get(leadKey) ?? {
-                attemptsInCampaign: 0,
-                hasActiveCall: false,
-            };
-
-            current.attemptsInCampaign += 1;
-            if (ACTIVE_CALL_STATUSES.has(call.call_status)) {
-                current.hasActiveCall = true;
+        const enrolledLeadIds = new Set(
+            campaignStateRows.map((row) => String(row.lead_id)),
+        );
+        const statsByLead = new Map<
+            string,
+            {
+                attemptsInCampaign: number;
+                hasActiveCall: boolean;
+                latestOutcome?: Doc<"outreachCalls">["outcome"];
             }
-            if (
-                current.latestInitiatedAt === undefined ||
-                call.initiated_at > current.latestInitiatedAt
-            ) {
-                current.latestInitiatedAt = call.initiated_at;
-                current.latestOutcome = call.outcome;
-            }
-
-            statsByLead.set(leadKey, current);
+        >();
+        for (const row of campaignStateRows) {
+            statsByLead.set(String(row.lead_id), {
+                attemptsInCampaign: row.attempts_in_campaign,
+                hasActiveCall:
+                    row.state === "queued" || row.state === "in_progress",
+                latestOutcome: row.last_outcome,
+            });
         }
 
-        const allLeads = await ctx.db.query("leads").order("desc").collect();
         const limit =
             args.limit !== undefined
                 ? Math.max(1, Math.floor(args.limit))
-                : undefined;
-        const leads = limit !== undefined ? allLeads.slice(0, limit) : allLeads;
+                : 500;
+        const leads = await ctx.db.query("leads").order("desc").take(limit);
 
-        const campaignCache = new Map<
-            Id<"outreachCampaigns">,
-            Doc<"outreachCampaigns"> | null
-        >();
+        const TERMINAL_STATES = new Set(["done", "terminal_blocked"]);
         const leadCandidates = [];
         for (const lead of leads) {
             const stats = statsByLead.get(String(lead._id));
-            const leadCalls = await ctx.db
-                .query("outreachCalls")
-                .withIndex("by_lead_id", (q) => q.eq("lead_id", lead._id))
-                .collect();
-            let inOtherActiveCampaign = false;
-            for (const call of leadCalls) {
-                const otherCampaignId = call.campaign_id;
-                if (!otherCampaignId || otherCampaignId === args.campaignId) {
-                    continue;
-                }
 
-                let otherCampaign = campaignCache.get(otherCampaignId) ?? null;
-                if (!campaignCache.has(otherCampaignId)) {
-                    otherCampaign = await ctx.db.get(otherCampaignId);
-                    campaignCache.set(otherCampaignId, otherCampaign);
-                }
-                if (
-                    otherCampaign?.status === "active" &&
-                    otherCampaign.created_by_user_id ===
-                        campaign.created_by_user_id
-                ) {
-                    inOtherActiveCampaign = true;
-                    break;
+            // Skip the expensive exclusivity DB query for leads already enrolled
+            // in this campaign — they'll be filtered out below anyway.
+            let inOtherActiveCampaign = false;
+            if (!enrolledLeadIds.has(String(lead._id))) {
+                const leadStateRows = await ctx.db
+                    .query("outreachCampaignLeadStates")
+                    .withIndex("by_lead_id", (q) => q.eq("lead_id", lead._id))
+                    .take(10);
+                for (const row of leadStateRows) {
+                    if (row.campaign_id === args.campaignId) continue;
+                    if (TERMINAL_STATES.has(row.state)) continue;
+                    const otherCampaign = await ctx.db.get(row.campaign_id);
+                    if (otherCampaign?.status === "active") {
+                        inOtherActiveCampaign = true;
+                        break;
+                    }
                 }
             }
 
             const reasons = getSelectableReasons({
                 lead,
-                stats,
+                stats: stats
+                    ? {
+                          attemptsInCampaign: stats.attemptsInCampaign,
+                          hasActiveCall: stats.hasActiveCall,
+                          latestOutcome: stats.latestOutcome,
+                      }
+                    : undefined,
                 maxAttempts,
                 inOtherActiveCampaign,
             });
@@ -188,8 +161,9 @@ export const getCampaignLeadPicker = query({
                 latestCampaignOutcome: stats?.latestOutcome ?? null,
             });
         }
+        // Only show leads not yet enrolled.
         const leadCandidatesForOutreach = leadCandidates.filter(
-            (lead) => lead.attemptsInCampaign === 0,
+            (lead) => !enrolledLeadIds.has(String(lead.leadId)),
         );
 
         return {
@@ -291,12 +265,15 @@ export const getCampaignCallAttempts = query({
                 ? Math.max(1, Math.floor(args.limit))
                 : 200;
 
-        const allCampaignCalls = await ctx.db
-            .query("outreachCalls")
+        // Use state table for lead stats instead of unbounded call scan.
+        const stateRows = await ctx.db
+            .query("outreachCampaignLeadStates")
             .withIndex("by_campaign_id", (q) =>
                 q.eq("campaign_id", args.campaignId),
             )
             .collect();
+
+        // Bounded recent calls for the call list display.
         const recentCalls = await ctx.db
             .query("outreachCalls")
             .withIndex("by_campaign_id_and_initiated_at", (q) =>
@@ -305,85 +282,75 @@ export const getCampaignCallAttempts = query({
             .order("desc")
             .take(take);
 
+        // Build lead cache from state rows + recent calls.
         const leadsById = new Map<string, Doc<"leads"> | null>();
-        for (const call of allCampaignCalls) {
+        for (const row of stateRows) {
+            const key = String(row.lead_id);
+            if (!leadsById.has(key)) {
+                leadsById.set(key, await ctx.db.get(row.lead_id));
+            }
+        }
+        for (const call of recentCalls) {
             const key = String(call.lead_id);
             if (!leadsById.has(key)) {
                 leadsById.set(key, await ctx.db.get(call.lead_id));
             }
         }
 
+        // Build summary from state rows (approximate — counts enrolled leads).
         const summary = {
-            total: allCampaignCalls.length,
-            queued: 0,
+            total: stateRows.reduce(
+                (sum, row) => sum + row.attempts_in_campaign,
+                0,
+            ),
+            queued: stateRows.filter((r) => r.state === "queued").length,
             ringing: 0,
-            in_progress: 0,
-            completed: 0,
-            failed: 0,
+            in_progress: stateRows.filter((r) => r.state === "in_progress")
+                .length,
+            completed: stateRows.filter(
+                (r) => r.state === "done" || r.state === "terminal_blocked",
+            ).length,
+            failed: stateRows.filter((r) => r.state === "error").length,
             canceled: 0,
         };
 
-        for (const call of allCampaignCalls) {
-            summary[call.call_status] += 1;
-        }
-
-        const leadStats = new Map<
-            string,
-            {
-                leadId: Id<"leads">;
-                attempts: number;
-                activeCalls: number;
-                latestCallId: Id<"outreachCalls">;
-                latestInitiatedAt: number;
-                latestCallStatus: Doc<"outreachCalls">["call_status"];
-                latestOutcome: Doc<"outreachCalls">["outcome"] | null;
-            }
-        >();
-        for (const call of allCampaignCalls) {
-            const leadKey = String(call.lead_id);
-            const current = leadStats.get(leadKey);
-            if (!current) {
-                leadStats.set(leadKey, {
-                    leadId: call.lead_id,
-                    attempts: 1,
-                    activeCalls: ACTIVE_CALL_STATUSES.has(call.call_status)
-                        ? 1
-                        : 0,
-                    latestCallId: call._id,
-                    latestInitiatedAt: call.initiated_at,
-                    latestCallStatus: call.call_status,
-                    latestOutcome: call.outcome ?? null,
-                });
-                continue;
-            }
-            current.attempts += 1;
-            if (ACTIVE_CALL_STATUSES.has(call.call_status)) {
-                current.activeCalls += 1;
-            }
-            if (call.initiated_at > current.latestInitiatedAt) {
-                current.latestCallId = call._id;
-                current.latestInitiatedAt = call.initiated_at;
-                current.latestCallStatus = call.call_status;
-                current.latestOutcome = call.outcome ?? null;
-            }
-        }
-
-        const campaignLeads = Array.from(leadStats.values())
-            .map((stats) => {
-                const lead = leadsById.get(String(stats.leadId)) ?? null;
+        // Build campaignLeads from state rows.
+        const campaignLeads = stateRows
+            .map((row) => {
+                const lead = leadsById.get(String(row.lead_id)) ?? null;
+                const stateToCallStatus: Record<
+                    string,
+                    Doc<"outreachCalls">["call_status"]
+                > = {
+                    eligible: "queued",
+                    queued: "queued",
+                    in_progress: "in_progress",
+                    cooldown: "completed",
+                    sms_pending: "completed",
+                    error: "failed",
+                    terminal_blocked: "completed",
+                    done: "completed",
+                };
                 return {
-                    leadId: stats.leadId,
+                    leadId: row.lead_id,
                     leadName: lead?.name ?? "Deleted lead",
                     leadPhone: lead?.phone ?? "Unknown",
                     leadStatus: lead?.status ?? null,
                     leadDoNotCall: lead?.do_not_call ?? false,
                     leadSmsOptOut: lead?.sms_opt_out ?? false,
-                    attempts: stats.attempts,
-                    activeCalls: stats.activeCalls,
-                    latestCallId: stats.latestCallId,
-                    latestInitiatedAt: stats.latestInitiatedAt,
-                    latestCallStatus: stats.latestCallStatus,
-                    latestOutcome: stats.latestOutcome,
+                    attempts: row.attempts_in_campaign,
+                    activeCalls:
+                        row.state === "queued" || row.state === "in_progress"
+                            ? 1
+                            : 0,
+                    latestCallId:
+                        row.active_call_id ??
+                        (null as Id<"outreachCalls"> | null),
+                    latestInitiatedAt: row.last_attempt_at ?? row._creationTime,
+                    latestCallStatus:
+                        stateToCallStatus[row.state] ??
+                        ("completed" as Doc<"outreachCalls">["call_status"]),
+                    latestOutcome: row.last_outcome ?? null,
                 };
             })
             .sort((a, b) => b.latestInitiatedAt - a.latestInitiatedAt);
@@ -437,16 +404,14 @@ export const getCampaignLeadConversation = query({
             throw new Error("Lead not found");
         }
 
-        const campaignCalls = await ctx.db
+        const leadCallsRaw = await ctx.db
             .query("outreachCalls")
-            .withIndex("by_campaign_id_and_initiated_at", (q) =>
-                q.eq("campaign_id", args.campaignId),
-            )
+            .withIndex("by_lead_id", (q) => q.eq("lead_id", args.leadId))
             .order("desc")
-            .collect();
-        const leadCalls = campaignCalls
-            .filter((call) => call.lead_id === args.leadId)
-            .slice(0, 50);
+            .take(50);
+        const leadCalls = leadCallsRaw.filter(
+            (call) => call.campaign_id === args.campaignId,
+        );
 
         const smsMessagesRaw = await ctx.db
             .query("outreachSmsMessages")
@@ -530,14 +495,14 @@ export const getCampaignCallAttemptDetails = query({
         const byCallIdEvents = await ctx.db
             .query("outreachWebhookEvents")
             .withIndex("by_call_id", (q) => q.eq("call_id", call._id))
-            .collect();
+            .take(100);
         const byRetellCallIdEvents = call.retell_call_id
             ? await ctx.db
                   .query("outreachWebhookEvents")
                   .withIndex("by_retell_call_id", (q) =>
                       q.eq("retell_call_id", call.retell_call_id!),
                   )
-                  .collect()
+                  .take(100)
             : [];
 
         const eventsById = new Map<string, Doc<"outreachWebhookEvents">>();
@@ -569,7 +534,7 @@ export const getCampaignCallAttemptDetails = query({
         const leadCalls = await ctx.db
             .query("outreachCalls")
             .withIndex("by_lead_id", (q) => q.eq("lead_id", call.lead_id))
-            .collect();
+            .take(50);
         const historyCampaignDocs = new Map<
             Id<"outreachCampaigns">,
             Doc<"outreachCampaigns"> | null
@@ -653,166 +618,25 @@ export const getCampaignCallAttemptDetails = query({
     },
 });
 
-export const getActiveCampaignsForAutomation = internalQuery({
-    args: {},
-    handler: async (ctx) => {
-        const activeCampaigns = await ctx.db
-            .query("outreachCampaigns")
-            .withIndex("by_status", (q) => q.eq("status", "active"))
-            .collect();
-        const startedCampaigns: Array<{
-            campaignId: Id<"outreachCampaigns">;
-            campaignName: string;
-            updatedAt: number;
-        }> = [];
-        for (const campaign of activeCampaigns) {
-            const hasCallHistory = await ctx.db
-                .query("outreachCalls")
-                .withIndex("by_campaign_id", (q) =>
-                    q.eq("campaign_id", campaign._id),
-                )
-                .first();
-            if (!hasCallHistory) {
-                continue;
-            }
-            startedCampaigns.push({
-                campaignId: campaign._id,
-                campaignName: campaign.name,
-                updatedAt: campaign.updated_at,
-            });
-        }
-
-        return startedCampaigns
-            .sort((a, b) => a.updatedAt - b.updatedAt)
-            .map(({ campaignId, campaignName }) => ({
-                campaignId,
-                campaignName,
-            }));
-    },
-});
-
-export const getCronLeadCandidatesForCampaign = internalQuery({
-    args: {
-        campaignId: v.id("outreachCampaigns"),
-        limit: v.number(),
-    },
-    handler: async (ctx, args) => {
-        const campaign = await ctx.db.get(args.campaignId);
-        if (!campaign || campaign.status !== "active") {
-            return [] as Id<"leads">[];
-        }
-
-        const limit = Math.max(1, Math.floor(args.limit));
-        const campaignCalls = await ctx.db
-            .query("outreachCalls")
-            .withIndex("by_campaign_id", (q) =>
-                q.eq("campaign_id", args.campaignId),
-            )
-            .collect();
-        if (campaignCalls.length === 0) {
-            return [] as Id<"leads">[];
-        }
-
-        const queuedCalls = await ctx.db
-            .query("outreachCalls")
-            .withIndex("by_call_status", (q) => q.eq("call_status", "queued"))
-            .collect();
-        const ringingCalls = await ctx.db
-            .query("outreachCalls")
-            .withIndex("by_call_status", (q) => q.eq("call_status", "ringing"))
-            .collect();
-        const inProgressCalls = await ctx.db
-            .query("outreachCalls")
-            .withIndex("by_call_status", (q) =>
-                q.eq("call_status", "in_progress"),
-            )
-            .collect();
-        const activeLeadIds = new Set(
-            [...queuedCalls, ...ringingCalls, ...inProgressCalls].map((call) =>
-                String(call.lead_id),
-            ),
-        );
-        const latestAttemptByLead = new Map<string, number>();
-        for (const call of campaignCalls) {
-            const leadKey = String(call.lead_id);
-            const currentLatest = latestAttemptByLead.get(leadKey);
-            if (
-                currentLatest === undefined ||
-                call.initiated_at > currentLatest
-            ) {
-                latestAttemptByLead.set(leadKey, call.initiated_at);
-            }
-        }
-        const sortedLeadIds = Array.from(latestAttemptByLead.entries())
-            .sort((a, b) => a[1] - b[1])
-            .map(([leadId]) => leadId as Id<"leads">);
-        const candidateLeadIds: Id<"leads">[] = [];
-        const campaignCache = new Map<
-            Id<"outreachCampaigns">,
-            Doc<"outreachCampaigns"> | null
-        >();
-        for (const leadId of sortedLeadIds) {
-            if (candidateLeadIds.length >= limit) {
-                break;
-            }
-
-            const leadKey = String(leadId);
-            if (activeLeadIds.has(leadKey)) {
-                continue;
-            }
-
-            const leadCalls = await ctx.db
-                .query("outreachCalls")
-                .withIndex("by_lead_id", (q) => q.eq("lead_id", leadId))
-                .collect();
-            let inOtherActiveCampaign = false;
-            for (const call of leadCalls) {
-                const otherCampaignId = call.campaign_id;
-                if (!otherCampaignId || otherCampaignId === args.campaignId) {
-                    continue;
-                }
-
-                let otherCampaign = campaignCache.get(otherCampaignId) ?? null;
-                if (!campaignCache.has(otherCampaignId)) {
-                    otherCampaign = await ctx.db.get(otherCampaignId);
-                    campaignCache.set(otherCampaignId, otherCampaign);
-                }
-                if (
-                    otherCampaign?.status === "active" &&
-                    otherCampaign.created_by_user_id ===
-                        campaign.created_by_user_id
-                ) {
-                    inOtherActiveCampaign = true;
-                    break;
-                }
-            }
-            if (inOtherActiveCampaign) {
-                continue;
-            }
-            candidateLeadIds.push(leadId);
-        }
-
-        return candidateLeadIds;
-    },
-});
-
 export const getActiveOutreachCallCount = internalQuery({
     args: {},
     handler: async (ctx) => {
+        // Use bounded .take() instead of unbounded .collect().
+        const maxConcurrency = 21; // MAX_RETELL_CONCURRENT_CALLS + 1
         const queuedCalls = await ctx.db
             .query("outreachCalls")
             .withIndex("by_call_status", (q) => q.eq("call_status", "queued"))
-            .collect();
+            .take(maxConcurrency);
         const ringingCalls = await ctx.db
             .query("outreachCalls")
             .withIndex("by_call_status", (q) => q.eq("call_status", "ringing"))
-            .collect();
+            .take(maxConcurrency);
         const inProgressCalls = await ctx.db
             .query("outreachCalls")
             .withIndex("by_call_status", (q) =>
                 q.eq("call_status", "in_progress"),
             )
-            .collect();
+            .take(maxConcurrency);
 
         return {
             queued: queuedCalls.length,
@@ -841,7 +665,7 @@ export const getPendingFollowUpSmsCallIdsForAutomation = internalQuery({
             .withIndex("by_follow_up_sms_status", (q) =>
                 q.eq("follow_up_sms_status", "pending"),
             )
-            .collect();
+            .take(200);
         const campaignDocs = new Map<
             Id<"outreachCampaigns">,
             Doc<"outreachCampaigns"> | null
@@ -915,18 +739,17 @@ export const getFollowUpSmsDispatchContext = internalQuery({
         const campaign = call.campaign_id
             ? await ctx.db.get(call.campaign_id)
             : null;
+        // Use state table for attempt count instead of unbounded call scan.
         let followUpAttemptsInCampaign = 0;
         if (lead && campaign) {
-            const leadCalls = await ctx.db
-                .query("outreachCalls")
-                .withIndex("by_lead_id", (q) => q.eq("lead_id", lead._id))
-                .collect();
-            followUpAttemptsInCampaign = leadCalls.filter(
-                (leadCall) =>
-                    leadCall.campaign_id === campaign._id &&
-                    (leadCall.outcome === "no_answer" ||
-                        leadCall.outcome === "voicemail_left"),
-            ).length;
+            const stateRow = await ctx.db
+                .query("outreachCampaignLeadStates")
+                .withIndex("by_campaign_id_and_lead_id", (q) =>
+                    q.eq("campaign_id", campaign._id).eq("lead_id", lead._id),
+                )
+                .first();
+            followUpAttemptsInCampaign =
+                stateRow?.no_answer_or_voicemail_count ?? 0;
         }
 
         return {

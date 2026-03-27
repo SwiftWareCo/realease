@@ -9,6 +9,7 @@ import {
 import {
     outreachCampaignsTable,
     outreachCallsTable,
+    outreachCampaignLeadStatesTable,
     outreachSmsMessagesTable,
     outreachWebhookEventsTable,
 } from "./outreach/outreach.schema";
@@ -21,6 +22,7 @@ export default defineSchema({
     insightFetchLog: insightFetchLogTable,
     outreachCampaigns: outreachCampaignsTable,
     outreachCalls: outreachCallsTable,
+    outreachCampaignLeadStates: outreachCampaignLeadStatesTable,
     outreachWebhookEvents: outreachWebhookEventsTable,
     outreachSmsMessages: outreachSmsMessagesTable,
 });

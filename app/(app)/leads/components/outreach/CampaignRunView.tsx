@@ -132,18 +132,13 @@ export function CampaignRunView({
                 leadIds,
             })) as StartOutreachResult;
 
-            if (result.startedCount > 0) {
+            if (result.enrolledCount > 0) {
                 toast.success(
-                    `Queued ${result.startedCount} calls. Provider dispatched ${result.dispatchedCount}.`,
+                    `Enrolled ${result.enrolledCount} leads in campaign.`,
                 );
             }
             if (result.skippedCount > 0) {
                 toast.warning(`Skipped ${result.skippedCount} leads.`);
-            }
-            if (result.dispatchFailedCount > 0) {
-                toast.error(
-                    `${result.dispatchFailedCount} queued calls failed provider dispatch.`,
-                );
             }
 
             setAddLeadsOpen(false);

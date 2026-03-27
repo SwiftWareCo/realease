@@ -156,21 +156,16 @@ export function OutreachLeadPicker({
 
             setLastStartResult(result);
 
-            if (result.startedCount > 0) {
+            if (result.enrolledCount > 0) {
                 toast.success(
-                    `Queued ${result.startedCount} calls. Provider dispatched ${result.dispatchedCount}.`,
+                    `Enrolled ${result.enrolledCount} leads in campaign.`,
                 );
             }
             if (result.skippedCount > 0) {
                 toast.warning(`Skipped ${result.skippedCount} leads.`);
             }
-            if (result.dispatchFailedCount > 0) {
-                toast.error(
-                    `${result.dispatchFailedCount} queued calls failed provider dispatch.`,
-                );
-            }
 
-            if (result.startedCount > 0) {
+            if (result.enrolledCount > 0) {
                 router.push(`/leads/outreach/${result.campaignId}`);
             }
             setWizardCampaignId(null);
@@ -360,17 +355,10 @@ export function OutreachLeadPicker({
                             Requested: {lastStartResult.requestedCount}
                         </Badge>
                         <Badge variant="outline">
-                            Queued: {lastStartResult.startedCount}
-                        </Badge>
-                        <Badge variant="outline">
-                            Dispatched: {lastStartResult.dispatchedCount}
+                            Enrolled: {lastStartResult.enrolledCount}
                         </Badge>
                         <Badge variant="outline">
                             Skipped: {lastStartResult.skippedCount}
-                        </Badge>
-                        <Badge variant="outline">
-                            Dispatch Failed:{" "}
-                            {lastStartResult.dispatchFailedCount}
                         </Badge>
                     </CardContent>
                 </Card>

@@ -230,3 +230,36 @@ export const outreachSmsMessagesTable = defineTable({
         "lead_id",
         "created_at",
     ]);
+
+export const campaignLeadStateSchema = v.union(
+    v.literal("eligible"),
+    v.literal("queued"),
+    v.literal("in_progress"),
+    v.literal("cooldown"),
+    v.literal("sms_pending"),
+    v.literal("error"),
+    v.literal("terminal_blocked"),
+    v.literal("done"),
+);
+
+export const outreachCampaignLeadStatesTable = defineTable({
+    campaign_id: v.id("outreachCampaigns"),
+    lead_id: v.id("leads"),
+    state: campaignLeadStateSchema,
+    next_action_at_ms: v.optional(v.number()),
+    attempts_in_campaign: v.number(),
+    no_answer_or_voicemail_count: v.number(),
+    last_attempt_at: v.optional(v.number()),
+    last_outcome: v.optional(outreachCallOutcomeSchema),
+    active_call_id: v.optional(v.id("outreachCalls")),
+    last_error: v.optional(v.string()),
+})
+    .index("by_campaign_id", ["campaign_id"])
+    .index("by_campaign_id_and_state", ["campaign_id", "state"])
+    .index("by_campaign_id_and_next_action_at_ms", [
+        "campaign_id",
+        "next_action_at_ms",
+    ])
+    .index("by_next_action_at_ms", ["next_action_at_ms"])
+    .index("by_lead_id", ["lead_id"])
+    .index("by_campaign_id_and_lead_id", ["campaign_id", "lead_id"]);

@@ -36,13 +36,14 @@ crons.interval(
 );
 
 /**
- * Outreach automation orchestrator (every 5 minutes)
- * Selects callable leads, dispatches calls, and sweeps due follow-up SMS.
+ * Outreach state reconciliation watchdog (every 15 minutes)
+ * Catches missed scheduled handlers and recovers stale state rows.
+ * Replaces the old 5-minute runOutreachAutomation cron.
  */
 crons.interval(
-    "run-outreach-automation",
-    { minutes: 5 },
-    internal.outreach.actions.runOutreachAutomation,
+    "reconcile-outreach-lead-states",
+    { minutes: 15 },
+    internal.outreach.campaignLeadState.reconcileDueCampaignLeadStates,
     {},
 );
 
