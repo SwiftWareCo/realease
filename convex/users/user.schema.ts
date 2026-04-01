@@ -10,11 +10,9 @@ export const marketRegionSchema = v.object({
 
 export const marketInterestSchema = v.union(
     v.literal("home_prices"),
-    v.literal("inventory_levels"),
+    v.literal("inventory"),
     v.literal("mortgage_rates"),
-    v.literal("market_trends"),
-    v.literal("new_construction"),
-    v.literal("rental_market"),
+    v.literal("market_trend"),
 );
 
 export const usersTable = defineTable({
@@ -24,9 +22,6 @@ export const usersTable = defineTable({
     imageUrl: v.optional(v.string()),
 
     // Preferences
-    // Legacy single-region field (keep for compatibility)
-    marketRegion: v.optional(marketRegionSchema),
-    // Multi-region preferences
     marketRegions: v.optional(v.array(marketRegionSchema)),
     marketInterests: v.optional(v.array(marketInterestSchema)),
 })

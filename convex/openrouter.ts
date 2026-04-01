@@ -3,6 +3,7 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { OpenRouter } from "@openrouter/sdk";
+import { OPENROUTER_FREE_MODEL } from "./openrouterConfig";
 
 export const analyzeLead = internalAction({
     args: {
@@ -64,7 +65,7 @@ Provide JSON only:
             });
 
             const response = await openrouter.chat.send({
-                model: "xiaomi/mimo-v2-flash:free",
+                model: OPENROUTER_FREE_MODEL,
                 messages: [
                     {
                         role: "user",

@@ -2,10 +2,126 @@
 
 import { useMemo, useState } from "react";
 import type { DevDocFile } from "@/lib/dev-docs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
 
 interface DevDocsViewerProps {
     docs: DevDocFile[];
+}
+
+interface StructuredSectionContent {
+    intro: string;
+    relevantFiles: string;
+    userFlow: string;
+    stepFunctionMap: string;
+    technicalSequence: string;
+    additional: string;
+}
+
+interface H3Block {
+    title: string;
+    content: string;
+}
+
+function normalizeHeading(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function parseH3Blocks(markdown: string): H3Block[] {
+    const lines = markdown.split(/\r?\n/);
+    const blocks: H3Block[] = [];
+    let currentTitle: string | null = null;
+    let currentLines: string[] = [];
+
+    for (const line of lines) {
+        if (/^###\s+/.test(line)) {
+            if (currentTitle) {
+                blocks.push({
+                    title: currentTitle,
+                    content:
+                        `### ${currentTitle}\n${currentLines.join("\n")}`.trim(),
+                });
+            }
+            currentTitle = line.replace(/^###\s+/, "").trim();
+            currentLines = [];
+            continue;
+        }
+
+        if (currentTitle) {
+            currentLines.push(line);
+        }
+    }
+
+    if (currentTitle) {
+        blocks.push({
+            title: currentTitle,
+            content: `### ${currentTitle}\n${currentLines.join("\n")}`.trim(),
+        });
+    }
+
+    return blocks;
+}
+
+function parseStructuredSection(
+    markdown: string,
+): StructuredSectionContent | null {
+    const withoutH2 = markdown.replace(/^##\s+.*$/m, "").trim();
+    const blocks = parseH3Blocks(withoutH2);
+    if (blocks.length === 0) {
+        return null;
+    }
+
+    const intro = withoutH2.split(/^###\s+/m)[0]?.trim() ?? "";
+    const relevantFiles = blocks.find(
+        (block) => normalizeHeading(block.title) === "relevant files",
+    );
+    const userFlow = blocks.find(
+        (block) => normalizeHeading(block.title) === "user flow",
+    );
+    const stepFunctionMap =
+        blocks.find(
+            (block) => normalizeHeading(block.title) === "step function map",
+        ) ??
+        blocks.find(
+            (block) => normalizeHeading(block.title) === "function map",
+        );
+    const technicalSequence = blocks.find(
+        (block) => normalizeHeading(block.title) === "technical sequence",
+    );
+
+    if (!relevantFiles || !userFlow || !technicalSequence) {
+        return null;
+    }
+
+    const additional = blocks
+        .filter((block) => {
+            const heading = normalizeHeading(block.title);
+            return (
+                heading !== "relevant files" &&
+                heading !== "user flow" &&
+                heading !== "step function map" &&
+                heading !== "function map" &&
+                heading !== "technical sequence"
+            );
+        })
+        .map((block) => block.content)
+        .join("\n\n")
+        .trim();
+
+    return {
+        intro,
+        relevantFiles: relevantFiles.content,
+        userFlow: userFlow.content,
+        stepFunctionMap: stepFunctionMap?.content ?? "",
+        technicalSequence: technicalSequence.content,
+        additional,
+    };
 }
 
 export function DevDocsViewer({ docs }: DevDocsViewerProps) {
@@ -18,6 +134,18 @@ export function DevDocsViewer({ docs }: DevDocsViewerProps) {
         activeDoc?.sections[0]?.slug ?? "",
     );
 
+    const sections = activeDoc?.sections ?? [];
+    const activeSection =
+        sections.find((section) => section.slug === activeSectionSlug) ??
+        sections[0];
+    const structuredSection = useMemo(
+        () =>
+            activeSection
+                ? parseStructuredSection(activeSection.content)
+                : null,
+        [activeSection],
+    );
+
     if (docs.length === 0) {
         return (
             <div className="p-6">
@@ -27,11 +155,6 @@ export function DevDocsViewer({ docs }: DevDocsViewerProps) {
             </div>
         );
     }
-
-    const sections = activeDoc?.sections ?? [];
-    const activeSection =
-        sections.find((section) => section.slug === activeSectionSlug) ??
-        sections[0];
 
     return (
         <div className="space-y-4 p-4 md:p-6">
@@ -107,9 +230,116 @@ export function DevDocsViewer({ docs }: DevDocsViewerProps) {
                                 {activeSection.title}
                             </h2>
                             <div className="mt-4">
-                                <MarkdownRenderer
-                                    content={activeSection.content}
-                                />
+                                {structuredSection ? (
+                                    <div className="space-y-6">
+                                        {structuredSection.intro ? (
+                                            <MarkdownRenderer
+                                                content={
+                                                    structuredSection.intro
+                                                }
+                                            />
+                                        ) : null}
+
+                                        <MarkdownRenderer
+                                            content={
+                                                structuredSection.relevantFiles
+                                            }
+                                        />
+
+                                        <Tabs
+                                            key={`${activeDoc?.slug ?? "doc"}-${activeSection?.slug ?? "section"}`}
+                                            defaultValue="user-flow"
+                                            className="gap-4"
+                                        >
+                                            <TabsList>
+                                                <TabsTrigger value="user-flow">
+                                                    User Flow
+                                                </TabsTrigger>
+                                                <TabsTrigger value="technical-sequence">
+                                                    Technical Sequence
+                                                </TabsTrigger>
+                                            </TabsList>
+                                            <TabsContent value="user-flow">
+                                                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
+                                                    <div className="min-w-0 rounded-lg border bg-background/60 p-3">
+                                                        <MarkdownRenderer
+                                                            content={
+                                                                structuredSection.userFlow
+                                                            }
+                                                        />
+                                                    </div>
+
+                                                    {structuredSection.stepFunctionMap ? (
+                                                        <>
+                                                            <div className="hidden xl:block">
+                                                                <div className="sticky top-4 rounded-lg border bg-muted/20 p-3">
+                                                                    <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                                                        Step
+                                                                        Function
+                                                                        Map
+                                                                    </p>
+                                                                    <div className="mt-2">
+                                                                        <MarkdownRenderer
+                                                                            content={
+                                                                                structuredSection.stepFunctionMap
+                                                                            }
+                                                                            compactInlineCode
+                                                                            className="[&_table]:w-full [&_table]:table-fixed [&_th]:align-top [&_td]:align-top [&_th]:px-2 [&_th]:py-1.5 [&_td]:px-2 [&_td]:py-1.5 [&_td]:break-words"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="xl:hidden">
+                                                                <Collapsible
+                                                                    key={`${activeDoc?.slug ?? "doc"}-${activeSection?.slug ?? "section"}-step-map`}
+                                                                    className="overflow-hidden rounded-lg border bg-muted/20"
+                                                                >
+                                                                    <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+                                                                        <span className="text-sm font-medium">
+                                                                            Step
+                                                                            Function
+                                                                            Map
+                                                                        </span>
+                                                                        <ChevronDown className="size-4 text-muted-foreground" />
+                                                                    </CollapsibleTrigger>
+                                                                    <CollapsibleContent className="border-t px-4 pb-4 pt-3">
+                                                                        <MarkdownRenderer
+                                                                            content={
+                                                                                structuredSection.stepFunctionMap
+                                                                            }
+                                                                            compactInlineCode
+                                                                            className="[&_table]:w-full [&_table]:table-fixed [&_th]:align-top [&_td]:align-top [&_th]:px-2 [&_th]:py-1.5 [&_td]:px-2 [&_td]:py-1.5 [&_td]:break-words"
+                                                                        />
+                                                                    </CollapsibleContent>
+                                                                </Collapsible>
+                                                            </div>
+                                                        </>
+                                                    ) : null}
+                                                </div>
+                                            </TabsContent>
+                                            <TabsContent value="technical-sequence">
+                                                <MarkdownRenderer
+                                                    content={
+                                                        structuredSection.technicalSequence
+                                                    }
+                                                />
+                                            </TabsContent>
+                                        </Tabs>
+
+                                        {structuredSection.additional ? (
+                                            <MarkdownRenderer
+                                                content={
+                                                    structuredSection.additional
+                                                }
+                                            />
+                                        ) : null}
+                                    </div>
+                                ) : (
+                                    <MarkdownRenderer
+                                        content={activeSection.content}
+                                    />
+                                )}
                             </div>
                         </>
                     ) : (

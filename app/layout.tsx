@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { Open_Sans, IBM_Plex_Mono, Source_Serif_4 } from "next/font/google";
+import { Inter, IBM_Plex_Mono, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./providers/ThemeProvider";
 import { ClerkProvider } from "@clerk/nextjs";
 
-const openSans = Open_Sans({
+const inter = Inter({
     variable: "--font-sans",
     subsets: ["latin"],
 });
@@ -33,7 +33,7 @@ export default function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning className="h-svh">
             <body
-                className={`${openSans.variable} ${ibmPlexMono.variable} ${sourceSerif4.variable} h-svh overflow-hidden antialiased`}
+                className={`${inter.variable} ${ibmPlexMono.variable} ${sourceSerif4.variable} h-svh overflow-hidden antialiased`}
             >
                 <ClerkProvider afterSignOutUrl={"/"}>
                     <ThemeProvider

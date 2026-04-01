@@ -3,16 +3,17 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, MapPin, RefreshCw } from "lucide-react";
-import Link from "next/link";
 
 interface InsightsEmptyStateProps {
     hasRegion?: boolean;
     regions?: Array<{ city: string; state?: string; country: string }>;
+    onOpenSettings?: () => void;
 }
 
 export function InsightsEmptyState({
     hasRegion,
     regions,
+    onOpenSettings,
 }: InsightsEmptyStateProps) {
     if (!hasRegion) {
         return (
@@ -28,9 +29,9 @@ export function InsightsEmptyState({
                         Select your market region to start seeing relevant real
                         estate insights.
                     </p>
-                    <Link href="/settings">
-                        <Button>Set Your Region</Button>
-                    </Link>
+                    <Button onClick={onOpenSettings} disabled={!onOpenSettings}>
+                        Set Your Region
+                    </Button>
                 </CardContent>
             </Card>
         );
@@ -51,7 +52,7 @@ export function InsightsEmptyState({
                                   : `${regions.length} regions`
                           }.`
                         : "We're gathering market data for your selected regions."}{" "}
-                    Check back soon or refresh to see the latest updates.
+                    Check back soon for the latest GVR Market Watch updates.
                 </p>
                 <Button
                     variant="outline"

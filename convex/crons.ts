@@ -4,23 +4,53 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 /**
- * Daily market data fetch at 6:00 AM PT (13:00 UTC / 1:00 PM UTC)
- * Fetches fresh market insights for all active regions
+ * Daily market data fetch (~every 24 hours).
+ * Fetches fresh market insights for all active regions.
  */
-crons.daily(
+crons.interval(
     "daily-market-insights",
-    { hourUTC: 13, minuteUTC: 0 },
+    { hours: 24 },
     internal.insights.actions.dailyFetch,
     {},
 );
 
 /**
- * Cleanup expired insights weekly (Sundays at 2 AM UTC)
+ * Cleanup expired insights weekly (every 168 hours)
  */
-crons.weekly(
+crons.interval(
     "cleanup-expired-insights",
-    { dayOfWeek: "sunday", hourUTC: 2, minuteUTC: 0 },
+    { hours: 168 },
     internal.insights.mutations.cleanupExpired,
+    {},
+);
+
+/**
+ * Fetch latest Bank of Canada rates every 6 hours.
+ */
+crons.interval(
+    "fetch-boc-latest-rates",
+    { hours: 6 },
+    internal.insights.apiFetchers.fetchBankOfCanadaRates,
+    {},
+);
+
+/**
+ * Refresh 12 months of Bank of Canada historical rate rows daily.
+ */
+crons.interval(
+    "fetch-boc-historical-rates",
+    { hours: 24 },
+    internal.insights.apiFetchers.fetchBankOfCanadaHistoricalRates,
+    {},
+);
+
+/**
+ * Check for the latest GVR monthly report daily.
+ */
+crons.interval(
+    "discover-latest-gvr-report",
+    { hours: 24 },
+    internal.insights.gvrDiscovery.discoverLatestGvrReport,
     {},
 );
 

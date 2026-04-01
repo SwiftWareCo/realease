@@ -1,16 +1,28 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { MermaidDiagram } from "./mermaid-diagram";
 
 interface MarkdownRendererProps {
     content: string;
+    className?: string;
+    compactInlineCode?: boolean;
 }
 
-export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+export function MarkdownRenderer({
+    content,
+    className,
+    compactInlineCode = false,
+}: MarkdownRendererProps) {
     return (
-        <div className="text-sm leading-7 text-foreground">
+        <div className={cn("text-sm leading-7 text-foreground", className)}>
             <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
@@ -60,8 +72,28 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
                         }
 
                         if (!className) {
+                            if (compactInlineCode) {
+                                return (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <code className="inline-block max-w-[16rem] cursor-help truncate rounded bg-muted px-1.5 py-0.5 align-bottom font-mono text-[0.92em] text-foreground">
+                                                {children}
+                                            </code>
+                                        </TooltipTrigger>
+                                        <TooltipContent
+                                            side="top"
+                                            className="max-w-[36rem]"
+                                        >
+                                            <p className="break-all font-mono text-[11px]">
+                                                {code}
+                                            </p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                );
+                            }
+
                             return (
-                                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.92em] text-foreground">
+                                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.92em] text-foreground whitespace-pre-wrap break-words">
                                     {children}
                                 </code>
                             );
@@ -73,7 +105,9 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
                             </code>
                         );
                     },
-                    pre: ({ children }) => <div className="mt-4">{children}</div>,
+                    pre: ({ children }) => (
+                        <div className="mt-4">{children}</div>
+                    ),
                 }}
             >
                 {content}

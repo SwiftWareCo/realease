@@ -1,13 +1,17 @@
 'use client';
 
+import { useQuery } from 'convex/react';
+import { api } from '@/convex/_generated/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, TrendingDown, Home, DollarSign, BarChart3, ArrowUpRight } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TrendingUp, TrendingDown, Minus, BarChart3, ArrowUpRight } from 'lucide-react';
+import Link from 'next/link';
 
 interface MetricCardProps {
     title: string;
     value: string;
-    change: string;
-    trend: 'up' | 'down';
+    change?: string;
+    trend: 'up' | 'down' | 'neutral';
     icon: React.ReactNode;
 }
 
@@ -25,50 +29,34 @@ function MetricCard({ title, value, change, trend, icon }: MetricCardProps) {
                     </p>
                 </div>
             </div>
-            <div
-                className={`flex items-center gap-1 text-xs font-medium ${trend === 'up' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+            {change && (
+                <div
+                    className={`flex items-center gap-1 text-xs font-medium ${
+                        trend === 'up'
+                            ? 'text-green-600 dark:text-green-400'
+                            : trend === 'down'
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-muted-foreground'
                     }`}
-            >
-                {trend === 'up' ? (
-                    <TrendingUp className='size-3' aria-hidden='true' />
-                ) : (
-                    <TrendingDown className='size-3' aria-hidden='true' />
-                )}
-                <span>{change}</span>
-            </div>
+                >
+                    {trend === 'up' && <TrendingUp className='size-3' aria-hidden='true' />}
+                    {trend === 'down' && <TrendingDown className='size-3' aria-hidden='true' />}
+                    {trend === 'neutral' && <Minus className='size-3' aria-hidden='true' />}
+                    <span>{change}</span>
+                </div>
+            )}
         </div>
     );
 }
 
 export function AnalyticsCard() {
-    // Mock data - will be replaced with real API data later
-    const metrics = [
-        {
-            title: 'Active Listings',
-            value: '247',
-            change: '+12%',
-            trend: 'up' as const,
-            icon: <Home className='size-4' aria-hidden='true' />,
-        },
-        {
-            title: 'Avg. Price',
-            value: '$485K',
-            change: '+5.2%',
-            trend: 'up' as const,
-            icon: <DollarSign className='size-4' aria-hidden='true' />,
-        },
-        {
-            title: 'Days on Market',
-            value: '32',
-            change: '-8%',
-            trend: 'up' as const,
-            icon: <BarChart3 className='size-4' aria-hidden='true' />,
-        },
-    ];
+    const kpiMetrics = useQuery(api.insights.metricsQueries.getKPIMetrics, {});
+
+    const isLoading = kpiMetrics === undefined;
+    const hasData = kpiMetrics && kpiMetrics.length > 0;
 
     return (
         <Card className='relative overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/20 h-full flex flex-col'>
-            {/* Animated gradient border effect */}
             <div
                 className='absolute inset-0 rounded-xl opacity-30'
                 style={{
@@ -85,32 +73,46 @@ export function AnalyticsCard() {
                         <BarChart3 className='size-5 text-primary' aria-hidden='true' />
                         Market Analytics
                     </CardTitle>
-                    <button
+                    <Link
+                        href='/insights'
                         className='flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded'
-                        type='button'
                     >
                         View Report
                         <ArrowUpRight className='size-3' aria-hidden='true' />
-                    </button>
+                    </Link>
                 </div>
                 <p className='text-xs text-muted-foreground mt-1'>
-                    Real-time market overview
+                    {hasData ? 'Live market data' : 'Real-time market overview'}
                 </p>
             </CardHeader>
 
             <CardContent className='space-y-3'>
-                {metrics.map((metric) => (
-                    <MetricCard key={metric.title} {...metric} />
-                ))}
-
-                {/* Placeholder chart area */}
-                <div className='mt-4 p-4 rounded-lg bg-muted/20 border border-dashed border-muted-foreground/20'>
-                    <div className='flex items-center justify-center h-20'>
-                        <p className='text-xs text-muted-foreground text-center'>
-                            📊 Chart visualization coming soon
-                        </p>
+                {isLoading ? (
+                    <>
+                        <Skeleton className='h-16 w-full rounded-lg' />
+                        <Skeleton className='h-16 w-full rounded-lg' />
+                        <Skeleton className='h-16 w-full rounded-lg' />
+                    </>
+                ) : hasData ? (
+                    kpiMetrics.slice(0, 3).map((metric) => (
+                        <MetricCard
+                            key={metric._id}
+                            title={metric.label}
+                            value={metric.formattedValue}
+                            change={metric.changeFormatted}
+                            trend={metric.trend}
+                            icon={<BarChart3 className='size-4' aria-hidden='true' />}
+                        />
+                    ))
+                ) : (
+                    <div className='p-4 rounded-lg bg-muted/20 border border-dashed border-muted-foreground/20'>
+                        <div className='flex items-center justify-center h-20'>
+                            <p className='text-xs text-muted-foreground text-center'>
+                                No market data yet. Configure your region in Settings.
+                            </p>
+                        </div>
                     </div>
-                </div>
+                )}
             </CardContent>
         </Card>
     );

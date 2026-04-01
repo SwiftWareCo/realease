@@ -18,6 +18,7 @@ interface InsightCardProps {
         value: string;
         trend?: "up" | "down" | "neutral";
     }>;
+    compact?: boolean;
 }
 
 const categoryLabels: Record<string, string> = {
@@ -88,6 +89,7 @@ export function InsightCard({
     fetchedAt,
     region,
     dataPoints,
+    compact = false,
 }: InsightCardProps) {
     const regionLabel = region
         ? `${region.city}${region.state ? `, ${region.state}` : ""}`
@@ -96,19 +98,21 @@ export function InsightCard({
 
     return (
         <Card className="h-full hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
+            <CardHeader className={compact ? "pb-2" : "pb-3"}>
                 <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                        <CardTitle className="text-base font-semibold leading-tight line-clamp-2">
+                        <CardTitle className={`font-semibold leading-tight line-clamp-2 ${compact ? "text-sm" : "text-base"}`}>
                             {title}
                         </CardTitle>
                     </div>
-                    <Badge
-                        className={categoryColors[category] || "bg-gray-100"}
-                        variant="secondary"
-                    >
-                        {categoryLabels[category] || category}
-                    </Badge>
+                    {!compact && (
+                        <Badge
+                            className={categoryColors[category] || "bg-gray-100"}
+                            variant="secondary"
+                        >
+                            {categoryLabels[category] || category}
+                        </Badge>
+                    )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span>{sourceName}</span>

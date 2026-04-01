@@ -3,9 +3,15 @@ import { eventsTable } from "./events/event.schema";
 import { leadsTable } from "./leads/lead.schema";
 import { usersTable } from "./users/user.schema";
 import {
-    marketInsightsTable,
-    insightFetchLogTable,
+    newsContextItemsTable,
+    newsIngestionLogTable,
 } from "./insights/insight.schema";
+import {
+    marketMetricsTable,
+    marketSummariesTable,
+} from "./insights/metrics.schema";
+import { metricHistoryTable } from "./insights/metricHistory.schema";
+import { gvrCheckpointTable } from "./insights/gvrCheckpoint.schema";
 import {
     outreachCampaignsTable,
     outreachCallsTable,
@@ -18,8 +24,12 @@ export default defineSchema({
     events: eventsTable,
     leads: leadsTable,
     users: usersTable,
-    marketInsights: marketInsightsTable,
-    insightFetchLog: insightFetchLogTable,
+    newsContextItems: newsContextItemsTable,
+    newsIngestionLog: newsIngestionLogTable,
+    marketMetrics: marketMetricsTable,
+    marketSummaries: marketSummariesTable,
+    metricHistory: metricHistoryTable,
+    gvrCheckpoints: gvrCheckpointTable,
     outreachCampaigns: outreachCampaignsTable,
     outreachCalls: outreachCallsTable,
     outreachCampaignLeadStates: outreachCampaignLeadStatesTable,

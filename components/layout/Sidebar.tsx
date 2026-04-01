@@ -9,7 +9,6 @@ import {
     Home,
     Users,
     TrendingUp,
-    Settings,
     PhoneCall,
 } from "lucide-react";
 import {
@@ -61,11 +60,6 @@ const navigation: NavItem[] = [
         name: "Listings",
         href: "/listings",
         icon: Building2,
-    },
-    {
-        name: "Settings",
-        href: "/settings",
-        icon: Settings,
     },
 ];
 
