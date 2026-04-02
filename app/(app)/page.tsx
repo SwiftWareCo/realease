@@ -1,45 +1,36 @@
-import { WelcomeHeader } from './homepage/components/WelcomeHeader';
-import { LiveClock } from './homepage/components/LiveClock';
-import { RevenueGoal } from './homepage/components/RevenueGoal';
-import { QuoteOfTheDay } from './homepage/components/QuoteOfTheDay';
-import { AnalyticsCard } from './homepage/components/AnalyticsCard';
-import { TodaysTasks } from './homepage/components/TodaysTasks';
-import { TodoChecklist } from './homepage/components/TodoChecklist';
+import { WelcomeHeader } from "./homepage/components/WelcomeHeader";
+import { LiveClock } from "./homepage/components/LiveClock";
+import { QuoteOfTheDay } from "./homepage/components/QuoteOfTheDay";
+import { AnalyticsCard } from "./homepage/components/AnalyticsCard";
+import { LeadActionBoard } from "./homepage/components/LeadActionBoard";
+import { TodaysTasks } from "./homepage/components/TodaysTasks";
 
 export default function Home() {
-  return (
-    <div className='p-6 md:p-8 max-w-7xl mx-auto'>
-      <WelcomeHeader />
+    return (
+        <div className="p-6 md:p-8 max-w-7xl mx-auto">
+            <WelcomeHeader />
 
-      {/* Main Grid Layout - 4 columns on xl, 2 on md, 1 on mobile */}
-      {/* Using items-stretch to align bottoms */}
-      <div className='grid gap-4 md:gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-4 items-stretch'>
-        {/* Column 1: Clock + Revenue Goal */}
-        <div className='flex flex-col gap-4 md:gap-5'>
-          <LiveClock />
-          <RevenueGoal />
+            <div className="grid grid-cols-1 gap-5 md:gap-6 lg:grid-cols-12 lg:auto-rows-[220px]">
+                <div className="lg:col-span-8 lg:row-span-2 lg:col-start-1 lg:row-start-1">
+                    <TodaysTasks />
+                </div>
+
+                <div className="lg:col-span-4 lg:row-span-2 lg:col-start-9 lg:row-start-1">
+                    <LeadActionBoard />
+                </div>
+
+                <div className="lg:col-span-8 lg:row-span-1 lg:col-start-1 lg:row-start-3">
+                    <AnalyticsCard />
+                </div>
+
+                <div className="lg:col-span-4 lg:row-span-1 lg:col-start-9 lg:row-start-3">
+                    <LiveClock />
+                </div>
+            </div>
+
+            <div className="mt-6">
+                <QuoteOfTheDay />
+            </div>
         </div>
-
-        {/* Column 2: Analytics */}
-        <div className='flex flex-col'>
-          <AnalyticsCard />
-        </div>
-
-        {/* Column 3: Today's Schedule */}
-        <div className='flex flex-col'>
-          <TodaysTasks />
-        </div>
-
-        {/* Column 4: To-Do Checklist */}
-        <div className='flex flex-col'>
-          <TodoChecklist />
-        </div>
-      </div>
-
-      {/* Quote of the Day - Full width below */}
-      <div className='mt-5'>
-        <QuoteOfTheDay />
-      </div>
-    </div>
-  );
+    );
 }

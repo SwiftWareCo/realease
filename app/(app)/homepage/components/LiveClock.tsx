@@ -45,14 +45,14 @@ export function LiveClock() {
     });
 
     return (
-        <Card className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-accent/10 border-primary/20 dark:border-primary/30 h-full">
+        <Card className="relative h-full overflow-hidden bg-gradient-to-br from-primary/5 via-background to-accent/10 border-primary/20 dark:border-primary/30">
             {/* Decorative background elements */}
             <div
                 className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-primary/5 blur-2xl"
                 aria-hidden="true"
             />
 
-            <CardContent className="relative p-5 flex flex-col items-center justify-center">
+            <CardContent className="relative flex h-full flex-col items-center justify-center p-5">
                 {/* Analog Clock - Fixed aspect ratio circle */}
                 <div
                     className="relative flex-shrink-0"
