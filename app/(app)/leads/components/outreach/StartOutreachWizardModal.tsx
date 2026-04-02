@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -62,11 +62,15 @@ export function StartOutreachWizardModal({
     const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(
         new Set(),
     );
+    const [selectedLeadIdsByCampaign, setSelectedLeadIdsByCampaign] = useState<
+        Record<string, string[]>
+    >({});
+
+    const campaignKey = campaign ? String(campaign._id) : null;
 
     const resetWizardState = () => {
         setWizardStep(1);
         setSearch("");
-        setSelectedLeadIds(new Set());
     };
 
     const pickerQueryArgs = open
@@ -87,6 +91,57 @@ export function StartOutreachWizardModal({
             ? pickerData === undefined
             : false
         : false;
+
+    useEffect(() => {
+        if (!campaignKey) {
+            setSelectedLeadIds(new Set());
+            return;
+        }
+        const saved = selectedLeadIdsByCampaign[campaignKey] ?? [];
+        setSelectedLeadIds(new Set(saved));
+    }, [campaignKey]);
+
+    useEffect(() => {
+        if (!campaignKey) {
+            return;
+        }
+        setSelectedLeadIdsByCampaign((prev) => {
+            const nextSelection = Array.from(selectedLeadIds);
+            const existing = prev[campaignKey] ?? [];
+            const unchanged =
+                existing.length === nextSelection.length &&
+                existing.every(
+                    (leadId, index) => leadId === nextSelection[index],
+                );
+            if (unchanged) {
+                return prev;
+            }
+            return {
+                ...prev,
+                [campaignKey]: nextSelection,
+            };
+        });
+    }, [campaignKey, selectedLeadIds]);
+
+    useEffect(() => {
+        if (!pickerData) {
+            return;
+        }
+        const selectableIds = new Set(
+            pickerData.leads
+                .filter((lead) => lead.selectable)
+                .map((lead) => String(lead.leadId)),
+        );
+        setSelectedLeadIds((prev) => {
+            const next = new Set(
+                Array.from(prev).filter((leadId) => selectableIds.has(leadId)),
+            );
+            if (next.size === prev.size) {
+                return prev;
+            }
+            return next;
+        });
+    }, [pickerData]);
 
     const filteredLeads = useMemo(() => {
         if (!pickerData) return [];

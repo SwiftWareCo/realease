@@ -1,6 +1,7 @@
 import "server-only";
 
 import { promises as fs } from "node:fs";
+import type { Dirent } from "node:fs";
 import path from "node:path";
 
 const DOCS_DIR = path.join(process.cwd(), "docs", "architecture");
@@ -49,10 +50,9 @@ function splitMarkdownIntoSections(markdown: string): DevDocSection[] {
             const raw = currentLines.join("\n").trim();
             // For the overview block (before first ##), strip the leading h1 heading.
             // If nothing substantive remains, skip creating an empty overview section.
-            const content =
-                !sawSectionHeading
-                    ? raw.replace(/^#\s+.*$/m, "").trim()
-                    : raw;
+            const content = !sawSectionHeading
+                ? raw.replace(/^#\s+.*$/m, "").trim()
+                : raw;
             if (content) {
                 sections.push({
                     slug: toSectionSlug(currentTitle),
@@ -92,7 +92,7 @@ function splitMarkdownIntoSections(markdown: string): DevDocSection[] {
 }
 
 export async function listArchitectureDocs(): Promise<DevDocFile[]> {
-    let entries: Awaited<ReturnType<typeof fs.readdir>>;
+    let entries: Dirent<string>[];
     try {
         entries = await fs.readdir(DOCS_DIR, { withFileTypes: true });
     } catch {
