@@ -1,20 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, query, type QueryCtx } from "./_generated/server";
 
-const clerkUserSchema = v.object({
-    id: v.string(),
-    first_name: v.union(v.string(), v.null()),
-    last_name: v.union(v.string(), v.null()),
-    image_url: v.optional(v.string()),
-    email_addresses: v.optional(
-        v.array(
-            v.object({
-                email_address: v.string(),
-            }),
-        ),
-    ),
-});
-
 export const current = query({
     args: {},
     handler: async (ctx) => {
@@ -23,15 +9,40 @@ export const current = query({
 });
 
 export const upsertFromClerk = internalMutation({
-    args: { data: clerkUserSchema },
+    args: { data: v.any() },
     returns: v.null(),
     handler: async (ctx, args) => {
         const user = args.data;
-        const name = `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim();
-        const email = user.email_addresses?.[0]?.email_address ?? undefined;
-        const imageUrl = user.image_url ?? undefined;
+        if (!user || typeof user !== "object") {
+            return null;
+        }
 
-        const existing = await userByExternalId(ctx, user.id);
+        const id = typeof user.id === "string" ? user.id : undefined;
+        if (!id) {
+            return null;
+        }
+
+        const firstName =
+            typeof user.first_name === "string" ? user.first_name : "";
+        const lastName =
+            typeof user.last_name === "string" ? user.last_name : "";
+        const name = `${firstName} ${lastName}`.trim();
+
+        const emailAddresses = Array.isArray(user.email_addresses)
+            ? user.email_addresses
+            : [];
+        const firstEmailAddress = emailAddresses[0];
+        const email =
+            firstEmailAddress &&
+            typeof firstEmailAddress === "object" &&
+            "email_address" in firstEmailAddress &&
+            typeof firstEmailAddress.email_address === "string"
+                ? firstEmailAddress.email_address
+                : undefined;
+        const imageUrl =
+            typeof user.image_url === "string" ? user.image_url : undefined;
+
+        const existing = await userByExternalId(ctx, id);
 
         if (existing) {
             await ctx.db.patch(existing._id, {
@@ -43,7 +54,7 @@ export const upsertFromClerk = internalMutation({
         }
 
         await ctx.db.insert("users", {
-            externalId: user.id,
+            externalId: id,
             name: name || "User",
             email,
             imageUrl,
