@@ -3,7 +3,10 @@
 import { internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { OpenRouter } from "@openrouter/sdk";
-import { OPENROUTER_FREE_MODEL } from "../openrouterConfig";
+import {
+    OPENROUTER_MODEL_CANDIDATES,
+    OPENROUTER_PRIMARY_MODEL,
+} from "../openrouterConfig";
 import {
     normalizeOpenRouterText,
     parseJsonObjectFromText,
@@ -233,7 +236,9 @@ Rules:
             ) {
                 try {
                     response = await openrouter.chat.send({
-                        model: OPENROUTER_FREE_MODEL,
+                        model: OPENROUTER_PRIMARY_MODEL,
+                        models: OPENROUTER_MODEL_CANDIDATES,
+                        route: "fallback",
                         messages: [{ role: "user", content: prompt }],
                         maxTokens: 500,
                         provider: {
@@ -249,9 +254,22 @@ Rules:
                             },
                         },
                     });
+                    const resolvedModel =
+                        (response as { model?: string })?.model ??
+                        OPENROUTER_PRIMARY_MODEL;
+                    if (resolvedModel !== OPENROUTER_PRIMARY_MODEL) {
+                        console.warn(
+                            `[Extract] Fallback model used (primary=${OPENROUTER_PRIMARY_MODEL}, resolved=${resolvedModel})`,
+                        );
+                    }
                     break;
                 } catch (error) {
                     lastError = error;
+                    console.warn(
+                        `[Extract] OpenRouter attempt ${attempt}/${OPENROUTER_MAX_ATTEMPTS} failed (primary=${OPENROUTER_PRIMARY_MODEL}): ${
+                            error instanceof Error ? error.message : String(error)
+                        }`,
+                    );
 
                     if (
                         attempt < OPENROUTER_MAX_ATTEMPTS &&

@@ -22,7 +22,6 @@ import type * as insights_gvrActivityMapping from "../insights/gvrActivityMappin
 import type * as insights_gvrDiscovery from "../insights/gvrDiscovery.js";
 import type * as insights_gvrParser from "../insights/gvrParser.js";
 import type * as insights_marketSummary from "../insights/marketSummary.js";
-import type * as insights_marketSummaryQueries from "../insights/marketSummaryQueries.js";
 import type * as insights_metricHistoryMutations from "../insights/metricHistoryMutations.js";
 import type * as insights_metricHistoryQueries from "../insights/metricHistoryQueries.js";
 import type * as insights_metricsMutations from "../insights/metricsMutations.js";
@@ -70,7 +69,6 @@ declare const fullApi: ApiFromModules<{
   "insights/gvrDiscovery": typeof insights_gvrDiscovery;
   "insights/gvrParser": typeof insights_gvrParser;
   "insights/marketSummary": typeof insights_marketSummary;
-  "insights/marketSummaryQueries": typeof insights_marketSummaryQueries;
   "insights/metricHistoryMutations": typeof insights_metricHistoryMutations;
   "insights/metricHistoryQueries": typeof insights_metricHistoryQueries;
   "insights/metricsMutations": typeof insights_metricsMutations;

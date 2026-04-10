@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+
+export type GvrActivityTableState = "loading" | "empty" | "ready";
 
 function formatCount(value: number | undefined) {
     if (value === undefined) return "-";
@@ -25,9 +28,13 @@ function propertyTypeLabel(value: "detached" | "attached" | "apartment") {
 export function GvrActivityComparisonTable({
     regionKeys,
     mode = "both",
+    className,
+    onDataStateChange,
 }: {
     regionKeys: string[];
     mode?: "listings" | "sales" | "both";
+    className?: string;
+    onDataStateChange?: (state: GvrActivityTableState) => void;
 }) {
     const sortedRegionKeys = useMemo(
         () => [...new Set(regionKeys)].sort(),
@@ -39,10 +46,20 @@ export function GvrActivityComparisonTable({
             regionKeys: sortedRegionKeys,
         },
     );
+    const tableState: GvrActivityTableState =
+        data === undefined
+            ? "loading"
+            : !data || data.regions.length === 0
+              ? "empty"
+              : "ready";
 
-    if (data === undefined) {
+    useEffect(() => {
+        onDataStateChange?.(tableState);
+    }, [onDataStateChange, tableState]);
+
+    if (tableState === "loading") {
         return (
-            <Card>
+            <Card className={className}>
                 <CardHeader>
                     <Skeleton className="h-5 w-72" />
                 </CardHeader>
@@ -62,9 +79,9 @@ export function GvrActivityComparisonTable({
               ? "Region vs Grand Total (Sales)"
               : "Region vs Grand Total (Listings & Sales)";
 
-    if (!data || data.regions.length === 0) {
+    if (!data || tableState === "empty") {
         return (
-            <Card>
+            <Card className={className}>
                 <CardHeader>
                     <CardTitle className="text-base">{title}</CardTitle>
                 </CardHeader>
@@ -82,8 +99,8 @@ export function GvrActivityComparisonTable({
     const showSales = mode === "sales" || mode === "both";
 
     return (
-        <Card>
-            <CardHeader>
+        <Card className={cn(className)}>
+            <CardHeader className="pb-3">
                 <CardTitle className="text-base">{title}</CardTitle>
                 <p className="text-xs text-muted-foreground">
                     Columns from GVR summary table:{" "}
@@ -92,54 +109,54 @@ export function GvrActivityComparisonTable({
                     {data.comparisonDates.currentMonth}
                 </p>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4">
                 {data.regions.map((region) => (
-                    <div key={region.regionKey} className="space-y-2">
+                    <div key={region.regionKey} className="space-y-1.5">
                         <h3 className="text-sm font-semibold">
                             {region.regionLabel}
                             {region.areaLabel ? ` (${region.areaLabel})` : ""}
                         </h3>
                         <div className="overflow-x-auto">
-                            <table className="min-w-full text-xs">
+                            <table className="min-w-full text-[11px]">
                                 <thead>
                                     <tr className="border-b text-muted-foreground">
-                                        <th className="px-2 py-2 text-left font-medium">
+                                        <th className="px-2 py-1.5 text-left font-medium">
                                             Type
                                         </th>
                                         {showListings ? (
                                             <>
-                                                <th className="px-2 py-2 text-right font-medium">
+                                                <th className="px-2 py-1.5 text-right font-medium">
                                                     Listings PY
                                                 </th>
-                                                <th className="px-2 py-2 text-right font-medium">
+                                                <th className="px-2 py-1.5 text-right font-medium">
                                                     Listings PM
                                                 </th>
-                                                <th className="px-2 py-2 text-right font-medium">
+                                                <th className="px-2 py-1.5 text-right font-medium">
                                                     Listings CM
                                                 </th>
-                                                <th className="px-2 py-2 text-right font-medium">
+                                                <th className="px-2 py-1.5 text-right font-medium">
                                                     Grand CM
                                                 </th>
-                                                <th className="px-2 py-2 text-right font-medium">
+                                                <th className="px-2 py-1.5 text-right font-medium">
                                                     % Grand
                                                 </th>
                                             </>
                                         ) : null}
                                         {showSales ? (
                                             <>
-                                                <th className="px-2 py-2 text-right font-medium">
+                                                <th className="px-2 py-1.5 text-right font-medium">
                                                     Sales PY
                                                 </th>
-                                                <th className="px-2 py-2 text-right font-medium">
+                                                <th className="px-2 py-1.5 text-right font-medium">
                                                     Sales PM
                                                 </th>
-                                                <th className="px-2 py-2 text-right font-medium">
+                                                <th className="px-2 py-1.5 text-right font-medium">
                                                     Sales CM
                                                 </th>
-                                                <th className="px-2 py-2 text-right font-medium">
+                                                <th className="px-2 py-1.5 text-right font-medium">
                                                     Grand CM
                                                 </th>
-                                                <th className="px-2 py-2 text-right font-medium">
+                                                <th className="px-2 py-1.5 text-right font-medium">
                                                     % Grand
                                                 </th>
                                             </>
@@ -152,33 +169,33 @@ export function GvrActivityComparisonTable({
                                             key={row.propertyType}
                                             className="border-b last:border-0"
                                         >
-                                            <td className="px-2 py-2 font-medium">
+                                            <td className="px-2 py-1.5 font-medium">
                                                 {propertyTypeLabel(row.propertyType)}
                                             </td>
                                             {showListings ? (
                                                 <>
-                                                    <td className="px-2 py-2 text-right tabular-nums">
+                                                    <td className="px-2 py-1.5 text-right tabular-nums">
                                                         {formatCount(
                                                             row.listings.previousYear,
                                                         )}
                                                     </td>
-                                                    <td className="px-2 py-2 text-right tabular-nums">
+                                                    <td className="px-2 py-1.5 text-right tabular-nums">
                                                         {formatCount(
                                                             row.listings.previousMonth,
                                                         )}
                                                     </td>
-                                                    <td className="px-2 py-2 text-right tabular-nums">
+                                                    <td className="px-2 py-1.5 text-right tabular-nums">
                                                         {formatCount(
                                                             row.listings.currentMonth,
                                                         )}
                                                     </td>
-                                                    <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                                                    <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
                                                         {formatCount(
                                                             row.listings
                                                                 .grandCurrentMonth,
                                                         )}
                                                     </td>
-                                                    <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                                                    <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
                                                         {formatPct(
                                                             row.listings
                                                                 .currentMonthShareOfGrandPct,
@@ -188,28 +205,28 @@ export function GvrActivityComparisonTable({
                                             ) : null}
                                             {showSales ? (
                                                 <>
-                                                    <td className="px-2 py-2 text-right tabular-nums">
+                                                    <td className="px-2 py-1.5 text-right tabular-nums">
                                                         {formatCount(
                                                             row.sales.previousYear,
                                                         )}
                                                     </td>
-                                                    <td className="px-2 py-2 text-right tabular-nums">
+                                                    <td className="px-2 py-1.5 text-right tabular-nums">
                                                         {formatCount(
                                                             row.sales.previousMonth,
                                                         )}
                                                     </td>
-                                                    <td className="px-2 py-2 text-right tabular-nums">
+                                                    <td className="px-2 py-1.5 text-right tabular-nums">
                                                         {formatCount(
                                                             row.sales.currentMonth,
                                                         )}
                                                     </td>
-                                                    <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                                                    <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
                                                         {formatCount(
                                                             row.sales
                                                                 .grandCurrentMonth,
                                                         )}
                                                     </td>
-                                                    <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                                                    <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
                                                         {formatPct(
                                                             row.sales
                                                                 .currentMonthShareOfGrandPct,

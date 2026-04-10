@@ -12,7 +12,25 @@ import {
 import { InsightCard } from "./InsightCard";
 import type { Doc } from "@/convex/_generated/dataModel";
 
-type Insight = Doc<"newsContextItems">;
+type Insight = {
+    _id: string;
+    title: string;
+    summary: string;
+    sourceName: string;
+    sourceUrl: string;
+    category: string;
+    fetchedAt: number;
+    dataPoints?: Array<{
+        label: string;
+        value: string;
+        trend?: "up" | "down" | "neutral";
+    }>;
+    region: {
+        city: string;
+        state?: string;
+        country: string;
+    };
+};
 type Metric = Doc<"marketMetrics">;
 
 const categoryMeta: Record<

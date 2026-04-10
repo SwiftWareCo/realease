@@ -1,9 +1,8 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { InsightsEmptyState } from "./components/InsightsEmptyState";
 import { KPIStrip, KPIStripSkeleton } from "./components/KPIStrip";
 import {
@@ -11,15 +10,30 @@ import {
     MarketSnapshotSkeleton,
 } from "./components/MarketSnapshot";
 import { MarketChartsTabs } from "./components/MarketChartsTabs";
-import { Settings, MapPin, AlertTriangle } from "lucide-react";
+import {
+    Settings,
+    MapPin,
+    AlertTriangle,
+    CheckCircle2,
+    Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MultiSelect } from "@/components/multi-select";
 import { Badge } from "@/components/ui/badge";
 import { InsightsSettingsDialog } from "./components/InsightsSettingsDialog";
+import { toast } from "sonner";
+import { InsightsPageSkeleton } from "./components/InsightsPageSkeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const GVR_PRIMARY_REGION_KEY = "greater-vancouver-bc-ca";
+const INTEREST_TO_LABEL: Record<string, string> = {
+    home_prices: "Home Prices",
+    inventory: "Inventory",
+    mortgage_rates: "Mortgage Rates",
+    market_trend: "Market Trends",
+};
 
 function buildRegionKey(region: {
     city: string;
@@ -29,37 +43,142 @@ function buildRegionKey(region: {
     return `${region.city.toLowerCase().replace(/\s+/g, "-")}-${region.state?.toLowerCase() || ""}-${region.country.toLowerCase()}`;
 }
 
+function sameKeySet(a: string[], b: string[]) {
+    if (a.length !== b.length) return false;
+    const left = [...a].sort();
+    const right = [...b].sort();
+    return left.every((value, index) => value === right[index]);
+}
+
 export default function InsightsPage() {
-    const [selectedRegionKeys, setSelectedRegionKeys] = useState<
-        string[] | null
-    >(null);
+    const [pendingRegionKeys, setPendingRegionKeys] = useState<string[] | null>(
+        null,
+    );
     const [currentTimeMs, setCurrentTimeMs] = useState(0);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isSavingRegions, setIsSavingRegions] = useState(false);
+    const [regionSaveError, setRegionSaveError] = useState<string | null>(null);
+    const latestSaveIdRef = useRef(0);
 
     const preferences = useQuery(api.insights.queries.getUserPreferences);
-    const regions = (preferences?.regions ?? []).map((region) => ({
-        ...region,
-        key: buildRegionKey(region),
-    }));
+    const supportedRegions = useQuery(api.insights.queries.getSupportedRegions);
+    const updateRegion = useMutation(api.users.mutations.updateRegion);
 
-    const effectiveRegionKeys =
-        selectedRegionKeys && selectedRegionKeys.length > 0
-            ? selectedRegionKeys
-            : regions.map((region) => region.key);
+    const supportedRegionMap = useMemo(
+        () =>
+            new Map((supportedRegions ?? []).map((region) => [region.key, region])),
+        [supportedRegions],
+    );
+
+    const savedRegionKeys = useMemo(
+        () =>
+            (preferences?.regions ?? [])
+                .map((region) => buildRegionKey(region))
+                .filter((key) => supportedRegionMap.has(key)),
+        [preferences?.regions, supportedRegionMap],
+    );
+
+    const selectedRegionKeys = pendingRegionKeys ?? savedRegionKeys;
+
+    useEffect(() => {
+        if (!supportedRegions || pendingRegionKeys === null) {
+            return;
+        }
+        if (sameKeySet(pendingRegionKeys, savedRegionKeys)) {
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            const nextSaveId = latestSaveIdRef.current + 1;
+            latestSaveIdRef.current = nextSaveId;
+
+            const regionsToSave = pendingRegionKeys
+                .map((key) => supportedRegionMap.get(key))
+                .filter(
+                    (region): region is NonNullable<typeof supportedRegions>[number] =>
+                        region !== undefined,
+                )
+                .map((region) => ({
+                    city: region.city,
+                    state: region.state,
+                    country: region.country,
+                }));
+
+            setIsSavingRegions(true);
+            setRegionSaveError(null);
+
+            void updateRegion({ regions: regionsToSave })
+                .then(() => {
+                    if (latestSaveIdRef.current === nextSaveId) {
+                        setRegionSaveError(null);
+                    }
+                })
+                .catch(() => {
+                    setRegionSaveError(
+                        "Could not save regions. Please try selecting regions again.",
+                    );
+                    setPendingRegionKeys(null);
+                    toast.error("Failed to save selected regions");
+                })
+                .finally(() => {
+                    if (latestSaveIdRef.current === nextSaveId) {
+                        setIsSavingRegions(false);
+                    }
+                });
+        }, 300);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [
+        pendingRegionKeys,
+        savedRegionKeys,
+        supportedRegionMap,
+        supportedRegions,
+        updateRegion,
+    ]);
+
+    const selectedInterests = useMemo(
+        () => preferences?.interests ?? [],
+        [preferences?.interests],
+    );
+    const selectedInterestSet = useMemo(
+        () => new Set(selectedInterests),
+        [selectedInterests],
+    );
+    const hasInterestSelection = selectedInterests.length > 0;
+
+    const effectiveRegionKeys = selectedRegionKeys;
 
     const chartPrimaryRegionKey =
         effectiveRegionKeys[0] ?? GVR_PRIMARY_REGION_KEY;
 
     const kpiMetrics = useQuery(api.insights.metricsQueries.getKPIMetrics, {
-        regionKeys: effectiveRegionKeys,
+        interestCategories: selectedInterests,
     });
 
-    const marketSummary = useQuery(
-        api.insights.metricsQueries.getMarketSummary,
-        {
-            regionKeys: effectiveRegionKeys,
-        },
+    const marketSummary = useQuery(api.insights.metricsQueries.getMarketSummary);
+
+    const selectedRegions = useMemo(
+        () =>
+            effectiveRegionKeys
+                .map((key) => supportedRegionMap.get(key))
+                .filter(
+                    (region): region is NonNullable<typeof supportedRegions>[number] =>
+                        region !== undefined,
+                ),
+        [effectiveRegionKeys, supportedRegionMap],
     );
+
+    const hasSelectedRegions = selectedRegionKeys.length > 0;
+    const showKpiStrip = hasInterestSelection;
+    const showMarketSnapshot = selectedInterestSet.has("market_trend");
+    const showCharts =
+        selectedInterestSet.has("mortgage_rates") ||
+        selectedInterestSet.has("home_prices") ||
+        selectedInterestSet.has("inventory");
+    const isInsightsDataLoading =
+        kpiMetrics === undefined || marketSummary === undefined;
 
     const metricLastUpdated =
         kpiMetrics && kpiMetrics.length > 0
@@ -86,44 +205,24 @@ export default function InsightsPage() {
         currentTimeMs - lastUpdatedForStaleCheck > 24 * 60 * 60 * 1000;
 
     // Loading state
-    if (preferences === undefined) {
-        return <InsightsLoading />;
+    if (preferences === undefined || supportedRegions === undefined) {
+        return <InsightsPageSkeleton />;
     }
 
-    // No region configured
-    if (!preferences || regions.length === 0) {
-        return (
-            <>
-                <div className="p-6 md:p-8 max-w-7xl mx-auto">
-                    <div className="mb-6">
-                        <h1 className="text-2xl font-bold tracking-tight">
-                            Market Insights
-                        </h1>
-                        <p className="text-muted-foreground">
-                            Real estate data and trends for your market
-                        </p>
-                    </div>
-                    <InsightsEmptyState
-                        hasRegion={false}
-                        onOpenSettings={() => setIsSettingsOpen(true)}
-                    />
-                </div>
-                <InsightsSettingsDialog
-                    open={isSettingsOpen}
-                    onOpenChange={setIsSettingsOpen}
-                />
-            </>
-        );
-    }
-
-    const regionOptions = regions.map((region) => ({
-        label: `${region.city}${region.state ? `, ${region.state}` : ""}`,
-        value: region.key,
-    }));
+    const regionOptions = [...supportedRegions]
+        .map((region) => ({
+            label: `${region.city}${region.state ? `, ${region.state}` : ""}`,
+            value: region.key,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, "en-CA"));
     const comparisonRegionOptions = regionOptions.filter((option) =>
         effectiveRegionKeys.includes(option.value),
     );
-    const hasMultipleRegions = regions.length > 1;
+    const selectedRegionLabel = selectedRegions[0]
+        ? `${selectedRegions[0].city}${
+              selectedRegions[0].state ? `, ${selectedRegions[0].state}` : ""
+          }`
+        : null;
 
     return (
         <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
@@ -134,27 +233,29 @@ export default function InsightsPage() {
                         <h1 className="text-2xl font-bold tracking-tight">
                             Market Insights
                         </h1>
-                        {hasMultipleRegions ? (
+                        {selectedRegionKeys.length > 1 ? (
                             <Badge
                                 variant="outline"
                                 className="flex items-center gap-1"
                             >
                                 <MapPin className="h-3 w-3" />
-                                {regions.length} regions
+                                {selectedRegionKeys.length} regions
+                            </Badge>
+                        ) : selectedRegionLabel ? (
+                            <Badge
+                                variant="outline"
+                                className="flex items-center gap-1"
+                            >
+                                <MapPin className="h-3 w-3" />
+                                {selectedRegionLabel}
                             </Badge>
                         ) : (
                             <Badge
-                                variant="outline"
-                                className="flex items-center gap-1"
+                                variant="secondary"
+                                className="flex items-center gap-1 text-muted-foreground"
                             >
                                 <MapPin className="h-3 w-3" />
-                                {regions[0].city}
-                                {regions[0].state
-                                    ? `, ${regions[0].state}`
-                                    : ""}
-                                <span className="ml-1 text-muted-foreground">
-                                    ({regions[0].country})
-                                </span>
+                                No regions selected
                             </Badge>
                         )}
                     </div>
@@ -172,16 +273,17 @@ export default function InsightsPage() {
                     </p>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    {hasMultipleRegions && (
-                        <MultiSelect
-                            options={regionOptions}
-                            defaultValue={effectiveRegionKeys}
-                            onValueChange={setSelectedRegionKeys}
-                            placeholder="Filter regions"
-                            maxCount={2}
-                            className="w-full sm:w-[260px]"
-                        />
-                    )}
+                    <MultiSelect
+                        options={regionOptions}
+                        defaultValue={selectedRegionKeys}
+                        onValueChange={(nextKeys) => {
+                            setRegionSaveError(null);
+                            setPendingRegionKeys(nextKeys);
+                        }}
+                        placeholder="Select market regions"
+                        maxCount={3}
+                        className="w-full sm:w-[320px]"
+                    />
                     <Button
                         variant="outline"
                         size="sm"
@@ -192,6 +294,46 @@ export default function InsightsPage() {
                     </Button>
                 </div>
             </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Interests:</span>
+                {selectedInterests.length > 0 ? (
+                    selectedInterests.map((interest) => (
+                        <Badge
+                            key={interest}
+                            variant="secondary"
+                            className="font-normal"
+                        >
+                            {INTEREST_TO_LABEL[interest] ?? interest}
+                        </Badge>
+                    ))
+                ) : (
+                    <Badge variant="outline" className="font-normal">
+                        No topics selected
+                    </Badge>
+                )}
+
+                {isSavingRegions ? (
+                    <span className="ml-auto inline-flex items-center gap-1 text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Saving regions...
+                    </span>
+                ) : (
+                    !regionSaveError &&
+                    sameKeySet(selectedRegionKeys, savedRegionKeys) && (
+                        <span className="ml-auto inline-flex items-center gap-1 text-muted-foreground">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Regions saved
+                        </span>
+                    )
+                )}
+            </div>
+
+            {regionSaveError ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {regionSaveError}
+                </div>
+            ) : null}
 
             {/* Stale data warning */}
             {isStale && (
@@ -209,67 +351,105 @@ export default function InsightsPage() {
                 </div>
             )}
 
-            {!marketSummary && (!kpiMetrics || kpiMetrics.length === 0) ? (
-                <InsightsEmptyState hasRegion={true} regions={regions} />
+            {!hasSelectedRegions ? (
+                <Card className="border-dashed">
+                    <CardContent className="py-10 text-center space-y-2">
+                        <p className="text-sm font-medium">
+                            Pick one or more regions to load market insights.
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            Region selections save automatically and drive your
+                            sentiment snapshot and comparison charts.
+                        </p>
+                    </CardContent>
+                </Card>
+            ) : !hasInterestSelection ? (
+                <Card className="border-dashed">
+                    <CardContent className="py-10 text-center space-y-3">
+                        <p className="text-sm font-medium">
+                            No topics selected.
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            Choose at least one topic in Market Preferences to
+                            show modules on this page.
+                        </p>
+                        <div>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setIsSettingsOpen(true)}
+                            >
+                                <Settings className="h-4 w-4 mr-2" />
+                                Open Preferences
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            ) : isInsightsDataLoading ? (
+                <>
+                    {showKpiStrip ? <KPIStripSkeleton /> : null}
+                    {showMarketSnapshot ? <MarketSnapshotSkeleton /> : null}
+                    {showCharts ? (
+                        <Card>
+                            <CardHeader>
+                                <Skeleton className="h-5 w-56" />
+                            </CardHeader>
+                            <CardContent>
+                                <Skeleton className="h-[320px] w-full rounded-md" />
+                            </CardContent>
+                        </Card>
+                    ) : null}
+                </>
+            ) : !showMarketSnapshot &&
+              !marketSummary &&
+              (!kpiMetrics || kpiMetrics.length === 0) ? (
+                <InsightsEmptyState hasRegion={true} regions={selectedRegions} />
             ) : (
                 <>
                     {/* KPI Strip */}
-                    {kpiMetrics === undefined ? (
-                        <KPIStripSkeleton />
-                    ) : kpiMetrics && kpiMetrics.length > 0 ? (
+                    {showKpiStrip && kpiMetrics && kpiMetrics.length > 0 ? (
                         <KPIStrip metrics={kpiMetrics} />
                     ) : null}
 
                     {/* Market Snapshot */}
-                    {marketSummary === undefined ? (
-                        <MarketSnapshotSkeleton />
-                    ) : marketSummary ? (
-                        <MarketSnapshot
-                            summary={marketSummary}
-                            metrics={kpiMetrics ?? undefined}
-                        />
+                    {showMarketSnapshot ? (
+                        marketSummary ? (
+                            <MarketSnapshot
+                                summary={marketSummary}
+                                metrics={kpiMetrics ?? undefined}
+                            />
+                        ) : (
+                            <Card className="border-dashed">
+                                <CardContent className="py-8 text-sm text-muted-foreground">
+                                    Market summary not available.
+                                </CardContent>
+                            </Card>
+                        )
                     ) : null}
 
                     {/* Charts */}
-                    <MarketChartsTabs
-                        regionKey={chartPrimaryRegionKey}
-                        regionKeys={effectiveRegionKeys}
-                        regionOptions={comparisonRegionOptions}
-                    />
+                    {showCharts ? (
+                        <MarketChartsTabs
+                            regionKey={chartPrimaryRegionKey}
+                            regionKeys={effectiveRegionKeys}
+                            regionOptions={comparisonRegionOptions}
+                            selectedInterests={selectedInterests}
+                        />
+                    ) : (
+                        <Card className="border-dashed">
+                            <CardContent className="py-8 text-sm text-muted-foreground">
+                                No chart modules are currently mapped to your
+                                selected interests. Enable Home Prices,
+                                Inventory, or Mortgage Rates in Preferences.
+                            </CardContent>
+                        </Card>
+                    )}
                 </>
             )}
             <InsightsSettingsDialog
                 open={isSettingsOpen}
                 onOpenChange={setIsSettingsOpen}
             />
-        </div>
-    );
-}
-
-function InsightsLoading() {
-    return (
-        <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-            {/* Header skeleton */}
-            <div>
-                <Skeleton className="h-8 w-48 mb-2" />
-                <Skeleton className="h-4 w-72" />
-            </div>
-
-            {/* KPI skeleton */}
-            <KPIStripSkeleton />
-
-            {/* Market snapshot skeleton */}
-            <MarketSnapshotSkeleton />
-
-            {/* Chart skeleton */}
-            <Card>
-                <CardHeader>
-                    <Skeleton className="h-5 w-48" />
-                </CardHeader>
-                <CardContent>
-                    <Skeleton className="h-[300px] w-full rounded-md" />
-                </CardContent>
-            </Card>
         </div>
     );
 }

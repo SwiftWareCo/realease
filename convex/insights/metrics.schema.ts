@@ -3,6 +3,8 @@ import { v } from "convex/values";
 
 /** Shared constant for the national (Canada-wide) region key */
 export const NATIONAL_REGION_KEY = "national-ca";
+/** App-level market summary key (Vancouver-only for current scope) */
+export const APP_MARKET_SUMMARY_REGION_KEY = "greater-vancouver-bc-ca";
 
 export const metricTrendSchema = v.union(
   v.literal("up"),
@@ -23,6 +25,8 @@ export const marketConditionSchema = v.union(
   v.literal("balanced"),
   v.literal("sellers"),
 );
+
+export const marketSummaryStatusSchema = v.literal("ai");
 
 export const marketMetricsTable = defineTable({
   regionKey: v.string(), // e.g., "national-ca" or "vancouver-bc-ca"
@@ -50,8 +54,46 @@ export const marketMetricsTable = defineTable({
 export const marketSummariesTable = defineTable({
   regionKey: v.string(),
   summary: v.string(), // 2-3 sentence AI summary
+  summaryStatus: v.optional(marketSummaryStatusSchema),
   marketCondition: marketConditionSchema,
   keyDrivers: v.array(v.string()), // e.g., ["Rising rates", "Low inventory"]
+  confidence: v.optional(
+    v.object({
+      level: v.union(
+        v.literal("high"),
+        v.literal("medium"),
+        v.literal("low"),
+      ),
+      reason: v.string(), // 1 sentence, plain language
+    }),
+  ),
+  whatChanged: v.optional(v.string()), // single-sentence delta vs last update
+  actionableIntel: v.optional(
+    v.object({
+      seller: v.string(),
+      buyer: v.string(),
+      sellerObjection: v.optional(
+        v.object({
+          objection: v.string(),
+          response: v.string(),
+        }),
+      ),
+      buyerObjection: v.optional(
+        v.object({
+          objection: v.string(),
+          response: v.string(),
+        }),
+      ),
+    }),
+  ),
+  whyThisGuidance: v.optional(
+    v.object({
+      rationale: v.string(),
+      rateImpact: v.string(),
+      rateTranslation: v.optional(v.string()), // "$X/mo on $500k at 5-yr fixed"
+      evidence: v.array(v.string()),
+    }),
+  ),
   generatedAt: v.number(),
   expiresAt: v.number(),
 })

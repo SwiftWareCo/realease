@@ -1,7 +1,10 @@
 import { internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
-import { NATIONAL_REGION_KEY } from "./metrics.schema";
+import {
+    APP_MARKET_SUMMARY_REGION_KEY,
+    NATIONAL_REGION_KEY,
+} from "./metrics.schema";
 
 // Bank of Canada Valet API series
 // https://www.bankofcanada.ca/valet/docs
@@ -31,6 +34,7 @@ const BOC_SERIES = [
         unit: "percent",
     },
 ] as const;
+const MARKET_METRIC_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 type ValetObservation = {
     d: string; // date "YYYY-MM-DD"
@@ -107,8 +111,17 @@ export const fetchBankOfCanadaRates = internalAction({
             }
 
             let upserted = 0;
+            let historyRowsUpserted = 0;
             const now = Date.now();
-            const expiresAt = now + 48 * 60 * 60 * 1000; // 48hr TTL (cron runs every 6h, extra buffer for API downtime)
+            const expiresAt = now + MARKET_METRIC_TTL_MS;
+            const historyRows: Array<{
+                regionKey: string;
+                metricKey: string;
+                date: string;
+                value: number;
+                source: string;
+                fetchedAt: number;
+            }> = [];
 
             for (const series of BOC_SERIES) {
                 const seriesPair = getLatestAndPreviousForSeries(
@@ -179,10 +192,44 @@ export const fetchBankOfCanadaRates = internalAction({
                     },
                 );
 
+                historyRows.push({
+                    regionKey: NATIONAL_REGION_KEY,
+                    metricKey: series.metricKey,
+                    date: referenceDate,
+                    value,
+                    source: "bank_of_canada",
+                    fetchedAt: now,
+                });
+
                 upserted++;
             }
 
-            console.log(`[BoC] Upserted ${upserted} rate metrics`);
+            if (historyRows.length > 0) {
+                const result: { inserted: number } = await ctx.runMutation(
+                    internal.insights.metricHistoryMutations.batchUpsertHistory,
+                    { rows: historyRows },
+                );
+                historyRowsUpserted = result.inserted;
+            }
+
+            console.log(
+                `[BoC] Upserted ${upserted} rate metrics and ${historyRowsUpserted} history rows`,
+            );
+
+            if (upserted > 0) {
+                try {
+                    await ctx.scheduler.runAfter(
+                        0,
+                        internal.insights.marketSummary.generateMarketSummary,
+                        { regionKey: APP_MARKET_SUMMARY_REGION_KEY },
+                    );
+                } catch (error) {
+                    console.error(
+                        `[BoC][summary_schedule_failed] ${error instanceof Error ? error.message : String(error)}`,
+                    );
+                }
+            }
+
             return { success: true, metricsUpserted: upserted };
         } catch (error) {
             const message =
@@ -196,6 +243,7 @@ export const fetchBankOfCanadaRates = internalAction({
 /**
  * Fetch 12 months of historical rate data from Bank of Canada Valet API
  * and store in the metricHistory table.
+ * Used for initial historical seeding/backfill.
  */
 export const fetchBankOfCanadaHistoricalRates = internalAction({
     args: {},
@@ -288,79 +336,5 @@ export const fetchBankOfCanadaHistoricalRates = internalAction({
             console.error(`[BoC History] Failed: ${message}`);
             return { success: false, rowsInserted: 0, error: message };
         }
-    },
-});
-
-/**
- * Orchestrator: fetch from all structured API sources.
- * Bank of Canada rates/history + GVR report discovery.
- */
-export const fetchAllStructuredData = internalAction({
-    args: {},
-    returns: v.null(),
-    handler: async (ctx) => {
-        console.log("[Metrics] Starting structured data fetch");
-
-        // Fetch latest rates and historical data in parallel, but don't let one source
-        // failure abort the full structured refresh.
-        const [bocState, historyState, gvrDiscoveryState] =
-            await Promise.allSettled([
-                ctx.runAction(
-                    internal.insights.apiFetchers.fetchBankOfCanadaRates,
-                ),
-                ctx.runAction(
-                    internal.insights.apiFetchers
-                        .fetchBankOfCanadaHistoricalRates,
-                ),
-                ctx.runAction(
-                    internal.insights.gvrDiscovery.discoverLatestGvrReport,
-                ),
-            ]);
-
-        const bocResult =
-            bocState.status === "fulfilled"
-                ? bocState.value
-                : {
-                      success: false,
-                      metricsUpserted: 0,
-                      error: "action_failed",
-                  };
-        const historyResult =
-            historyState.status === "fulfilled"
-                ? historyState.value
-                : { success: false, rowsInserted: 0, error: "action_failed" };
-        const gvrDiscoveryResult =
-            gvrDiscoveryState.status === "fulfilled"
-                ? gvrDiscoveryState.value
-                : {
-                      changed: false,
-                      scheduled: false,
-                      discovered: null,
-                  };
-
-        if (bocState.status === "rejected") {
-            console.error(
-                "[Metrics] BoC latest action failed:",
-                bocState.reason,
-            );
-        }
-        if (historyState.status === "rejected") {
-            console.error(
-                "[Metrics] BoC history action failed:",
-                historyState.reason,
-            );
-        }
-        if (gvrDiscoveryState.status === "rejected") {
-            console.error(
-                "[Metrics] GVR discovery action failed:",
-                gvrDiscoveryState.reason,
-            );
-        }
-
-        console.log(
-            `[Metrics] Structured data fetch complete. BoC latest: ${bocResult.success ? "OK" : "FAIL"} (${bocResult.metricsUpserted} metrics), History: ${historyResult.success ? "OK" : "FAIL"} (${historyResult.rowsInserted} rows), GVR discovery: ${gvrDiscoveryResult.scheduled ? "NEW_REPORT_SCHEDULED" : "NO_CHANGE"}`,
-        );
-
-        return null;
     },
 });

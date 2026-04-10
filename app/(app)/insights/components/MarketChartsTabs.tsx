@@ -17,10 +17,19 @@ import {
 } from "@/components/ui/chart";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { RateTrendChart } from "./RateTrendChart";
-import { GvrActivityComparisonTable } from "./GvrActivityComparisonTable";
+import {
+    GvrActivityComparisonTable,
+    type GvrActivityTableState,
+} from "./GvrActivityComparisonTable";
 
 const GVR_GRAND_TOTAL_REGION_KEY = "gvr-grand-total-ca";
 const DEFAULT_GVR_REGION_KEY = "greater-vancouver-bc-ca";
+
+type InterestCategory =
+    | "home_prices"
+    | "inventory"
+    | "mortgage_rates"
+    | "market_trend";
 
 type RegionOption = {
     value: string;
@@ -55,6 +64,14 @@ const SALES_SERIES = [
     { metricKey: "gvr_apartment_sales", label: "Apartment" },
 ] as const;
 
+const RATE_SERIES = [
+    { metricKey: "boc_policy_rate", label: "BoC Policy Rate" },
+    { metricKey: "prime_rate", label: "Prime Rate" },
+    { metricKey: "5yr_fixed_mortgage", label: "5-Year Fixed" },
+    { metricKey: "3yr_fixed_mortgage", label: "3-Year Fixed" },
+] as const;
+const RATE_KEYS = RATE_SERIES.map((entry) => entry.metricKey);
+
 function formatDateLabel(dateStr: string) {
     const d = new Date(`${dateStr}T00:00:00`);
     return d.toLocaleDateString("en-CA", { month: "short", year: "2-digit" });
@@ -76,6 +93,17 @@ function formatCurrencyFull(value: number) {
 
 function formatCountFull(value: number) {
     return Math.round(value).toLocaleString("en-CA");
+}
+
+function formatSignedCurrencyDelta(value: number) {
+    const abs = Math.abs(value);
+    const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+    return `${sign}${formatCurrencyFull(abs)}`;
+}
+
+function formatSignedPct(value: number) {
+    const sign = value > 0 ? "+" : value < 0 ? "" : "";
+    return `${sign}${value.toFixed(2)}%`;
 }
 
 function humanizeRegionKey(regionKey: string) {
@@ -113,6 +141,19 @@ function findLatestSeriesValue(
     return undefined;
 }
 
+function findLatestRowWithMetric(
+    rows: Array<Record<string, number | string | undefined>>,
+    metricKey: string,
+) {
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+        const value = rows[i]?.[metricKey];
+        if (typeof value === "number" && Number.isFinite(value)) {
+            return rows[i];
+        }
+    }
+    return undefined;
+}
+
 function ChartSkeleton() {
     return (
         <Card>
@@ -120,7 +161,7 @@ function ChartSkeleton() {
                 <Skeleton className="h-5 w-64" />
             </CardHeader>
             <CardContent>
-                <Skeleton className="h-[320px] w-full rounded-md" />
+                <Skeleton className="h-[220px] w-full rounded-md" />
             </CardContent>
         </Card>
     );
@@ -140,7 +181,7 @@ function RegionVisibilityToggles({
     }
 
     return (
-        <div className="space-y-2 rounded-md border p-3">
+        <div className="space-y-1.5 rounded-md border p-2.5">
             <p className="text-xs text-muted-foreground">Visible regions</p>
             <div className="flex flex-wrap gap-2">
                 {regionOptions.map((region, index) => {
@@ -151,7 +192,7 @@ function RegionVisibilityToggles({
                             type="button"
                             size="sm"
                             variant={hidden ? "outline" : "default"}
-                            className="h-8"
+                            className="h-7"
                             onClick={() => onToggle(region.value)}
                         >
                             <span
@@ -170,16 +211,304 @@ function RegionVisibilityToggles({
     );
 }
 
-function GvrHomePriceComparisonChart({
+function RateTrendSummaryTable({ className }: { className?: string }) {
+    const data = useQuery(api.insights.metricHistoryQueries.getRateHistory, {
+        metricKeys: RATE_KEYS,
+    });
+
+    if (data === undefined) {
+        return <ChartSkeleton />;
+    }
+
+    if (!data || data.length === 0) {
+        return (
+            <Card className={className}>
+                <CardHeader>
+                    <CardTitle className="text-base">Rate Table</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                        No rate history available yet.
+                    </p>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    const rows = RATE_SERIES.map((series) => {
+        const latestRow = findLatestRowWithMetric(data, series.metricKey);
+        const latestValue =
+            latestRow && typeof latestRow[series.metricKey] === "number"
+                ? (latestRow[series.metricKey] as number)
+                : undefined;
+        const latestDate =
+            latestRow && typeof latestRow.date === "string"
+                ? latestRow.date
+                : undefined;
+
+        let previousValue: number | undefined;
+        if (latestDate) {
+            const latestIndex = data.findIndex((row) => row.date === latestDate);
+            for (let i = latestIndex - 1; i >= 0; i -= 1) {
+                const prev = data[i]?.[series.metricKey];
+                if (typeof prev === "number" && Number.isFinite(prev)) {
+                    previousValue = prev;
+                    break;
+                }
+            }
+        }
+
+        const change =
+            latestValue !== undefined && previousValue !== undefined
+                ? latestValue - previousValue
+                : undefined;
+
+        return {
+            label: series.label,
+            latestValue,
+            change,
+            latestDate,
+        };
+    });
+
+    const latestDateLabel = rows.find((row) => row.latestDate)?.latestDate;
+
+    return (
+        <Card className={className}>
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base">Rate Table</CardTitle>
+                {latestDateLabel ? (
+                    <p className="text-xs text-muted-foreground">
+                        Latest month: {formatDateLabel(latestDateLabel)}
+                    </p>
+                ) : null}
+            </CardHeader>
+            <CardContent>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full text-[12px]">
+                        <thead>
+                            <tr className="border-b text-muted-foreground">
+                                <th className="px-2 py-1.5 text-left font-medium">
+                                    Metric
+                                </th>
+                                <th className="px-2 py-1.5 text-right font-medium">
+                                    Latest
+                                </th>
+                                <th className="px-2 py-1.5 text-right font-medium">
+                                    MoM
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((row) => (
+                                <tr key={row.label} className="border-b last:border-0">
+                                    <td className="px-2 py-1.5 font-medium">
+                                        {row.label}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-right tabular-nums">
+                                        {row.latestValue !== undefined
+                                            ? formatSignedPct(row.latestValue).replace(
+                                                  "+",
+                                                  "",
+                                              )
+                                            : "-"}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+                                        {row.change !== undefined
+                                            ? formatSignedPct(row.change)
+                                            : "-"}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+function HomePriceComparisonTable({
     allRegions,
     hiddenRegionKeys,
+    className,
 }: {
     allRegions: RegionOption[];
     hiddenRegionKeys: string[];
+    className?: string;
 }) {
-    const [selectedMetricKey, setSelectedMetricKey] = useState<
-        (typeof HOME_PRICE_SERIES)[number]["metricKey"]
-    >("gvr_apartment_benchmark_price");
+    const visibleRegions = useMemo(
+        () =>
+            allRegions.filter(
+                (region) => !hiddenRegionKeys.includes(region.value),
+            ),
+        [allRegions, hiddenRegionKeys],
+    );
+
+    const benchmarkHistory = useQuery(
+        api.insights.metricHistoryQueries.getGvrMonthlyHistory,
+        {
+            regionKey: GVR_GRAND_TOTAL_REGION_KEY,
+            metricKeys: ["gvr_mls_benchmark_price"],
+            months: 12,
+        },
+    );
+
+    const overlayRegionHistory = useQuery(
+        api.insights.metricHistoryQueries.getGvrMonthlyHistoryByRegions,
+        {
+            regionKeys: allRegions.map((region) => region.value),
+            metricKeys: ["gvr_mls_benchmark_price"],
+            months: 12,
+        },
+    );
+
+    if (benchmarkHistory === undefined || overlayRegionHistory === undefined) {
+        return <ChartSkeleton />;
+    }
+
+    if (!benchmarkHistory || benchmarkHistory.length === 0) {
+        return (
+            <Card className={className}>
+                <CardHeader>
+                    <CardTitle className="text-base">Home Price Table</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                        No home-price history available yet.
+                    </p>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    const selectedMetricKey = "gvr_mls_benchmark_price";
+    const byDate = new Map<string, Record<string, number | string | undefined>>();
+
+    for (const row of benchmarkHistory) {
+        const date = String(row.date);
+        const current = byDate.get(date) ?? { date };
+        current.benchmark = coerceNumber(row[selectedMetricKey]);
+        byDate.set(date, current);
+    }
+
+    const overlayRows = (overlayRegionHistory ?? []) as RegionalHistoryRows;
+    for (const regionRows of overlayRows) {
+        for (const row of regionRows.rows ?? []) {
+            const date = String(row.date);
+            const current = byDate.get(date) ?? { date };
+            current[regionRows.regionKey] = coerceNumber(row[selectedMetricKey]);
+            byDate.set(date, current);
+        }
+    }
+
+    const data = Array.from(byDate.values()).sort((a, b) =>
+        String(a.date).localeCompare(String(b.date)),
+    );
+    const latestDate = data[data.length - 1]?.date;
+    const latestBenchmark = findLatestSeriesValue(data, "benchmark");
+
+    const regionRows = visibleRegions.map((region) => {
+        const value = findLatestSeriesValue(data, region.value);
+        return {
+            regionLabel: region.label,
+            value,
+            deltaToBenchmark:
+                value !== undefined && latestBenchmark !== undefined
+                    ? value - latestBenchmark
+                    : undefined,
+        };
+    });
+
+    return (
+        <Card className={className}>
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base">Home Price Table</CardTitle>
+                {typeof latestDate === "string" ? (
+                    <p className="text-xs text-muted-foreground">
+                        Latest month: {formatDateLabel(latestDate)}
+                    </p>
+                ) : null}
+            </CardHeader>
+            <CardContent>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full text-[12px]">
+                        <thead>
+                            <tr className="border-b text-muted-foreground">
+                                <th className="px-2 py-1.5 text-left font-medium">
+                                    Region
+                                </th>
+                                <th className="px-2 py-1.5 text-right font-medium">
+                                    Benchmark
+                                </th>
+                                <th className="px-2 py-1.5 text-right font-medium">
+                                    vs GVR
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="border-b">
+                                <td className="px-2 py-1.5 font-medium">
+                                    GVR Benchmark
+                                </td>
+                                <td className="px-2 py-1.5 text-right tabular-nums">
+                                    {latestBenchmark !== undefined
+                                        ? formatCurrencyFull(latestBenchmark)
+                                        : "-"}
+                                </td>
+                                <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+                                    -
+                                </td>
+                            </tr>
+                            {regionRows.map((row) => (
+                                <tr key={row.regionLabel} className="border-b last:border-0">
+                                    <td className="px-2 py-1.5 font-medium">
+                                        {row.regionLabel}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-right tabular-nums">
+                                        {row.value !== undefined
+                                            ? formatCurrencyFull(row.value)
+                                            : "-"}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+                                        {row.deltaToBenchmark !== undefined
+                                            ? formatSignedCurrencyDelta(
+                                                  row.deltaToBenchmark,
+                                              )
+                                            : "-"}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+const PROPERTY_TYPE_SERIES = HOME_PRICE_SERIES.filter(
+    (s) => s.metricKey !== "gvr_mls_benchmark_price",
+);
+
+const PROPERTY_TYPE_COLORS: Record<string, string> = {
+    gvr_detached_benchmark_price: "var(--chart-3)",
+    gvr_townhouse_benchmark_price: "var(--chart-4)",
+    gvr_apartment_benchmark_price: "var(--chart-5)",
+};
+
+type HomePriceViewMode = "regions" | "property-types";
+
+function GvrHomePriceComparisonChart({
+    allRegions,
+    hiddenRegionKeys,
+    fillCompanionHeight = false,
+}: {
+    allRegions: RegionOption[];
+    hiddenRegionKeys: string[];
+    fillCompanionHeight?: boolean;
+}) {
+    const [viewMode, setViewMode] = useState<HomePriceViewMode>("property-types");
 
     const visibleRegions = useMemo(
         () =>
@@ -229,10 +558,6 @@ function GvrHomePriceComparisonChart({
         );
     }
 
-    const selectedSeriesLabel =
-        HOME_PRICE_SERIES.find((s) => s.metricKey === selectedMetricKey)?.label ??
-        "Price";
-
     const byDate = new Map<
         string,
         Record<string, number | string | undefined>
@@ -241,7 +566,13 @@ function GvrHomePriceComparisonChart({
     for (const row of benchmarkHistory) {
         const date = String(row.date);
         const current = byDate.get(date) ?? { date };
-        current.benchmark = coerceNumber(row[selectedMetricKey]);
+        current.benchmark = coerceNumber(row["gvr_mls_benchmark_price"]);
+        for (const series of PROPERTY_TYPE_SERIES) {
+            const val = coerceNumber(row[series.metricKey]);
+            if (val !== undefined) {
+                current[series.metricKey] = val;
+            }
+        }
         byDate.set(date, current);
     }
 
@@ -250,7 +581,7 @@ function GvrHomePriceComparisonChart({
         for (const row of regionRows.rows ?? []) {
             const date = String(row.date);
             const current = byDate.get(date) ?? { date };
-            current[regionRows.regionKey] = coerceNumber(row[selectedMetricKey]);
+            current[regionRows.regionKey] = coerceNumber(row["gvr_mls_benchmark_price"]);
             byDate.set(date, current);
         }
     }
@@ -261,86 +592,143 @@ function GvrHomePriceComparisonChart({
 
     const latestBenchmark = findLatestSeriesValue(data, "benchmark");
 
-    const overlayConfig: ChartConfig = {
+    const chartConfig: ChartConfig = {
         benchmark: {
-            label: "GVR Benchmark",
+            label: "Composite",
             color: "var(--chart-1)",
         },
     };
 
+    for (const series of PROPERTY_TYPE_SERIES) {
+        chartConfig[series.metricKey] = {
+            label: series.label,
+            color: PROPERTY_TYPE_COLORS[series.metricKey] ?? "var(--chart-2)",
+        };
+    }
+
     const regionLabelByKey = new Map<string, string>();
     allRegions.forEach((region, index) => {
-        overlayConfig[region.value] = {
+        chartConfig[region.value] = {
             label: region.label,
             color: getOverlayRegionColor(index),
         };
         regionLabelByKey.set(region.value, region.label);
     });
 
+    const labelByKey = new Map<string, string>([
+        ["benchmark", "Composite"],
+        ...PROPERTY_TYPE_SERIES.map(
+            (s) => [s.metricKey, s.label] as [string, string],
+        ),
+        ...Array.from(regionLabelByKey),
+    ]);
+
+    const chartContainerClassName = fillCompanionHeight
+        ? "h-full min-h-[320px] w-full aspect-auto"
+        : "h-[220px] w-full";
+
+    const showPropertyTypes = viewMode === "property-types";
+    const showRegions = viewMode === "regions";
+
     return (
-        <Card>
-            <CardHeader className="space-y-4">
-                <div className="space-y-1">
-                    <CardTitle className="text-base">
-                        Benchmark vs Region Home Prices (12 months)
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground">
-                        Compare GVR benchmark values against visible regions.
-                    </p>
+        <Card
+            className={fillCompanionHeight ? "h-full flex flex-col" : undefined}
+        >
+            <CardHeader className="space-y-3 pb-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                        <CardTitle className="text-base">
+                            Home Prices (12 months)
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                            {showPropertyTypes
+                                ? "Benchmark comparison by property type."
+                                : "Composite benchmark comparison across visible regions."}
+                        </p>
+                    </div>
+                    <div className="flex gap-1">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={showPropertyTypes ? "default" : "outline"}
+                            className="h-7 text-xs"
+                            onClick={() => setViewMode("property-types")}
+                        >
+                            By Type
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={showRegions ? "default" : "outline"}
+                            className="h-7 text-xs"
+                            onClick={() => setViewMode("regions")}
+                        >
+                            By Region
+                        </Button>
+                    </div>
                 </div>
 
-                <Tabs
-                    value={selectedMetricKey}
-                    onValueChange={(value) =>
-                        setSelectedMetricKey(
-                            value as (typeof HOME_PRICE_SERIES)[number]["metricKey"],
-                        )
-                    }
-                    className="space-y-3"
-                >
-                    <TabsList>
-                        {HOME_PRICE_SERIES.map((series) => (
-                            <TabsTrigger key={series.metricKey} value={series.metricKey}>
-                                {series.label}
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
-                </Tabs>
-
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     <div className="rounded-md border px-3 py-2">
-                        <p className="text-xs text-muted-foreground">GVR Benchmark</p>
+                        <p className="text-xs text-muted-foreground">Composite</p>
                         <p className="text-sm font-semibold tabular-nums">
                             {latestBenchmark !== undefined
                                 ? formatCurrencyFull(latestBenchmark)
                                 : "-"}
                         </p>
                     </div>
-                    {visibleRegions.map((region) => {
-                        const latestRegionValue = findLatestSeriesValue(
-                            data,
-                            region.value,
-                        );
-                        return (
-                            <div
-                                key={region.value}
-                                className="rounded-md border px-3 py-2"
-                            >
-                                <p className="text-xs text-muted-foreground">
-                                    {region.label}
-                                </p>
-                                <p className="text-sm font-semibold tabular-nums">
-                                    {latestRegionValue !== undefined
-                                        ? formatCurrencyFull(latestRegionValue)
-                                        : "-"}
-                                </p>
-                            </div>
-                        );
-                    })}
+                    {showPropertyTypes
+                        ? PROPERTY_TYPE_SERIES.map((series) => {
+                              const value = findLatestSeriesValue(
+                                  data,
+                                  series.metricKey,
+                              );
+                              return (
+                                  <div
+                                      key={series.metricKey}
+                                      className="rounded-md border px-3 py-2"
+                                  >
+                                      <p className="text-xs text-muted-foreground">
+                                          {series.label}
+                                      </p>
+                                      <p className="text-sm font-semibold tabular-nums">
+                                          {value !== undefined
+                                              ? formatCurrencyFull(value)
+                                              : "-"}
+                                      </p>
+                                  </div>
+                              );
+                          })
+                        : visibleRegions.map((region) => {
+                              const latestRegionValue = findLatestSeriesValue(
+                                  data,
+                                  region.value,
+                              );
+                              return (
+                                  <div
+                                      key={region.value}
+                                      className="rounded-md border px-3 py-2"
+                                  >
+                                      <p className="text-xs text-muted-foreground">
+                                          {region.label}
+                                      </p>
+                                      <p className="text-sm font-semibold tabular-nums">
+                                          {latestRegionValue !== undefined
+                                              ? formatCurrencyFull(latestRegionValue)
+                                              : "-"}
+                                      </p>
+                                  </div>
+                              );
+                          })}
                 </div>
             </CardHeader>
-            <CardContent>
-                <ChartContainer config={overlayConfig} className="h-[320px] w-full">
+            <CardContent
+                className={fillCompanionHeight ? "flex flex-1 flex-col" : undefined}
+            >
+                <ChartContainer
+                    config={chartConfig}
+                    className={chartContainerClassName}
+                >
                     <LineChart
                         data={data}
                         margin={{ top: 5, right: 12, left: 12, bottom: 0 }}
@@ -364,6 +752,7 @@ function GvrHomePriceComparisonChart({
                         <ChartTooltip
                             content={
                                 <ChartTooltipContent
+                                    className="border-slate-700 bg-slate-900 text-slate-100 dark:border-slate-300 dark:bg-slate-100 dark:text-slate-900 [&_.text-muted-foreground]:text-slate-300 dark:[&_.text-muted-foreground]:text-slate-600 [&_.text-foreground]:text-slate-100 dark:[&_.text-foreground]:text-slate-900"
                                     labelFormatter={(value) =>
                                         typeof value === "string"
                                             ? formatDateLabel(value)
@@ -372,10 +761,8 @@ function GvrHomePriceComparisonChart({
                                     formatter={(value, name, item) => {
                                         const key = String(name);
                                         const displayLabel =
-                                            key === "benchmark"
-                                                ? "GVR Benchmark"
-                                                : (regionLabelByKey.get(key) ??
-                                                  humanizeRegionKey(key));
+                                            labelByKey.get(key) ??
+                                            humanizeRegionKey(key);
                                         const numericValue =
                                             typeof value === "number"
                                                 ? value
@@ -425,24 +812,46 @@ function GvrHomePriceComparisonChart({
                             dot={false}
                             connectNulls
                         />
-                        {allRegions.map((region, index) => (
-                            <Line
-                                key={region.value}
-                                type="monotone"
-                                dataKey={region.value}
-                                name={region.value}
-                                stroke={getOverlayRegionColor(index)}
-                                strokeWidth={2}
-                                strokeDasharray="6 4"
-                                dot={false}
-                                connectNulls
-                                hide={hiddenRegionKeys.includes(region.value)}
-                            />
-                        ))}
+                        {showPropertyTypes
+                            ? PROPERTY_TYPE_SERIES.map((series) => (
+                                  <Line
+                                      key={series.metricKey}
+                                      type="monotone"
+                                      dataKey={series.metricKey}
+                                      name={series.metricKey}
+                                      stroke={
+                                          PROPERTY_TYPE_COLORS[
+                                              series.metricKey
+                                          ] ?? "var(--chart-2)"
+                                      }
+                                      strokeWidth={2}
+                                      dot={false}
+                                      connectNulls
+                                  />
+                              ))
+                            : null}
+                        {showRegions
+                            ? allRegions.map((region, index) => (
+                                  <Line
+                                      key={region.value}
+                                      type="monotone"
+                                      dataKey={region.value}
+                                      name={region.value}
+                                      stroke={getOverlayRegionColor(index)}
+                                      strokeWidth={2}
+                                      strokeDasharray="6 4"
+                                      dot={false}
+                                      connectNulls
+                                      hide={hiddenRegionKeys.includes(region.value)}
+                                  />
+                              ))
+                            : null}
                     </LineChart>
                 </ChartContainer>
                 <p className="mt-2 text-xs text-muted-foreground">
-                    Showing {selectedSeriesLabel} benchmark values.
+                    {showPropertyTypes
+                        ? "Showing composite, detached, townhouse, and apartment benchmarks."
+                        : "Showing composite benchmark values by region."}
                 </p>
             </CardContent>
         </Card>
@@ -453,16 +862,16 @@ function GvrActivityComparisonChart({
     allRegions,
     hiddenRegionKeys,
     mode,
+    tableState,
 }: {
     allRegions: RegionOption[];
     hiddenRegionKeys: string[];
     mode: "listings" | "sales";
+    tableState: GvrActivityTableState;
 }) {
     const series = mode === "sales" ? SALES_SERIES : LISTINGS_SERIES;
     const metricKeys = series.map((entry) => entry.metricKey);
-    const [selectedMetricKey, setSelectedMetricKey] = useState<string>(
-        mode === "sales" ? "gvr_mls_sales" : "gvr_new_listings",
-    );
+    const selectedMetricKey = mode === "sales" ? "gvr_mls_sales" : "gvr_new_listings";
 
     const visibleRegions = useMemo(
         () =>
@@ -515,10 +924,6 @@ function GvrActivityComparisonChart({
     }
 
     const isSales = mode === "sales";
-    const selectedSeriesLabel =
-        series.find((entry) => entry.metricKey === selectedMetricKey)?.label ??
-        "All Property Types";
-
     const byDate = new Map<
         string,
         Record<string, number | string | undefined>
@@ -544,6 +949,13 @@ function GvrActivityComparisonChart({
     const data = Array.from(byDate.values()).sort((a, b) =>
         String(a.date).localeCompare(String(b.date)),
     );
+    const fillCompanionHeight = tableState === "ready";
+    const chartContainerClassName =
+        tableState === "empty"
+            ? "h-[360px] w-full aspect-auto"
+            : fillCompanionHeight
+              ? "h-full min-h-[300px] w-full aspect-auto"
+              : "h-[300px] w-full aspect-auto";
 
     const latestBenchmark = findLatestSeriesValue(data, "benchmark");
 
@@ -564,8 +976,8 @@ function GvrActivityComparisonChart({
     });
 
     return (
-        <Card>
-            <CardHeader className="space-y-4">
+        <Card className={fillCompanionHeight ? "h-full flex flex-col" : undefined}>
+            <CardHeader className="space-y-3 pb-3">
                 <div className="space-y-1">
                     <CardTitle className="text-base">
                         {isSales
@@ -573,25 +985,11 @@ function GvrActivityComparisonChart({
                             : "Benchmark vs Region Listings (12 months)"}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground">
-                        Compare GVR grand-total activity against visible regions.
+                        All-property-type comparison against visible regions.
                     </p>
                 </div>
 
-                <Tabs
-                    value={selectedMetricKey}
-                    onValueChange={(value) => setSelectedMetricKey(value)}
-                    className="space-y-3"
-                >
-                    <TabsList>
-                        {series.map((entry) => (
-                            <TabsTrigger key={entry.metricKey} value={entry.metricKey}>
-                                {entry.label}
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
-                </Tabs>
-
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     <div className="rounded-md border px-3 py-2">
                         <p className="text-xs text-muted-foreground">GVR Grand Total</p>
                         <p className="text-sm font-semibold tabular-nums">
@@ -623,8 +1021,11 @@ function GvrActivityComparisonChart({
                     })}
                 </div>
             </CardHeader>
-            <CardContent>
-                <ChartContainer config={overlayConfig} className="h-[320px] w-full">
+            <CardContent className={fillCompanionHeight ? "flex flex-1 flex-col" : undefined}>
+                <ChartContainer
+                    config={overlayConfig}
+                    className={chartContainerClassName}
+                >
                     <LineChart
                         data={data}
                         margin={{ top: 5, right: 12, left: 12, bottom: 0 }}
@@ -648,6 +1049,7 @@ function GvrActivityComparisonChart({
                         <ChartTooltip
                             content={
                                 <ChartTooltipContent
+                                    className="border-slate-700 bg-slate-900 text-slate-100 dark:border-slate-300 dark:bg-slate-100 dark:text-slate-900 [&_.text-muted-foreground]:text-slate-300 dark:[&_.text-muted-foreground]:text-slate-600 [&_.text-foreground]:text-slate-100 dark:[&_.text-foreground]:text-slate-900"
                                     labelFormatter={(value) =>
                                         typeof value === "string"
                                             ? formatDateLabel(value)
@@ -726,7 +1128,7 @@ function GvrActivityComparisonChart({
                     </LineChart>
                 </ChartContainer>
                 <p className="mt-2 text-xs text-muted-foreground">
-                    Showing {selectedSeriesLabel} values.
+                    Showing all-property-type values.
                 </p>
             </CardContent>
         </Card>
@@ -737,10 +1139,12 @@ export function MarketChartsTabs({
     regionKey,
     regionKeys,
     regionOptions,
+    selectedInterests,
 }: {
     regionKey?: string;
     regionKeys?: string[];
     regionOptions?: RegionOption[];
+    selectedInterests?: InterestCategory[];
 }) {
     const comparisonRegionKeys = useMemo(
         () =>
@@ -779,6 +1183,43 @@ export function MarketChartsTabs({
     }, [comparisonRegionKeys, regionKey, regionOptions]);
 
     const [hiddenRegionKeys, setHiddenRegionKeys] = useState<string[]>([]);
+    const [selectedTab, setSelectedTab] = useState<string>("rates");
+    const [listingsTableState, setListingsTableState] =
+        useState<GvrActivityTableState>("loading");
+    const [salesTableState, setSalesTableState] =
+        useState<GvrActivityTableState>("loading");
+
+    const activeInterestSet = useMemo(
+        () => new Set(selectedInterests ?? []),
+        [selectedInterests],
+    );
+
+    const availableTabs = useMemo(() => {
+        const tabs = [
+            {
+                key: "rates",
+                label: "Rate Trends",
+                visible: activeInterestSet.has("mortgage_rates"),
+            },
+            {
+                key: "home-prices",
+                label: "Home Prices",
+                visible: activeInterestSet.has("home_prices"),
+            },
+            {
+                key: "listings",
+                label: "Listings",
+                visible: activeInterestSet.has("inventory"),
+            },
+            {
+                key: "sales",
+                label: "Sales",
+                visible: activeInterestSet.has("inventory"),
+            },
+        ];
+
+        return tabs.filter((tab) => tab.visible);
+    }, [activeInterestSet]);
 
     const toggleRegionVisibility = (regionKeyToToggle: string) => {
         setHiddenRegionKeys((current) =>
@@ -788,57 +1229,109 @@ export function MarketChartsTabs({
         );
     };
 
-    return (
-        <Tabs defaultValue="rates" className="space-y-4">
-            <div className="space-y-3">
-                <TabsList>
-                    <TabsTrigger value="rates">Rate Trends</TabsTrigger>
-                    <TabsTrigger value="home-prices">Home Prices</TabsTrigger>
-                    <TabsTrigger value="listings">Listings</TabsTrigger>
-                    <TabsTrigger value="sales">Sales</TabsTrigger>
-                </TabsList>
-                <RegionVisibilityToggles
-                    regionOptions={resolvedRegionOptions}
-                    hiddenRegionKeys={hiddenRegionKeys}
-                    onToggle={toggleRegionVisibility}
-                />
-            </div>
+    const allowedTabKeys = new Set(availableTabs.map((tab) => tab.key));
+    const activeTab = allowedTabKeys.has(selectedTab)
+        ? selectedTab
+        : availableTabs[0]?.key ?? "rates";
 
-            <TabsContent value="rates" className="mt-0">
-                <RateTrendChart />
-            </TabsContent>
-            <TabsContent value="home-prices" className="mt-0">
-                <GvrHomePriceComparisonChart
-                    allRegions={resolvedRegionOptions}
-                    hiddenRegionKeys={hiddenRegionKeys}
-                />
-            </TabsContent>
-            <TabsContent value="listings" className="mt-0">
-                <div className="space-y-4">
-                    <GvrActivityComparisonChart
-                        allRegions={resolvedRegionOptions}
+    if (availableTabs.length === 0) {
+        return (
+            <Card className="border-dashed">
+                <CardContent className="py-8 text-sm text-muted-foreground">
+                    No chart tabs are available for the currently selected
+                    interests.
+                </CardContent>
+            </Card>
+        );
+    }
+
+    return (
+        <Tabs
+            value={activeTab}
+            onValueChange={setSelectedTab}
+            className="space-y-3"
+        >
+            <Card>
+                <CardHeader className="space-y-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="space-y-1">
+                            <CardTitle className="text-base">
+                                Market Graphs
+                            </CardTitle>
+                            <p className="text-xs text-muted-foreground">
+                                Compare rate, price, listings, and sales data across
+                                your selected regions.
+                            </p>
+                        </div>
+                        <TabsList className="h-9">
+                            {availableTabs.map((tab) => (
+                                <TabsTrigger key={tab.key} value={tab.key}>
+                                    {tab.label}
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </div>
+                    <RegionVisibilityToggles
+                        regionOptions={resolvedRegionOptions}
                         hiddenRegionKeys={hiddenRegionKeys}
-                        mode="listings"
+                        onToggle={toggleRegionVisibility}
                     />
-                    <GvrActivityComparisonTable
-                        regionKeys={comparisonRegionKeys}
-                        mode="listings"
-                    />
-                </div>
-            </TabsContent>
-            <TabsContent value="sales" className="mt-0">
-                <div className="space-y-4">
-                    <GvrActivityComparisonChart
-                        allRegions={resolvedRegionOptions}
-                        hiddenRegionKeys={hiddenRegionKeys}
-                        mode="sales"
-                    />
-                    <GvrActivityComparisonTable
-                        regionKeys={comparisonRegionKeys}
-                        mode="sales"
-                    />
-                </div>
-            </TabsContent>
+                </CardHeader>
+                <CardContent className="pt-1">
+                    <TabsContent value="rates" className="mt-4">
+                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-stretch">
+                            <RateTrendChart fillHeight />
+                            <RateTrendSummaryTable className="h-full" />
+                        </div>
+                    </TabsContent>
+                    <TabsContent value="home-prices" className="mt-4">
+                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-stretch">
+                            <GvrHomePriceComparisonChart
+                                allRegions={resolvedRegionOptions}
+                                hiddenRegionKeys={hiddenRegionKeys}
+                                fillCompanionHeight
+                            />
+                            <HomePriceComparisonTable
+                                allRegions={resolvedRegionOptions}
+                                hiddenRegionKeys={hiddenRegionKeys}
+                                className="h-full"
+                            />
+                        </div>
+                    </TabsContent>
+                    <TabsContent value="listings" className="mt-4">
+                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-stretch">
+                            <GvrActivityComparisonChart
+                                allRegions={resolvedRegionOptions}
+                                hiddenRegionKeys={hiddenRegionKeys}
+                                mode="listings"
+                                tableState={listingsTableState}
+                            />
+                            <GvrActivityComparisonTable
+                                regionKeys={comparisonRegionKeys}
+                                mode="listings"
+                                className="h-full"
+                                onDataStateChange={setListingsTableState}
+                            />
+                        </div>
+                    </TabsContent>
+                    <TabsContent value="sales" className="mt-4">
+                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-stretch">
+                            <GvrActivityComparisonChart
+                                allRegions={resolvedRegionOptions}
+                                hiddenRegionKeys={hiddenRegionKeys}
+                                mode="sales"
+                                tableState={salesTableState}
+                            />
+                            <GvrActivityComparisonTable
+                                regionKeys={comparisonRegionKeys}
+                                mode="sales"
+                                className="h-full"
+                                onDataStateChange={setSalesTableState}
+                            />
+                        </div>
+                    </TabsContent>
+                </CardContent>
+            </Card>
         </Tabs>
     );
 }

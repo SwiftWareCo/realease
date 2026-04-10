@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -59,9 +59,6 @@ export function StartOutreachWizardModal({
 }) {
     const [wizardStep, setWizardStep] = useState<1 | 2>(1);
     const [search, setSearch] = useState("");
-    const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(
-        new Set(),
-    );
     const [selectedLeadIdsByCampaign, setSelectedLeadIdsByCampaign] = useState<
         Record<string, string[]>
     >({});
@@ -92,56 +89,25 @@ export function StartOutreachWizardModal({
             : false
         : false;
 
-    useEffect(() => {
-        if (!campaignKey) {
-            setSelectedLeadIds(new Set());
-            return;
-        }
-        const saved = selectedLeadIdsByCampaign[campaignKey] ?? [];
-        setSelectedLeadIds(new Set(saved));
-    }, [campaignKey]);
-
-    useEffect(() => {
-        if (!campaignKey) {
-            return;
-        }
-        setSelectedLeadIdsByCampaign((prev) => {
-            const nextSelection = Array.from(selectedLeadIds);
-            const existing = prev[campaignKey] ?? [];
-            const unchanged =
-                existing.length === nextSelection.length &&
-                existing.every(
-                    (leadId, index) => leadId === nextSelection[index],
-                );
-            if (unchanged) {
-                return prev;
-            }
-            return {
-                ...prev,
-                [campaignKey]: nextSelection,
-            };
-        });
-    }, [campaignKey, selectedLeadIds]);
-
-    useEffect(() => {
-        if (!pickerData) {
-            return;
-        }
-        const selectableIds = new Set(
+    const selectableLeadIdSet = useMemo(() => {
+        if (!pickerData) return null;
+        return new Set(
             pickerData.leads
                 .filter((lead) => lead.selectable)
                 .map((lead) => String(lead.leadId)),
         );
-        setSelectedLeadIds((prev) => {
-            const next = new Set(
-                Array.from(prev).filter((leadId) => selectableIds.has(leadId)),
-            );
-            if (next.size === prev.size) {
-                return prev;
-            }
-            return next;
-        });
     }, [pickerData]);
+
+    const selectedLeadIds = useMemo(() => {
+        if (!campaignKey) {
+            return new Set<string>();
+        }
+        const saved = selectedLeadIdsByCampaign[campaignKey] ?? [];
+        if (!selectableLeadIdSet) {
+            return new Set(saved);
+        }
+        return new Set(saved.filter((leadId) => selectableLeadIdSet.has(leadId)));
+    }, [campaignKey, selectedLeadIdsByCampaign, selectableLeadIdSet]);
 
     const filteredLeads = useMemo(() => {
         if (!pickerData) return [];
@@ -182,8 +148,35 @@ export function StartOutreachWizardModal({
         return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
     }, [filteredLeads]);
 
+    const updateSelectedLeadIds = (updater: (prev: Set<string>) => Set<string>) => {
+        if (!campaignKey) {
+            return;
+        }
+
+        setSelectedLeadIdsByCampaign((prevByCampaign) => {
+            const previousSelection = prevByCampaign[campaignKey] ?? [];
+            const nextSelectionSet = updater(new Set(previousSelection));
+            const nextSelection = Array.from(nextSelectionSet);
+            const unchanged =
+                previousSelection.length === nextSelection.length &&
+                previousSelection.every(
+                    (leadId, index) => leadId === nextSelection[index],
+                );
+            if (unchanged) {
+                return prevByCampaign;
+            }
+            return {
+                ...prevByCampaign,
+                [campaignKey]: nextSelection,
+            };
+        });
+    };
+
     const toggleLead = (leadId: string) => {
-        setSelectedLeadIds((prev) => {
+        if (selectableLeadIdSet && !selectableLeadIdSet.has(leadId)) {
+            return;
+        }
+        updateSelectedLeadIds((prev) => {
             const next = new Set(prev);
             if (next.has(leadId)) {
                 next.delete(leadId);
@@ -195,7 +188,7 @@ export function StartOutreachWizardModal({
     };
 
     const toggleAllSelectable = () => {
-        setSelectedLeadIds((prev) => {
+        updateSelectedLeadIds((prev) => {
             const next = new Set(prev);
             if (allSelectableChecked) {
                 selectableLeadIds.forEach((leadId) => next.delete(leadId));

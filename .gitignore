@@ -47,3 +47,6 @@ next-env.d.ts
 /.codex/skills/
 /.claude/skills/
 /.agents/skills/
+
+# local planning/runbook notes (do not commit)
+/plans/.local/

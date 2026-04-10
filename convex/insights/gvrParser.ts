@@ -5,7 +5,10 @@ import { OpenRouter } from "@openrouter/sdk";
 import { extractText } from "unpdf";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { OPENROUTER_FREE_MODEL } from "../openrouterConfig";
+import {
+    OPENROUTER_MODEL_CANDIDATES,
+    OPENROUTER_PRIMARY_MODEL,
+} from "../openrouterConfig";
 import {
     normalizeOpenRouterText,
     parseJsonObjectFromText,
@@ -927,10 +930,20 @@ ${args.extractedText}`;
     for (let attempt = 1; attempt <= OPENROUTER_MAX_ATTEMPTS; attempt++) {
         try {
             const response = await openrouter.chat.send({
-                model: OPENROUTER_FREE_MODEL,
+                model: OPENROUTER_PRIMARY_MODEL,
+                models: OPENROUTER_MODEL_CANDIDATES,
+                route: "fallback",
                 messages: [{ role: "user", content: prompt }],
                 maxTokens: 350,
             });
+            const resolvedModel =
+                (response as { model?: string })?.model ??
+                OPENROUTER_PRIMARY_MODEL;
+            if (resolvedModel !== OPENROUTER_PRIMARY_MODEL) {
+                console.warn(
+                    `[GVR][fallback][model_route] Fallback model used (primary=${OPENROUTER_PRIMARY_MODEL}, resolved=${resolvedModel})`,
+                );
+            }
 
             const message = response.choices?.[0]?.message?.content;
             const text = normalizeOpenRouterText(message);
@@ -1032,6 +1045,11 @@ ${args.extractedText}`;
             );
         } catch (error) {
             lastError = error;
+            console.warn(
+                `[GVR][fallback][attempt_failed] attempt=${attempt}/${OPENROUTER_MAX_ATTEMPTS} primary=${OPENROUTER_PRIMARY_MODEL} message=${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
             const retryInvalidPayload =
                 error instanceof Error &&
                 error.message ===
@@ -1792,7 +1810,7 @@ export const ingestGvrReport = internalAction({
                             sourceLabel: GVR_SOURCE_LABEL,
                             referenceDate: canonicalDate,
                             fetchedAt,
-                            expiresAt: fetchedAt + 45 * 24 * 60 * 60 * 1000,
+                            expiresAt: fetchedAt + 30 * 24 * 60 * 60 * 1000,
                         },
                     );
                     metricsUpserted++;
@@ -1892,7 +1910,7 @@ export const ingestGvrReport = internalAction({
                             sourceLabel: GVR_SOURCE_LABEL,
                             referenceDate: canonicalDate,
                             fetchedAt,
-                            expiresAt: fetchedAt + 45 * 24 * 60 * 60 * 1000,
+                            expiresAt: fetchedAt + 30 * 24 * 60 * 60 * 1000,
                         },
                     );
                     metricsUpserted++;
@@ -1935,7 +1953,7 @@ export const ingestGvrReport = internalAction({
                             sourceLabel: GVR_SOURCE_LABEL,
                             referenceDate: canonicalDate,
                             fetchedAt,
-                            expiresAt: fetchedAt + 45 * 24 * 60 * 60 * 1000,
+                            expiresAt: fetchedAt + 30 * 24 * 60 * 60 * 1000,
                         },
                     );
                     metricsUpserted++;
@@ -2052,7 +2070,7 @@ export const ingestGvrReport = internalAction({
                             sourceLabel: GVR_SOURCE_LABEL,
                             referenceDate: canonicalDate,
                             fetchedAt,
-                            expiresAt: fetchedAt + 45 * 24 * 60 * 60 * 1000,
+                            expiresAt: fetchedAt + 30 * 24 * 60 * 60 * 1000,
                         },
                     );
                     metricsUpserted++;
@@ -2110,7 +2128,7 @@ export const ingestGvrReport = internalAction({
                         sourceLabel: GVR_SOURCE_LABEL,
                         referenceDate: canonicalDate,
                         fetchedAt,
-                        expiresAt: fetchedAt + 45 * 24 * 60 * 60 * 1000,
+                        expiresAt: fetchedAt + 30 * 24 * 60 * 60 * 1000,
                     },
                 );
                 metricsUpserted++;
@@ -2153,7 +2171,7 @@ export const ingestGvrReport = internalAction({
                         sourceLabel: GVR_SOURCE_LABEL,
                         referenceDate: canonicalDate,
                         fetchedAt,
-                        expiresAt: fetchedAt + 45 * 24 * 60 * 60 * 1000,
+                        expiresAt: fetchedAt + 30 * 24 * 60 * 60 * 1000,
                     },
                 );
                 metricsUpserted++;
@@ -2256,6 +2274,18 @@ export const ingestGvrReport = internalAction({
                     ingestedAt: fetchedAt,
                 },
             );
+
+            try {
+                await ctx.scheduler.runAfter(
+                    0,
+                    internal.insights.marketSummary.generateMarketSummary,
+                    { regionKey: GVR_PRIMARY_REGION_KEY },
+                );
+            } catch (error) {
+                console.error(
+                    `[GVR][summary_schedule_failed] ${error instanceof Error ? error.message : String(error)}`,
+                );
+            }
 
             return {
                 success: true,

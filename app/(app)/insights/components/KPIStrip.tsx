@@ -160,7 +160,10 @@ function KPICard({ metric }: { metric: Metric }) {
     return (
         <Tooltip>
             <TooltipTrigger asChild>{card}</TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs text-xs">
+            <TooltipContent
+                side="bottom"
+                className="max-w-xs border-slate-700 bg-slate-900 text-xs text-slate-100 dark:border-slate-300 dark:bg-slate-100 dark:text-slate-900"
+            >
                 {description}
             </TooltipContent>
         </Tooltip>

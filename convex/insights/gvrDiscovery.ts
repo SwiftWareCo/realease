@@ -5,7 +5,7 @@ import {
     internalQuery,
 } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { GVR_SOURCE_KEY } from "./gvrCheckpoint.schema";
+import { GVR_SOURCE_KEY } from "./ingestionCheckpoint.schema";
 
 const GVR_LISTING_PAGE_URL =
     "https://www.gvrealtors.ca/market-watch/monthly-market-report.html";
@@ -256,7 +256,7 @@ export const getLatestCheckpoint = internalQuery({
     ),
     handler: async (ctx) => {
         const checkpoint = await ctx.db
-            .query("gvrCheckpoints")
+            .query("ingestionCheckpoints")
             .withIndex("by_source_key", (q) =>
                 q.eq("sourceKey", GVR_SOURCE_KEY),
             )
@@ -264,8 +264,8 @@ export const getLatestCheckpoint = internalQuery({
 
         if (!checkpoint) return null;
         return {
-            reportUrl: checkpoint.lastReportUrl,
-            reportMonth: checkpoint.lastReportMonth,
+            reportUrl: checkpoint.lastArtifactUrl,
+            reportMonth: checkpoint.lastArtifactPeriod,
             publishedAt: checkpoint.lastPublishedAt,
             lastIngestedAt: checkpoint.lastIngestedAt,
         };
@@ -282,7 +282,7 @@ export const saveCheckpoint = internalMutation({
     returns: v.null(),
     handler: async (ctx, args) => {
         const existing = await ctx.db
-            .query("gvrCheckpoints")
+            .query("ingestionCheckpoints")
             .withIndex("by_source_key", (q) =>
                 q.eq("sourceKey", GVR_SOURCE_KEY),
             )
@@ -290,8 +290,8 @@ export const saveCheckpoint = internalMutation({
 
         const row = {
             sourceKey: GVR_SOURCE_KEY,
-            lastReportUrl: args.reportUrl,
-            lastReportMonth: args.reportMonth,
+            lastArtifactUrl: args.reportUrl,
+            lastArtifactPeriod: args.reportMonth,
             lastPublishedAt: args.publishedAt,
             lastIngestedAt: args.ingestedAt,
             updatedAt: Date.now(),
@@ -300,7 +300,7 @@ export const saveCheckpoint = internalMutation({
         if (existing) {
             await ctx.db.patch(existing._id, row);
         } else {
-            await ctx.db.insert("gvrCheckpoints", row);
+            await ctx.db.insert("ingestionCheckpoints", row);
         }
 
         return null;

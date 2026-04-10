@@ -1,25 +1,18 @@
 "use client";
 
-import { useAction, useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
-import { Bell, Building2, MapPin, RefreshCw } from "lucide-react";
+import { Building2 } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
-import { MultiSelect } from "@/components/multi-select";
 import { Button } from "@/components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     Dialog,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
@@ -30,39 +23,38 @@ const INTEREST_OPTIONS = [
     {
         id: "home_prices",
         label: "Home Prices",
-        description: "Median prices, price trends, affordability",
+        description: "Show benchmark price trend modules and pricing context.",
     },
     {
         id: "inventory",
         label: "Inventory Levels",
-        description: "Available homes, days on market, supply",
+        description: "Show listings/sales supply modules and absorption context.",
     },
     {
         id: "mortgage_rates",
         label: "Mortgage Rates",
-        description: "Current rates, forecasts, lending news",
+        description: "Show rate trend modules tied to borrowing costs.",
     },
     {
         id: "market_trend",
         label: "Market Trends",
-        description: "Overall market analysis and predictions",
+        description:
+            "Show the Market Sentiment + Actionable Intel module for strategic context.",
     },
 ] as const;
 
 type InterestOptionId = (typeof INTEREST_OPTIONS)[number]["id"];
-type Region = { city: string; state?: string; country: string };
 
 interface InsightsSettingsDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }
 
-function normalizeRegionKey(region: Region) {
-    return `${region.city.toLowerCase().replace(/\s+/g, "-")}-${region.state?.toLowerCase() || ""}-${region.country.toLowerCase()}`;
-}
-
-function formatRegionLabel(region: Region) {
-    return `${region.city}${region.state ? `, ${region.state}` : ""}`;
+function sameInterests(a: string[], b: string[]) {
+    if (a.length !== b.length) return false;
+    const left = [...a].sort();
+    const right = [...b].sort();
+    return left.every((value, index) => value === right[index]);
 }
 
 export function InsightsSettingsDialog({
@@ -70,299 +62,103 @@ export function InsightsSettingsDialog({
     onOpenChange,
 }: InsightsSettingsDialogProps) {
     const preferences = useQuery(api.insights.queries.getUserPreferences);
-    const supportedRegions = useQuery(api.insights.queries.getSupportedRegions);
-    const updateRegion = useMutation(api.users.mutations.updateRegion);
     const updateInterests = useMutation(api.users.mutations.updateInterests);
-    const manualFetchBatch = useAction(api.insights.actions.manualFetchBatch);
-    const backfillGvrHistory = useAction(
-        api.insights.actions.backfillGvrHistory,
-    );
 
-    const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
     const [selectedInterests, setSelectedInterests] = useState<
         InterestOptionId[]
     >([]);
-    const [isSavingRegions, setIsSavingRegions] = useState(false);
-    const [isSavingInterests, setIsSavingInterests] = useState(false);
-    const [isManualFetching, setIsManualFetching] = useState(false);
-    const [isBackfillingGvr, setIsBackfillingGvr] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const persistedInterests = useMemo(
+        () => (preferences?.interests ?? []) as InterestOptionId[],
+        [preferences?.interests],
+    );
 
     useEffect(() => {
-        if (preferences?.regions) {
-            const keys = preferences.regions.map((region) =>
-                normalizeRegionKey(region),
-            );
-            setSelectedRegions(keys);
-        } else {
-            setSelectedRegions([]);
-        }
+        if (!open) return;
+        setSelectedInterests(persistedInterests);
+    }, [open, persistedInterests]);
 
-        if (preferences?.interests) {
-            setSelectedInterests([...preferences.interests]);
-        } else {
-            setSelectedInterests([]);
-        }
-    }, [preferences]);
+    const hasChanges = !sameInterests(selectedInterests, persistedInterests);
 
-    const supportedRegionMap = useMemo(
-        () =>
-            new Map(
-                (supportedRegions ?? []).map((region) => [region.key, region]),
-            ),
-        [supportedRegions],
-    );
-    const savedRegions = preferences?.regions ?? [];
-
-    const hasRegionChanges = () => {
-        const currentKeys = (preferences?.regions || []).map((region) =>
-            normalizeRegionKey(region),
-        );
-        if (currentKeys.length !== selectedRegions.length) return true;
-        return selectedRegions.some((region) => !currentKeys.includes(region));
-    };
-
-    const hasInterestChanges = () => {
-        const current = preferences?.interests || [];
-        if (current.length !== selectedInterests.length) return true;
-        return selectedInterests.some(
-            (interest) => !current.includes(interest),
-        );
-    };
-
-    const handleRegionSave = async () => {
-        if (!supportedRegions) return;
-
-        const regions = selectedRegions
-            .map((key) => supportedRegionMap.get(key))
-            .filter(
-                (region): region is (typeof supportedRegions)[number] =>
-                    region !== undefined,
-            );
-
-        setIsSavingRegions(true);
+    const handleSave = async () => {
+        setIsSaving(true);
         try {
-            await updateRegion({
-                regions: regions.map((region) => ({
-                    city: region.city,
-                    state: region.state,
-                    country: region.country,
-                })),
-            });
-            toast.success("Regions updated");
+            await updateInterests({ interests: selectedInterests });
+            toast.success("Market preferences saved");
+            onOpenChange(false);
         } catch {
-            toast.error("Failed to update regions");
+            toast.error("Failed to save market preferences");
         } finally {
-            setIsSavingRegions(false);
+            setIsSaving(false);
         }
     };
 
-    const handleInterestsSave = async () => {
-        setIsSavingInterests(true);
-        try {
-            await updateInterests({
-                interests: selectedInterests,
-            });
-            toast.success("Interests updated");
-        } catch {
-            toast.error("Failed to update interests");
-        } finally {
-            setIsSavingInterests(false);
-        }
+    const handleCancel = () => {
+        setSelectedInterests(persistedInterests);
+        onOpenChange(false);
     };
 
-    const handleManualFetch = async () => {
-        if (savedRegions.length === 0) {
-            toast.error(
-                "Save at least one region before running manual fetch.",
+    const toggleInterest = (interestId: InterestOptionId, checked: boolean) => {
+        if (checked) {
+            setSelectedInterests((current) =>
+                Array.from(new Set([...current, interestId])),
             );
             return;
         }
-
-        setIsManualFetching(true);
-        try {
-            const result = await manualFetchBatch({
-                regions: savedRegions.map((region) => ({
-                    city: region.city,
-                    state: region.state,
-                    country: region.country,
-                })),
-            });
-
-            if (result.failedRegions === 0) {
-                toast.success(
-                    `Manual fetch completed for ${result.succeededRegions} region${result.succeededRegions === 1 ? "" : "s"}.`,
-                );
-            } else if (result.succeededRegions > 0) {
-                toast.error(
-                    `Manual fetch finished with issues (${result.succeededRegions} succeeded, ${result.failedRegions} failed).`,
-                );
-            } else {
-                toast.error("Manual fetch failed for all regions.");
-            }
-        } catch {
-            toast.error("Manual fetch failed.");
-        } finally {
-            setIsManualFetching(false);
-        }
-    };
-
-    const handleBackfillGvr = async () => {
-        setIsBackfillingGvr(true);
-        try {
-            const result = await backfillGvrHistory({ months: 12 });
-            if (result.failed === 0) {
-                toast.success(
-                    `Backfill complete: ${result.succeeded}/${result.requestedMonths} months ingested.`,
-                );
-            } else {
-                toast.error(
-                    `Backfill finished with issues (${result.succeeded} succeeded, ${result.failed} failed).`,
-                );
-            }
-        } catch {
-            toast.error("Failed to backfill GVR history.");
-        } finally {
-            setIsBackfillingGvr(false);
-        }
+        setSelectedInterests((current) =>
+            current.filter((interest) => interest !== interestId),
+        );
     };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl max-h-[90vh] p-0 overflow-hidden flex flex-col">
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 overflow-hidden flex flex-col">
                 <DialogHeader className="px-6 py-4 border-b">
                     <DialogTitle>Market Preferences</DialogTitle>
                     <DialogDescription>
-                        Manage your market regions, insight topics, and run a
-                        manual data fetch.
+                        Choose which modules appear on your Market Insights page.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex-1 min-h-0 p-6 space-y-6 overflow-y-auto scrollbar-hidden">
-                    {preferences === undefined ||
-                    supportedRegions === undefined ? (
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                    {preferences === undefined ? (
                         <DialogLoading />
                     ) : (
-                        <>
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-center gap-2">
-                                        <MapPin className="h-5 w-5 text-primary" />
-                                        <CardTitle>Market Regions</CardTitle>
-                                    </div>
-                                    <CardDescription>
-                                        Select one or more Greater Vancouver
-                                        markets for personalized insights.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="insights-regions">
-                                            City / Metro Areas
-                                        </Label>
-                                        <MultiSelect
-                                            id="insights-regions"
-                                            options={supportedRegions.map(
-                                                (region) => ({
-                                                    label: formatRegionLabel(
-                                                        region,
-                                                    ),
-                                                    value: region.key,
-                                                }),
-                                            )}
-                                            defaultValue={selectedRegions}
-                                            onValueChange={setSelectedRegions}
-                                            placeholder="Select one or more regions"
-                                            maxCount={3}
-                                            className="w-full sm:w-[320px]"
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Region selection is currently
-                                            limited to Greater Vancouver markets
-                                            supported by GVR Market Watch.
-                                        </p>
-                                    </div>
-
-                                    {hasRegionChanges() && (
-                                        <div className="flex gap-2">
-                                            <Button
-                                                onClick={handleRegionSave}
-                                                disabled={isSavingRegions}
-                                            >
-                                                {isSavingRegions
-                                                    ? "Saving..."
-                                                    : "Save Regions"}
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                onClick={() => {
-                                                    const currentKeys = (
-                                                        preferences?.regions ||
-                                                        []
-                                                    ).map((region) =>
-                                                        normalizeRegionKey(
-                                                            region,
-                                                        ),
-                                                    );
-                                                    setSelectedRegions(
-                                                        currentKeys,
-                                                    );
-                                                }}
-                                            >
-                                                Cancel
-                                            </Button>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-center gap-2">
-                                        <Building2 className="h-5 w-5 text-primary" />
-                                        <CardTitle>Market Interests</CardTitle>
-                                    </div>
-                                    <CardDescription>
-                                        Choose what topics to prioritize in your
-                                        feed.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="grid gap-4 sm:grid-cols-2">
-                                        {INTEREST_OPTIONS.map((interest) => (
-                                            <div
-                                                key={interest.id}
-                                                className="flex items-start space-x-3"
-                                            >
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                                <Building2 className="h-4 w-4 text-primary" />
+                                Interest Focus
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                {INTEREST_OPTIONS.map((interest) => {
+                                    const checked =
+                                        selectedInterests.includes(interest.id);
+                                    return (
+                                        <label
+                                            key={interest.id}
+                                            htmlFor={interest.id}
+                                            className={`rounded-lg border p-3 transition-colors cursor-pointer ${
+                                                checked
+                                                    ? "border-primary/60 bg-primary/5"
+                                                    : "border-border hover:border-primary/30"
+                                            }`}
+                                        >
+                                            <div className="flex items-start gap-3">
                                                 <Checkbox
                                                     id={interest.id}
-                                                    checked={selectedInterests.includes(
-                                                        interest.id,
-                                                    )}
-                                                    onCheckedChange={(
-                                                        checked,
-                                                    ) => {
-                                                        if (checked) {
-                                                            setSelectedInterests(
-                                                                [
-                                                                    ...selectedInterests,
-                                                                    interest.id,
-                                                                ],
-                                                            );
-                                                        } else {
-                                                            setSelectedInterests(
-                                                                selectedInterests.filter(
-                                                                    (value) =>
-                                                                        value !==
-                                                                        interest.id,
-                                                                ),
-                                                            );
-                                                        }
-                                                    }}
+                                                    checked={checked}
+                                                    onCheckedChange={(value) =>
+                                                        toggleInterest(
+                                                            interest.id,
+                                                            value === true,
+                                                        )
+                                                    }
                                                 />
-                                                <div className="space-y-1 leading-none">
+                                                <div className="space-y-1">
                                                     <Label
                                                         htmlFor={interest.id}
-                                                        className="text-sm font-medium cursor-pointer"
+                                                        className="cursor-pointer text-sm font-medium"
                                                     >
                                                         {interest.label}
                                                     </Label>
@@ -371,135 +167,40 @@ export function InsightsSettingsDialog({
                                                     </p>
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
-
-                                    {hasInterestChanges() && (
-                                        <div className="flex gap-2 mt-4">
-                                            <Button
-                                                onClick={handleInterestsSave}
-                                                disabled={isSavingInterests}
-                                            >
-                                                {isSavingInterests
-                                                    ? "Saving..."
-                                                    : "Save Interests"}
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                onClick={() =>
-                                                    setSelectedInterests(
-                                                        preferences?.interests ||
-                                                            [],
-                                                    )
-                                                }
-                                            >
-                                                Cancel
-                                            </Button>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-center gap-2">
-                                        <RefreshCw className="h-5 w-5 text-primary" />
-                                        <CardTitle>Manual Fetch</CardTitle>
-                                    </div>
-                                    <CardDescription>
-                                        Pull the latest market data immediately.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    <p className="text-sm text-muted-foreground">
-                                        Fetch runs for your saved regions and
-                                        also refreshes structured rate data.
-                                    </p>
-                                    <p className="text-sm text-muted-foreground">
-                                        For charts, backfill the last 12 months
-                                        of GVR reports into your database.
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                        Targets:{" "}
-                                        {savedRegions.length > 0
-                                            ? savedRegions
-                                                  .map((region) =>
-                                                      formatRegionLabel(region),
-                                                  )
-                                                  .join(", ")
-                                            : "No saved regions"}
-                                    </p>
-                                    <div className="flex flex-wrap gap-2">
-                                        <Button
-                                            onClick={handleManualFetch}
-                                            disabled={
-                                                isManualFetching ||
-                                                savedRegions.length === 0
-                                            }
-                                        >
-                                            {isManualFetching
-                                                ? "Fetching..."
-                                                : "Fetch Latest Now"}
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            onClick={handleBackfillGvr}
-                                            disabled={isBackfillingGvr}
-                                        >
-                                            {isBackfillingGvr
-                                                ? "Backfilling..."
-                                                : "Backfill Last 12 Months"}
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-center gap-2">
-                                        <Bell className="h-5 w-5 text-primary" />
-                                        <CardTitle>Data Sources</CardTitle>
-                                    </div>
-                                    <CardDescription>
-                                        Where we get your market insights.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-sm text-muted-foreground space-y-2">
-                                        <p>
-                                            We gather data from these trusted
-                                            Canadian sources:
-                                        </p>
-                                        <ul className="list-disc list-inside space-y-1 ml-2">
-                                            <li>
-                                                <strong>
-                                                    GVR Market Watch
-                                                </strong>{" "}
-                                                - Monthly MLS benchmark price,
-                                                sales, listings, and
-                                                sales-to-active ratio for
-                                                Greater Vancouver
-                                            </li>
-                                            <li>
-                                                <strong>
-                                                    Bank of Canada Valet API
-                                                </strong>{" "}
-                                                - Policy rate, mortgage rates,
-                                                prime rate
-                                            </li>
-                                        </ul>
-                                        <p>
-                                            GVR source pages are refreshed
-                                            daily. Structured BoC API data
-                                            refreshes every 6 hours. Data
-                                            expires after 24-48 hours.
-                                        </p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Region selection now saves directly from the top
+                                multi-select on the Insights page.
+                            </p>
+                        </div>
                     )}
                 </div>
+
+                <DialogFooter className="shrink-0 border-t bg-background px-6 py-4 flex-col sm:flex-row sm:justify-between">
+                    <p className="text-xs text-muted-foreground sm:mr-auto">
+                        {selectedInterests.length > 0
+                            ? `${selectedInterests.length} topic${selectedInterests.length === 1 ? "" : "s"} selected`
+                            : "No topics selected. Modules are hidden until a topic is selected."}
+                    </p>
+                    <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
+                        <Button
+                            variant="outline"
+                            onClick={handleCancel}
+                            disabled={isSaving}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleSave}
+                            disabled={isSaving || preferences === undefined || !hasChanges}
+                        >
+                            {isSaving ? "Saving..." : "Save Preferences"}
+                        </Button>
+                    </div>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
@@ -507,27 +208,17 @@ export function InsightsSettingsDialog({
 
 function DialogLoading() {
     return (
-        <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <Skeleton className="h-6 w-36" />
-                    <Skeleton className="h-4 w-64" />
-                </CardHeader>
-                <CardContent>
-                    <Skeleton className="h-10 w-[320px]" />
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                    <Skeleton className="h-6 w-40" />
-                    <Skeleton className="h-4 w-56" />
-                </CardHeader>
-                <CardContent className="grid gap-3 sm:grid-cols-2">
-                    {Array.from({ length: 6 }).map((_, index) => (
-                        <Skeleton key={index} className="h-12" />
-                    ))}
-                </CardContent>
-            </Card>
+        <div className="space-y-4">
+            <Skeleton className="h-5 w-40" />
+            <div className="grid gap-3 sm:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={index} className="rounded-lg border p-3 space-y-2">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-5/6" />
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }

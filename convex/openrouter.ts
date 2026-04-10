@@ -3,7 +3,10 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { OpenRouter } from "@openrouter/sdk";
-import { OPENROUTER_FREE_MODEL } from "./openrouterConfig";
+import {
+    OPENROUTER_MODEL_CANDIDATES,
+    OPENROUTER_PRIMARY_MODEL,
+} from "./openrouterConfig";
 
 export const analyzeLead = internalAction({
     args: {
@@ -65,7 +68,9 @@ Provide JSON only:
             });
 
             const response = await openrouter.chat.send({
-                model: OPENROUTER_FREE_MODEL,
+                model: OPENROUTER_PRIMARY_MODEL,
+                models: OPENROUTER_MODEL_CANDIDATES,
+                route: "fallback",
                 messages: [
                     {
                         role: "user",
@@ -74,6 +79,14 @@ Provide JSON only:
                 ],
                 maxTokens: 150,
             });
+            const resolvedModel =
+                (response as { model?: string })?.model ??
+                OPENROUTER_PRIMARY_MODEL;
+            if (resolvedModel !== OPENROUTER_PRIMARY_MODEL) {
+                console.warn(
+                    `[Leads][OpenRouter] Fallback model used (primary=${OPENROUTER_PRIMARY_MODEL}, resolved=${resolvedModel})`,
+                );
+            }
 
             if (
                 !response.choices ||
@@ -143,7 +156,10 @@ Provide JSON only:
                         : "Follow up with property information",
             };
         } catch (error) {
-            console.error("Error calling OpenRouter:", error);
+            console.error(
+                `[Leads][OpenRouter] Failed (primary=${OPENROUTER_PRIMARY_MODEL}, candidates=${OPENROUTER_MODEL_CANDIDATES.join(" | ")}):`,
+                error,
+            );
             // Return fallback values on error
             return {
                 sentiment: "neutral" as const,

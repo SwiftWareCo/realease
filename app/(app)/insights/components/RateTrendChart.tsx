@@ -45,7 +45,11 @@ function formatDateLabel(dateStr: string) {
     return d.toLocaleDateString("en-CA", { month: "short", year: "2-digit" });
 }
 
-export function RateTrendChart() {
+export function RateTrendChart({
+    fillHeight = false,
+}: {
+    fillHeight?: boolean;
+} = {}) {
     const data = useQuery(api.insights.metricHistoryQueries.getRateHistory, {
         metricKeys: METRIC_KEYS,
     });
@@ -60,18 +64,19 @@ export function RateTrendChart() {
         return null;
     }
 
+    const chartClassName = fillHeight
+        ? "h-full min-h-[320px] w-full aspect-auto"
+        : "h-[210px] w-full";
+
     return (
-        <Card>
-            <CardHeader>
+        <Card className={fillHeight ? "h-full flex flex-col" : undefined}>
+            <CardHeader className="pb-3">
                 <CardTitle className="text-base">
                     Rate Trends (12 months)
                 </CardTitle>
             </CardHeader>
-            <CardContent>
-                <ChartContainer
-                    config={chartConfig}
-                    className="h-[300px] w-full"
-                >
+            <CardContent className={fillHeight ? "flex flex-1 flex-col" : undefined}>
+                <ChartContainer config={chartConfig} className={chartClassName}>
                     <LineChart
                         data={data}
                         margin={{ top: 5, right: 10, left: 10, bottom: 0 }}
@@ -96,6 +101,7 @@ export function RateTrendChart() {
                             shared={false}
                             content={
                                 <ChartTooltipContent
+                                    className="border-slate-700 bg-slate-900 text-slate-100 dark:border-slate-300 dark:bg-slate-100 dark:text-slate-900 [&_.text-muted-foreground]:text-slate-300 dark:[&_.text-muted-foreground]:text-slate-600 [&_.text-foreground]:text-slate-100 dark:[&_.text-foreground]:text-slate-900"
                                     labelFormatter={(value) =>
                                         typeof value === "string"
                                             ? formatDateLabel(value)
@@ -190,7 +196,7 @@ function RateTrendChartSkeleton() {
                 <Skeleton className="h-5 w-48" />
             </CardHeader>
             <CardContent>
-                <Skeleton className="h-[300px] w-full rounded-md" />
+                <Skeleton className="h-[210px] w-full rounded-md" />
             </CardContent>
         </Card>
     );

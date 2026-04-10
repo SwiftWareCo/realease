@@ -4,17 +4,6 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 /**
- * Daily market data fetch (~every 24 hours).
- * Fetches fresh market insights for all active regions.
- */
-crons.interval(
-    "daily-market-insights",
-    { hours: 24 },
-    internal.insights.actions.dailyFetch,
-    {},
-);
-
-/**
  * Cleanup expired insights weekly (every 168 hours)
  */
 crons.interval(
@@ -25,22 +14,12 @@ crons.interval(
 );
 
 /**
- * Fetch latest Bank of Canada rates every 6 hours.
+ * Fetch latest Bank of Canada rates daily.
  */
 crons.interval(
-    "fetch-boc-latest-rates",
-    { hours: 6 },
-    internal.insights.apiFetchers.fetchBankOfCanadaRates,
-    {},
-);
-
-/**
- * Refresh 12 months of Bank of Canada historical rate rows daily.
- */
-crons.interval(
-    "fetch-boc-historical-rates",
+    "fetch-boc-rates",
     { hours: 24 },
-    internal.insights.apiFetchers.fetchBankOfCanadaHistoricalRates,
+    internal.insights.apiFetchers.fetchBankOfCanadaRates,
     {},
 );
 

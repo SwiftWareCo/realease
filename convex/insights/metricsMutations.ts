@@ -5,6 +5,7 @@ import {
     metricTrendSchema,
     metricCategorySchema,
     marketConditionSchema,
+    marketSummaryStatusSchema,
 } from "./metrics.schema";
 
 const AUTHORITATIVE_STRUCTURED_SOURCES = new Set([
@@ -138,8 +139,46 @@ export const upsertMarketSummary = internalMutation({
     args: {
         regionKey: v.string(),
         summary: v.string(),
+        summaryStatus: v.optional(marketSummaryStatusSchema),
         marketCondition: marketConditionSchema,
         keyDrivers: v.array(v.string()),
+        confidence: v.optional(
+            v.object({
+                level: v.union(
+                    v.literal("high"),
+                    v.literal("medium"),
+                    v.literal("low"),
+                ),
+                reason: v.string(),
+            }),
+        ),
+        whatChanged: v.optional(v.string()),
+        actionableIntel: v.optional(
+            v.object({
+                seller: v.string(),
+                buyer: v.string(),
+                sellerObjection: v.optional(
+                    v.object({
+                        objection: v.string(),
+                        response: v.string(),
+                    }),
+                ),
+                buyerObjection: v.optional(
+                    v.object({
+                        objection: v.string(),
+                        response: v.string(),
+                    }),
+                ),
+            }),
+        ),
+        whyThisGuidance: v.optional(
+            v.object({
+                rationale: v.string(),
+                rateImpact: v.string(),
+                rateTranslation: v.optional(v.string()),
+                evidence: v.array(v.string()),
+            }),
+        ),
         generatedAt: v.number(),
         expiresAt: v.number(),
     },
