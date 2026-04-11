@@ -16,6 +16,8 @@ import {
     type CallingWindow,
 } from "./callingWindow";
 import { getCurrentUserIdOrThrow } from "./auth";
+import { buildLeadEnrollmentReviewRecord } from "./eligibility";
+import { outreachCampaignTemplateKeyValidator } from "./templates";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -38,6 +40,32 @@ function campaignCallingWindow(
     campaign: Doc<"outreachCampaigns">,
 ): CallingWindow {
     return campaign.calling_window as CallingWindow;
+}
+
+async function scheduleLeadEnrollment(
+    ctx: MutationCtx,
+    args: {
+        campaignId: Id<"outreachCampaigns">;
+        leadId: Id<"leads">;
+        nextActionAtMs: number;
+    },
+) {
+    const stateId = await ctx.db.insert("outreachCampaignLeadStates", {
+        campaign_id: args.campaignId,
+        lead_id: args.leadId,
+        state: "eligible",
+        next_action_at_ms: args.nextActionAtMs,
+        attempts_in_campaign: 0,
+        no_answer_or_voicemail_count: 0,
+    });
+
+    await ctx.scheduler.runAt(
+        args.nextActionAtMs,
+        internal.outreach.campaignLeadState.evaluateCampaignLeadState,
+        { stateId },
+    );
+
+    return stateId;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +145,7 @@ export const enrollLeadsInCampaignBatch = internalMutation({
     args: {
         campaign_id: v.id("outreachCampaigns"),
         lead_ids: v.array(v.id("leads")),
+        template_key: v.optional(outreachCampaignTemplateKeyValidator),
     },
     handler: async (ctx, args) => {
         const campaign = await ctx.db.get(args.campaign_id);
@@ -130,43 +159,52 @@ export const enrollLeadsInCampaignBatch = internalMutation({
             ? now
             : getNextWindowOpenMs(now, campaign.timezone, window);
 
-        const enrolled: Array<{ lead_id: Id<"leads">; stateId: Id<"outreachCampaignLeadStates"> }> = [];
-        const skipped: Array<{ lead_id: Id<"leads">; reason: string }> = [];
+        const enrolled: Array<{
+            lead_id: Id<"leads">;
+            stateId: Id<"outreachCampaignLeadStates">;
+        }> = [];
+        const skipped: Array<{
+            lead_id: Id<"leads">;
+            reasons: string[];
+            conflict_campaign_id?: Id<"outreachCampaigns"> | null;
+            conflict_campaign_name?: string | null;
+        }> = [];
 
         for (const leadId of args.lead_ids) {
-            // Check exclusivity — only block if other campaign is active.
-            const existingRows = await ctx.db
-                .query("outreachCampaignLeadStates")
-                .withIndex("by_lead_id", (q) => q.eq("lead_id", leadId))
-                .collect();
-            let hasActiveRow = false;
-            for (const row of existingRows) {
-                if (TERMINAL_STATES.has(row.state)) continue;
-                const otherCampaign = await ctx.db.get(row.campaign_id);
-                if (otherCampaign?.status === "active") {
-                    hasActiveRow = true;
-                    break;
-                }
-            }
-            if (hasActiveRow) {
-                skipped.push({ lead_id: leadId, reason: "lead_already_active" });
+            const lead = await ctx.db.get(leadId);
+            if (!lead) {
+                skipped.push({
+                    lead_id: leadId,
+                    reasons: ["lead_not_found"],
+                });
                 continue;
             }
 
-            const stateId = await ctx.db.insert("outreachCampaignLeadStates", {
-                campaign_id: args.campaign_id,
-                lead_id: leadId,
-                state: "eligible",
-                next_action_at_ms: nextActionAtMs,
-                attempts_in_campaign: 0,
-                no_answer_or_voicemail_count: 0,
-            });
-
-            await ctx.scheduler.runAt(
-                nextActionAtMs,
-                internal.outreach.campaignLeadState.evaluateCampaignLeadState,
-                { stateId },
+            const review = await buildLeadEnrollmentReviewRecord(
+                ctx,
+                {
+                    campaignId: campaign._id,
+                    maxAttempts: campaign.retry_policy.max_attempts,
+                    templateKey:
+                        campaign.template_key ?? args.template_key ?? null,
+                },
+                lead,
             );
+            if (!review.selectable) {
+                skipped.push({
+                    lead_id: leadId,
+                    reasons: review.reasons,
+                    conflict_campaign_id: review.conflictCampaignId,
+                    conflict_campaign_name: review.conflictCampaignName,
+                });
+                continue;
+            }
+
+            const stateId = await scheduleLeadEnrollment(ctx, {
+                campaignId: args.campaign_id,
+                leadId,
+                nextActionAtMs,
+            });
 
             enrolled.push({ lead_id: leadId, stateId });
         }

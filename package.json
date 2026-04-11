@@ -11,6 +11,7 @@
         "start": "next start",
         "lint:types": "tsc --noEmit",
         "lint:eslint": "eslint .",
+        "test:outreach-outcomes": "npx tsx scripts/test-outreach-outcomes.ts",
         "db:seed": "npx tsx scripts/mock-data.ts seed",
         "db:clear": "npx tsx scripts/mock-data.ts clear --yes",
         "db:reset": "npx tsx scripts/mock-data.ts reset --yes",

@@ -8,6 +8,10 @@ import {
 import { v } from "convex/values";
 import { normalizePhoneNumber } from "./phone";
 import { getCurrentUserIdOrThrow } from "./auth";
+import {
+    getOutreachCampaignTemplate,
+    outreachCampaignTemplateKeyValidator,
+} from "./templates";
 
 const STALE_QUEUED_OR_RINGING_TIMEOUT_MS = 20 * 60 * 1000;
 const STALE_IN_PROGRESS_TIMEOUT_MS = 2 * 60 * 60 * 1000;
@@ -265,6 +269,8 @@ export const createCampaign = mutation({
     args: {
         name: v.string(),
         description: v.optional(v.string()),
+        template_key: v.optional(outreachCampaignTemplateKeyValidator),
+        template_version: v.optional(v.number()),
         status: v.optional(
             v.union(
                 v.literal("draft"),
@@ -291,6 +297,9 @@ export const createCampaign = mutation({
             process.env.TWILIO_DEFAULT_MESSAGING_SERVICE_SID?.trim();
         const envDefaultTimezone =
             process.env.OUTREACH_DEFAULT_TIMEZONE?.trim();
+        const template = args.template_key
+            ? getOutreachCampaignTemplate(args.template_key)
+            : null;
 
         const resolvedRetellAgentId =
             args.retell_agent_id?.trim() || envRetellAgentId;
@@ -309,34 +318,54 @@ export const createCampaign = mutation({
             args.timezone?.trim() ||
             envDefaultTimezone ||
             "America/Los_Angeles";
+        const templateVersion = template?.version ?? args.template_version;
+
+        if (
+            template &&
+            args.template_version !== undefined &&
+            args.template_version !== template.version
+        ) {
+            throw new Error(
+                `Campaign template version mismatch. Expected v${template.version}.`,
+            );
+        }
 
         return await ctx.db.insert("outreachCampaigns", {
             name: args.name.trim(),
             description: args.description?.trim() || undefined,
             status: args.status ?? "active",
+            template_key: template?.key,
+            template_version: templateVersion,
             retell_agent_id: resolvedRetellAgentId,
             retell_phone_number_id: resolvedRetellPhoneNumberId || undefined,
             twilio_messaging_service_sid:
                 resolvedTwilioMessagingServiceSid || undefined,
             timezone: resolvedTimezone,
-            calling_window: {
+            calling_window: template?.callingWindow ?? {
                 start_hour_local: 9,
                 end_hour_local: 18,
                 allowed_weekdays: [1, 2, 3, 4, 5],
             },
-            retry_policy: {
+            retry_policy: template?.retryPolicy ?? {
                 max_attempts: 3,
                 min_minutes_between_attempts: 60,
             },
             follow_up_sms: {
-                enabled: args.follow_up_sms?.enabled ?? true,
+                enabled:
+                    args.follow_up_sms?.enabled ??
+                    template?.followUpSms.enabled ??
+                    true,
                 delay_minutes: FIXED_FOLLOW_UP_SMS_DELAY_MINUTES,
                 default_template:
-                    args.follow_up_sms?.default_template?.trim() || undefined,
+                    args.follow_up_sms?.default_template?.trim() ||
+                    template?.followUpSms.default_template ||
+                    undefined,
                 send_only_on_outcomes: args.follow_up_sms
-                    ?.send_only_on_outcomes ?? ["no_answer", "voicemail_left"],
+                    ?.send_only_on_outcomes ??
+                    template?.followUpSms.send_only_on_outcomes ??
+                    ["no_answer", "voicemail_left"],
             },
-            outcome_routing: args.outcome_routing,
+            outcome_routing: args.outcome_routing ?? template?.outcomeRouting,
             created_by_user_id: userId,
             created_at: now,
             updated_at: now,
@@ -912,12 +941,10 @@ async function transitionStateOnCallEventImpl(
         .first();
     if (!stateRow) return;
 
-    // Only process if state is queued or in_progress.
-    if (stateRow.state !== "queued" && stateRow.state !== "in_progress") {
-        return;
-    }
-
     if (args.eventType === "call_started") {
+        if (stateRow.state !== "queued" && stateRow.state !== "in_progress") {
+            return;
+        }
         await ctx.db.patch(stateRow._id, { state: "in_progress" });
         return;
     }
@@ -930,17 +957,41 @@ async function transitionStateOnCallEventImpl(
     const outcome = args.outcome;
     const campaign = await ctx.db.get(args.campaignId);
     const now = Date.now();
+    const isCorrection =
+        args.eventType === "call_analyzed" &&
+        stateRow.state !== "queued" &&
+        stateRow.state !== "in_progress";
+    if (
+        !isCorrection &&
+        stateRow.state !== "queued" &&
+        stateRow.state !== "in_progress"
+    ) {
+        return;
+    }
 
-    const newAttempts = stateRow.attempts_in_campaign + 1;
+    const previousWasNoAnswer =
+        stateRow.last_outcome === "no_answer" ||
+        stateRow.last_outcome === "voicemail_left";
+    const nextIsNoAnswer =
+        outcome === "no_answer" || outcome === "voicemail_left";
+    const newAttempts = isCorrection
+        ? stateRow.attempts_in_campaign
+        : stateRow.attempts_in_campaign + 1;
     let newNoAnswerCount = stateRow.no_answer_or_voicemail_count;
-    if (outcome === "no_answer" || outcome === "voicemail_left") {
+    if (isCorrection) {
+        if (previousWasNoAnswer && !nextIsNoAnswer) {
+            newNoAnswerCount = Math.max(0, newNoAnswerCount - 1);
+        } else if (!previousWasNoAnswer && nextIsNoAnswer) {
+            newNoAnswerCount += 1;
+        }
+    } else if (nextIsNoAnswer) {
         newNoAnswerCount += 1;
     }
 
     const baseUpdates: Partial<Doc<"outreachCampaignLeadStates">> = {
         attempts_in_campaign: newAttempts,
         no_answer_or_voicemail_count: newNoAnswerCount,
-        last_attempt_at: now,
+        last_attempt_at: isCorrection ? stateRow.last_attempt_at ?? now : now,
         last_outcome: outcome,
         active_call_id: undefined,
     };
@@ -989,7 +1040,7 @@ async function transitionStateOnCallEventImpl(
 
     const cooldownMs =
         (campaign?.retry_policy.min_minutes_between_attempts ?? 60) * 60 * 1000;
-    const nextActionAtMs = now + cooldownMs;
+    const nextActionAtMs = (baseUpdates.last_attempt_at ?? now) + cooldownMs;
     await ctx.db.patch(stateRow._id, {
         ...baseUpdates,
         state: "cooldown",

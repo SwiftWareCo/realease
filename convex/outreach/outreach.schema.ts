@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { outreachCampaignTemplateKeyValidator } from "./templates";
 
 const weekdaySchema = v.union(
     v.literal(0),
@@ -93,6 +94,8 @@ export const outreachCampaignsTable = defineTable({
     name: v.string(),
     description: v.optional(v.string()),
     status: outreachCampaignStatusSchema,
+    template_key: v.optional(outreachCampaignTemplateKeyValidator),
+    template_version: v.optional(v.number()),
     retell_agent_id: v.string(),
     retell_phone_number_id: v.optional(v.string()),
     twilio_messaging_service_sid: v.optional(v.string()),

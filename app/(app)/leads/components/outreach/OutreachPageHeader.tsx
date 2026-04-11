@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 
 export function OutreachPageHeader({
+    onStartOutreach,
     onCreateCampaign,
 }: {
+    onStartOutreach: () => void;
     onCreateCampaign: () => void;
 }) {
     return (
@@ -17,15 +19,18 @@ export function OutreachPageHeader({
                         Outreach Campaigns
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        Manage campaigns, review eligibility, and start outbound
-                        qualification calls.
+                        Launch outreach from one flow, then manage campaign runs
+                        from the table below.
                     </p>
                 </div>
             </div>
-            <Button onClick={onCreateCampaign}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Campaign
-            </Button>
+            <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={onCreateCampaign}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Campaign
+                </Button>
+                <Button onClick={onStartOutreach}>Start Outreach</Button>
+            </div>
         </div>
     );
 }

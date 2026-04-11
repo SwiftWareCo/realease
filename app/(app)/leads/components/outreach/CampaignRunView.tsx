@@ -18,10 +18,12 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { ArrowLeft, MessageSquare } from "lucide-react";
-import { OUTCOME_LABELS, getCampaignStatusBadge } from "./constants";
+import { getCampaignStatusBadge } from "./constants";
 import type {
+    CampaignRow,
     CampaignCallsData,
     CampaignLeadConversationDetails,
+    CampaignTemplate,
     StartOutreachResult,
 } from "./types";
 import { formatDateTimeHumanReadable } from "@/utils/dateandtimes";
@@ -29,15 +31,18 @@ import { CallAttemptDetailsDrawer } from "./CallAttemptDetailsDrawer";
 import { LeadConversationDrawer } from "./LeadConversationDrawer";
 import { StartOutreachWizardModal } from "./StartOutreachWizardModal";
 import { toast } from "sonner";
+import { getOutreachOutcomeLabel } from "@/lib/outreach/outcomes";
 
 function formatDateTime(timestamp: number): string {
     return formatDateTimeHumanReadable(timestamp);
 }
 
 export function CampaignRunView({
+    campaign,
     data,
     onBack,
 }: {
+    campaign: CampaignRow;
     data: CampaignCallsData;
     onBack: () => void;
 }) {
@@ -51,6 +56,8 @@ export function CampaignRunView({
     const [isStartingOutreach, setIsStartingOutreach] = useState(false);
     const [leadSearch, setLeadSearch] = useState("");
     const startOutreach = useAction(api.outreach.actions.startCampaignOutreach);
+    const templatesRaw = useQuery(api.outreach.queries.getCampaignTemplates, {});
+    const templates = templatesRaw as CampaignTemplate[] | undefined;
 
     useEffect(() => {
         if (data.campaignLeads.length === 0) {
@@ -99,7 +106,7 @@ export function CampaignRunView({
             {
                 label: "Last Outcome",
                 value: selectedLead.latestOutcome
-                    ? (OUTCOME_LABELS[selectedLead.latestOutcome] ??
+                    ? (getOutreachOutcomeLabel(selectedLead.latestOutcome) ??
                       selectedLead.latestOutcome)
                     : "-",
             },
@@ -117,74 +124,72 @@ export function CampaignRunView({
         });
     }, [data.campaignLeads, leadSearch]);
 
-    const handleStartOutreach = async (
-        campaignId: Id<"outreachCampaigns">,
-        leadIds: Id<"leads">[],
-    ) => {
-        if (leadIds.length === 0) {
-            return;
-        }
-
+    const handleStartOutreach = async (input: {
+        templateKey?: CampaignTemplate["key"];
+        campaignId?: Id<"outreachCampaigns">;
+        campaignName?: string;
+        leadIds: Id<"leads">[];
+    }) => {
         setIsStartingOutreach(true);
         try {
-            const result = (await startOutreach({
-                campaignId,
-                leadIds,
-            })) as StartOutreachResult;
+            const result = (await startOutreach(input)) as StartOutreachResult;
 
             if (result.enrolledCount > 0) {
                 toast.success(
-                    `Enrolled ${result.enrolledCount} leads in campaign.`,
+                    result.review.target.dispatchMode === "next_window"
+                        ? `Enrolled ${result.enrolledCount} leads. Calls are queued for the next valid window.`
+                        : `Enrolled ${result.enrolledCount} leads and scheduled outreach.`,
                 );
             }
             if (result.skippedCount > 0) {
-                toast.warning(`Skipped ${result.skippedCount} leads.`);
+                toast.warning(
+                    `${result.skippedCount} selected leads were skipped.`,
+                );
             }
 
             setAddLeadsOpen(false);
         } catch (error) {
             console.error("Failed to start outreach", error);
-            toast.error("Failed to start outreach.");
+            toast.error("Failed to enroll and schedule outreach.");
         } finally {
             setIsStartingOutreach(false);
         }
     };
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             <Card>
-                <CardContent className="flex flex-col gap-3 pt-5 md:flex-row md:items-center md:justify-between">
-                    <div className="space-y-1">
+                <CardContent className="flex flex-col gap-2 pt-4 md:flex-row md:items-center md:justify-between">
+                    <div className="space-y-0.5">
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="-ml-2 h-8"
+                            className="-ml-2 h-7"
                             onClick={onBack}
                         >
                             <ArrowLeft className="mr-1 h-4 w-4" />
                             Back to Campaigns
                         </Button>
                         <div className="flex items-center gap-2">
-                            <h2 className="text-xl font-semibold">
+                            <h2 className="text-lg font-semibold">
                                 {data.campaign.name}
                             </h2>
                             {getCampaignStatusBadge(data.campaign.status)}
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                            Live view of communication attempts for this started
-                            campaign.
+                        <p className="text-xs text-muted-foreground">
+                            Campaign run view with latest attempts and lead state.
                         </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-1.5 text-[11px] sm:grid-cols-4">
                         <Badge
                             variant="outline"
-                            className="justify-center py-1.5"
+                            className="justify-center py-1"
                         >
                             Total: {data.summary.total}
                         </Badge>
                         <Badge
                             variant="outline"
-                            className="justify-center py-1.5"
+                            className="justify-center py-1"
                         >
                             Active:{" "}
                             {data.summary.queued +
@@ -193,13 +198,13 @@ export function CampaignRunView({
                         </Badge>
                         <Badge
                             variant="outline"
-                            className="justify-center py-1.5"
+                            className="justify-center py-1"
                         >
                             Completed: {data.summary.completed}
                         </Badge>
                         <Badge
                             variant="outline"
-                            className="justify-center py-1.5"
+                            className="justify-center py-1"
                         >
                             Failed: {data.summary.failed}
                         </Badge>
@@ -214,9 +219,9 @@ export function CampaignRunView({
                 </CardContent>
             </Card>
 
-            <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-                <Card className="border-muted-foreground/20 shadow-sm lg:sticky lg:top-4 lg:flex lg:h-[calc(100vh-220px)] lg:flex-col lg:min-h-0">
-                    <CardHeader className="space-y-2 pb-2">
+            <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
+                <Card className="border-muted-foreground/20 shadow-sm lg:sticky lg:top-3 lg:flex lg:h-[calc(100vh-184px)] lg:flex-col lg:min-h-0">
+                    <CardHeader className="space-y-2 pb-2 pt-4">
                         <CardTitle className="text-base">
                             Contacted Leads
                         </CardTitle>
@@ -234,7 +239,7 @@ export function CampaignRunView({
                         </p>
                     </CardHeader>
                     <CardContent className="lg:flex-1 lg:min-h-0">
-                        <ScrollArea className="h-[320px] rounded-md border lg:h-full">
+                        <ScrollArea className="h-[280px] rounded-md border lg:h-full">
                             <div className="space-y-1 p-2">
                                 {filteredCampaignLeads.length === 0 && (
                                     <div className="p-4 text-sm text-muted-foreground">
@@ -253,33 +258,33 @@ export function CampaignRunView({
                                             onClick={() =>
                                                 setSelectedLeadId(lead.leadId)
                                             }
-                                            className={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
+                                            className={`w-full rounded-md border px-2.5 py-2 text-left transition-colors ${
                                                 selected
                                                     ? "border-primary bg-primary/10 shadow-sm"
                                                     : "hover:bg-muted/40"
                                             }`}
                                         >
-                                            <p className="text-sm font-medium">
+                                            <p className="text-sm font-medium leading-tight">
                                                 {lead.leadName}
                                             </p>
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className="text-[11px] text-muted-foreground">
                                                 {lead.leadPhone}
                                             </p>
                                             <div className="mt-1 flex flex-wrap gap-1">
-                                                <Badge variant="outline">
+                                                <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
                                                     {lead.attempts} attempts
                                                 </Badge>
                                                 {lead.activeCalls > 0 && (
-                                                    <Badge variant="secondary">
+                                                    <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
                                                         {lead.activeCalls}{" "}
                                                         active
                                                     </Badge>
                                                 )}
                                                 {lead.latestOutcome && (
-                                                    <Badge variant="secondary">
-                                                        {OUTCOME_LABELS[
-                                                            lead.latestOutcome
-                                                        ] ?? lead.latestOutcome}
+                                                    <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                                                        {getOutreachOutcomeLabel(
+                                                            lead.latestOutcome,
+                                                        ) ?? lead.latestOutcome}
                                                     </Badge>
                                                 )}
                                             </div>
@@ -292,7 +297,7 @@ export function CampaignRunView({
                 </Card>
 
                 <Card>
-                    <CardHeader className="pb-2">
+                    <CardHeader className="pb-2 pt-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <CardTitle className="text-base">
                                 Communication Attempts
@@ -308,17 +313,18 @@ export function CampaignRunView({
                             </Button>
                         </div>
                         {selectedLead && (
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                                <Badge variant="outline">
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                <Badge variant="outline" className="py-0">
                                     Lead: {selectedLead.leadName}
                                 </Badge>
-                                <Badge variant="outline">
+                                <Badge variant="outline" className="py-0">
                                     {selectedLead.leadPhone}
                                 </Badge>
                                 {selectedLeadSummaryBadges.map((item) => (
                                     <Badge
                                         key={`${item.label}-${item.value}`}
                                         variant="secondary"
+                                        className="py-0"
                                     >
                                         {item.label}: {item.value}
                                     </Badge>
@@ -327,7 +333,7 @@ export function CampaignRunView({
                         )}
                     </CardHeader>
                     <CardContent>
-                        <ScrollArea className="h-[520px] rounded-md border">
+                        <ScrollArea className="h-[calc(100vh-290px)] min-h-[360px] rounded-md border">
                             <Table>
                                 <TableHeader className="sticky top-0 z-10 bg-background">
                                     <TableRow>
@@ -357,9 +363,9 @@ export function CampaignRunView({
                                             <TableCell>
                                                 {attempt.outcome ? (
                                                     <Badge variant="secondary">
-                                                        {OUTCOME_LABELS[
-                                                            attempt.outcome
-                                                        ] ?? attempt.outcome}
+                                                        {getOutreachOutcomeLabel(
+                                                            attempt.outcome,
+                                                        ) ?? attempt.outcome}
                                                     </Badge>
                                                 ) : (
                                                     <span className="text-muted-foreground">
@@ -424,16 +430,17 @@ export function CampaignRunView({
                     setConversationOpen(open);
                 }}
             />
-            <StartOutreachWizardModal
-                campaign={{
-                    _id: data.campaign._id,
-                    name: data.campaign.name,
-                }}
-                open={addLeadsOpen}
-                isStarting={isStartingOutreach}
-                onOpenChange={setAddLeadsOpen}
-                onStart={handleStartOutreach}
-            />
+            {templates && (
+                <StartOutreachWizardModal
+                    campaigns={[campaign]}
+                    templates={templates}
+                    fixedCampaign={campaign}
+                    open={addLeadsOpen}
+                    isSubmitting={isStartingOutreach}
+                    onOpenChange={setAddLeadsOpen}
+                    onSubmit={handleStartOutreach}
+                />
+            )}
         </div>
     );
 }

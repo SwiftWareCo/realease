@@ -1,181 +1,266 @@
-import { internalQuery, query } from "../_generated/server";
+import { internalQuery, query, type QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
-import { isValidPhoneNumber } from "./phone";
-import { getCurrentUserIdOrThrow } from "./auth";
+import {
+    buildLeadEnrollmentReviewRecord,
+    summarizeLeadEnrollmentReview,
+} from "./eligibility";
+import { getCurrentUserIdOrThrow, requireCampaignOwner } from "./auth";
+import {
+    buildDefaultCampaignName,
+    getOutreachCampaignTemplate,
+    OUTREACH_CAMPAIGN_TEMPLATE_KEYS,
+    outreachCampaignTemplateKeyValidator,
+    resolveCampaignTemplateKey,
+} from "./templates";
+import { getNextWindowOpenMs, isInsideCallingWindow } from "./callingWindow";
 
-type EligibilityReason =
-    | "invalid_phone"
-    | "do_not_call"
-    | "status_not_eligible"
-    | "active_call_in_progress"
-    | "max_attempts_reached"
-    | "blocked_by_terminal_outcome"
-    | "in_other_active_campaign";
-
-type CampaignLeadCallStats = {
-    attemptsInCampaign: number;
-    hasActiveCall: boolean;
-    latestOutcome?: Doc<"outreachCalls">["outcome"];
-    latestInitiatedAt?: number;
-};
-
-function getSelectableReasons(args: {
-    lead: Doc<"leads">;
-    stats: CampaignLeadCallStats | undefined;
-    maxAttempts: number;
-    inOtherActiveCampaign: boolean;
-}): EligibilityReason[] {
-    const reasons: EligibilityReason[] = [];
-
-    if (!isValidPhoneNumber(args.lead.phone)) {
-        reasons.push("invalid_phone");
+function resolveEffectiveTemplateKey(args: {
+    campaign?: Doc<"outreachCampaigns"> | null;
+    templateKey?: (typeof OUTREACH_CAMPAIGN_TEMPLATE_KEYS)[number] | null;
+}): (typeof OUTREACH_CAMPAIGN_TEMPLATE_KEYS)[number] {
+    const campaignTemplateKey = resolveCampaignTemplateKey(args.campaign);
+    if (campaignTemplateKey) {
+        return campaignTemplateKey;
     }
-
-    if (args.lead.do_not_call === true) {
-        reasons.push("do_not_call");
+    if (args.templateKey) {
+        return args.templateKey;
     }
-
-    if (args.lead.status !== "new" && args.lead.status !== "contacted") {
-        reasons.push("status_not_eligible");
-    }
-
-    if (args.stats?.hasActiveCall) {
-        reasons.push("active_call_in_progress");
-    }
-
-    if ((args.stats?.attemptsInCampaign ?? 0) >= args.maxAttempts) {
-        reasons.push("max_attempts_reached");
-    }
-
-    if (
-        args.stats?.latestOutcome === "do_not_call" ||
-        args.stats?.latestOutcome === "wrong_number"
-    ) {
-        reasons.push("blocked_by_terminal_outcome");
-    }
-    if (args.inOtherActiveCampaign) {
-        reasons.push("in_other_active_campaign");
-    }
-
-    return reasons;
+    throw new Error(
+        "Campaign template is not configured. Choose a template or update the campaign metadata.",
+    );
 }
 
-export const getCampaignLeadPicker = query({
+function getCampaignTemplateMeta(templateKey: string | undefined) {
+    if (!templateKey) {
+        return null;
+    }
+    return getOutreachCampaignTemplate(
+        templateKey as (typeof OUTREACH_CAMPAIGN_TEMPLATE_KEYS)[number],
+    );
+}
+
+function getTargetCampaignConfig(args: {
+    campaign?: Doc<"outreachCampaigns"> | null;
+    templateKey: (typeof OUTREACH_CAMPAIGN_TEMPLATE_KEYS)[number];
+}) {
+    const template = getOutreachCampaignTemplate(args.templateKey);
+    const timezone =
+        args.campaign?.timezone ??
+        process.env.OUTREACH_DEFAULT_TIMEZONE?.trim() ??
+        "America/Los_Angeles";
+
+    return {
+        template,
+        timezone,
+        callingWindow: args.campaign?.calling_window ?? template.callingWindow,
+        maxAttempts:
+            args.campaign?.retry_policy.max_attempts ??
+            template.retryPolicy.max_attempts,
+        campaignId: args.campaign?._id ?? null,
+        campaignName:
+            args.campaign?.name ?? buildDefaultCampaignName(args.templateKey),
+        targetKind: args.campaign ? "existing" : "new",
+        templateVersion:
+            args.campaign?.template_version ?? template.version,
+    };
+}
+
+async function resolveOwnedCampaign(
+    ctx: QueryCtx,
+    campaignId: Id<"outreachCampaigns">,
+) {
+    const { campaign } = await requireCampaignOwner(ctx, campaignId);
+    return campaign;
+}
+
+async function buildLeadEnrollmentReviewPayload(
+    ctx: QueryCtx,
     args: {
-        campaignId: v.id("outreachCampaigns"),
+        templateKey: (typeof OUTREACH_CAMPAIGN_TEMPLATE_KEYS)[number];
+        campaign?: Doc<"outreachCampaigns"> | null;
+        leadIds?: Id<"leads">[];
+        limit?: number;
+    },
+) {
+    const targetConfig = getTargetCampaignConfig({
+        campaign: args.campaign,
+        templateKey: args.templateKey,
+    });
+    const leads = args.leadIds
+        ? (
+              await Promise.all(
+                  args.leadIds.map((leadId) => ctx.db.get(leadId)),
+              )
+          ).filter((lead): lead is Doc<"leads"> => Boolean(lead))
+        : await ctx.db
+              .query("leads")
+              .order("desc")
+              .take(args.limit ?? 500);
+
+    const reviewLeads = await Promise.all(
+        leads.map((lead) =>
+            buildLeadEnrollmentReviewRecord(
+                ctx,
+                {
+                    campaignId: targetConfig.campaignId,
+                    maxAttempts: targetConfig.maxAttempts,
+                    templateKey: args.templateKey,
+                },
+                lead,
+            ),
+        ),
+    );
+
+    const summary = summarizeLeadEnrollmentReview(reviewLeads);
+    const now = Date.now();
+    const canCallNow = isInsideCallingWindow(
+        now,
+        targetConfig.timezone,
+        targetConfig.callingWindow,
+    );
+    const nextCallableAt = canCallNow
+        ? null
+        : getNextWindowOpenMs(
+              now,
+              targetConfig.timezone,
+              targetConfig.callingWindow,
+          );
+
+    return {
+        target: {
+            kind: targetConfig.targetKind,
+            campaignId: targetConfig.campaignId,
+            campaignName: targetConfig.campaignName,
+            templateKey: args.templateKey,
+            templateVersion: targetConfig.templateVersion,
+            timezone: targetConfig.timezone,
+            callingWindow: targetConfig.callingWindow,
+            dispatchMode: canCallNow ? "immediate" : "next_window",
+            nextCallableAt,
+        },
+        summary: {
+            selectedCount: reviewLeads.length,
+            eligibleCount: summary.eligibleCount,
+            conflictCount: summary.conflictCount,
+            ineligibleCount: summary.ineligibleCount,
+        },
+        eligibleLeads: reviewLeads.filter(
+            (lead) => lead.classification === "eligible",
+        ),
+        conflictLeads: reviewLeads.filter(
+            (lead) => lead.classification === "conflict",
+        ),
+        ineligibleLeads: reviewLeads.filter(
+            (lead) => lead.classification === "ineligible",
+        ),
+        allLeads: reviewLeads,
+    };
+}
+
+export const getCampaignTemplates = query({
+    args: {},
+    handler: async (ctx) => {
+        await getCurrentUserIdOrThrow(ctx);
+
+        return OUTREACH_CAMPAIGN_TEMPLATE_KEYS.map((templateKey) => {
+            const template = getOutreachCampaignTemplate(templateKey);
+            return {
+                key: template.key,
+                version: template.version,
+                label: template.label,
+                shortLabel: template.shortLabel,
+                description: template.description,
+                recommendedLeadType: template.recommendedLeadType,
+                defaultName: buildDefaultCampaignName(template.key),
+            };
+        });
+    },
+});
+
+export const getOutreachLeadPicker = query({
+    args: {
+        templateKey: v.optional(outreachCampaignTemplateKeyValidator),
+        campaignId: v.optional(v.id("outreachCampaigns")),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const userId = await getCurrentUserIdOrThrow(ctx);
-        const campaign = await ctx.db.get(args.campaignId);
-        if (!campaign) {
-            throw new Error("Campaign not found");
-        }
-        if (campaign.created_by_user_id !== userId) {
-            throw new Error("Campaign not found");
-        }
-
-        const maxAttempts = campaign.retry_policy.max_attempts;
-
-        // Use state table to get enrolled leads and their stats.
-        const campaignStateRows = await ctx.db
-            .query("outreachCampaignLeadStates")
-            .withIndex("by_campaign_id", (q) =>
-                q.eq("campaign_id", args.campaignId),
-            )
-            .collect();
-        const enrolledLeadIds = new Set(
-            campaignStateRows.map((row) => String(row.lead_id)),
-        );
-        const statsByLead = new Map<
-            string,
-            {
-                attemptsInCampaign: number;
-                hasActiveCall: boolean;
-                latestOutcome?: Doc<"outreachCalls">["outcome"];
-            }
-        >();
-        for (const row of campaignStateRows) {
-            statsByLead.set(String(row.lead_id), {
-                attemptsInCampaign: row.attempts_in_campaign,
-                hasActiveCall:
-                    row.state === "queued" || row.state === "in_progress",
-                latestOutcome: row.last_outcome,
-            });
-        }
-
+        await getCurrentUserIdOrThrow(ctx);
+        const campaign = args.campaignId
+            ? await resolveOwnedCampaign(ctx, args.campaignId)
+            : null;
+        const templateKey = resolveEffectiveTemplateKey({
+            campaign,
+            templateKey: args.templateKey ?? null,
+        });
         const limit =
             args.limit !== undefined
                 ? Math.max(1, Math.floor(args.limit))
                 : 500;
-        const leads = await ctx.db.query("leads").order("desc").take(limit);
-
-        const TERMINAL_STATES = new Set(["done", "terminal_blocked"]);
-        const leadCandidates = [];
-        for (const lead of leads) {
-            const stats = statsByLead.get(String(lead._id));
-
-            // Skip the expensive exclusivity DB query for leads already enrolled
-            // in this campaign — they'll be filtered out below anyway.
-            let inOtherActiveCampaign = false;
-            if (!enrolledLeadIds.has(String(lead._id))) {
-                const leadStateRows = await ctx.db
-                    .query("outreachCampaignLeadStates")
-                    .withIndex("by_lead_id", (q) => q.eq("lead_id", lead._id))
-                    .take(10);
-                for (const row of leadStateRows) {
-                    if (row.campaign_id === args.campaignId) continue;
-                    if (TERMINAL_STATES.has(row.state)) continue;
-                    const otherCampaign = await ctx.db.get(row.campaign_id);
-                    if (otherCampaign?.status === "active") {
-                        inOtherActiveCampaign = true;
-                        break;
-                    }
-                }
-            }
-
-            const reasons = getSelectableReasons({
-                lead,
-                stats: stats
-                    ? {
-                          attemptsInCampaign: stats.attemptsInCampaign,
-                          hasActiveCall: stats.hasActiveCall,
-                          latestOutcome: stats.latestOutcome,
-                      }
-                    : undefined,
-                maxAttempts,
-                inOtherActiveCampaign,
-            });
-            const selectable = reasons.length === 0;
-
-            leadCandidates.push({
-                leadId: lead._id,
-                name: lead.name,
-                phone: lead.phone,
-                status: lead.status,
-                doNotCall: lead.do_not_call ?? false,
-                selectable,
-                reasons,
-                attemptsInCampaign: stats?.attemptsInCampaign ?? 0,
-                latestCampaignOutcome: stats?.latestOutcome ?? null,
-            });
-        }
-        // Only show leads not yet enrolled.
-        const leadCandidatesForOutreach = leadCandidates.filter(
-            (lead) => !enrolledLeadIds.has(String(lead.leadId)),
-        );
+        const review = await buildLeadEnrollmentReviewPayload(ctx, {
+            templateKey,
+            campaign,
+            limit,
+        });
 
         return {
-            campaignId: campaign._id,
-            campaignName: campaign.name,
-            maxAttempts,
-            totalLeads: leadCandidatesForOutreach.length,
-            selectableCount: leadCandidatesForOutreach.filter(
-                (lead) => lead.selectable,
-            ).length,
-            leads: leadCandidatesForOutreach,
+            campaignId: review.target.campaignId,
+            campaignName: review.target.campaignName,
+            templateKey: review.target.templateKey,
+            templateVersion: review.target.templateVersion,
+            maxAttempts:
+                campaign?.retry_policy.max_attempts ??
+                getOutreachCampaignTemplate(templateKey).retryPolicy.max_attempts,
+            totalLeads: review.allLeads.length,
+            selectableCount: review.summary.eligibleCount,
+            leads: review.allLeads,
         };
+    },
+});
+
+export const getLeadEnrollmentReviewInternal = internalQuery({
+    args: {
+        templateKey: v.optional(outreachCampaignTemplateKeyValidator),
+        campaignId: v.optional(v.id("outreachCampaigns")),
+        leadIds: v.array(v.id("leads")),
+    },
+    handler: async (ctx, args) => {
+        const campaign = args.campaignId
+            ? await ctx.db.get(args.campaignId)
+            : null;
+        const templateKey = resolveEffectiveTemplateKey({
+            campaign,
+            templateKey: args.templateKey ?? null,
+        });
+        return await buildLeadEnrollmentReviewPayload(ctx, {
+            templateKey,
+            campaign,
+            leadIds: args.leadIds,
+        });
+    },
+});
+
+export const getLeadEnrollmentReview = query({
+    args: {
+        templateKey: v.optional(outreachCampaignTemplateKeyValidator),
+        campaignId: v.optional(v.id("outreachCampaigns")),
+        leadIds: v.array(v.id("leads")),
+    },
+    handler: async (ctx, args) => {
+        await getCurrentUserIdOrThrow(ctx);
+        const campaign = args.campaignId
+            ? await resolveOwnedCampaign(ctx, args.campaignId)
+            : null;
+        const templateKey = resolveEffectiveTemplateKey({
+            campaign,
+            templateKey: args.templateKey ?? null,
+        });
+
+        return await buildLeadEnrollmentReviewPayload(ctx, {
+            templateKey,
+            campaign,
+            leadIds: args.leadIds,
+        });
     },
 });
 
@@ -217,11 +302,20 @@ export const getCampaignsForPicker = query({
                 );
             })
             .sort((a, b) => b.updated_at - a.updated_at)
-            .map((campaign) => ({
+            .map((campaign) => {
+                const resolvedTemplateKey = resolveCampaignTemplateKey(campaign);
+                const templateMeta = getCampaignTemplateMeta(
+                    resolvedTemplateKey ?? undefined,
+                );
+                return {
                 _id: campaign._id,
                 name: campaign.name,
                 description: campaign.description ?? null,
                 status: campaign.status,
+                templateKey: resolvedTemplateKey,
+                templateVersion:
+                    campaign.template_version ?? templateMeta?.version ?? null,
+                templateLabel: templateMeta?.label ?? null,
                 timezone: campaign.timezone,
                 retellAgentId: campaign.retell_agent_id,
                 retellPhoneNumberId: campaign.retell_phone_number_id ?? null,
@@ -241,7 +335,8 @@ export const getCampaignsForPicker = query({
                 hasCallHistory:
                     hasCallHistoryByCampaignId.get(String(campaign._id)) ??
                     false,
-            }));
+                };
+            });
     },
 });
 
@@ -284,6 +379,7 @@ export const getCampaignCallAttempts = query({
 
         // Build lead cache from state rows + recent calls.
         const leadsById = new Map<string, Doc<"leads"> | null>();
+        const latestRecentCallByLeadId = new Map<string, Doc<"outreachCalls">>();
         for (const row of stateRows) {
             const key = String(row.lead_id);
             if (!leadsById.has(key)) {
@@ -294,6 +390,26 @@ export const getCampaignCallAttempts = query({
             const key = String(call.lead_id);
             if (!leadsById.has(key)) {
                 leadsById.set(key, await ctx.db.get(call.lead_id));
+            }
+            if (!latestRecentCallByLeadId.has(key)) {
+                latestRecentCallByLeadId.set(key, call);
+            }
+        }
+        for (const row of stateRows) {
+            const key = String(row.lead_id);
+            if (latestRecentCallByLeadId.has(key)) {
+                continue;
+            }
+            const leadCalls = await ctx.db
+                .query("outreachCalls")
+                .withIndex("by_lead_id", (q) => q.eq("lead_id", row.lead_id))
+                .order("desc")
+                .take(20);
+            const latestCallForCampaign =
+                leadCalls.find((call) => call.campaign_id === args.campaignId) ??
+                null;
+            if (latestCallForCampaign) {
+                latestRecentCallByLeadId.set(key, latestCallForCampaign);
             }
         }
 
@@ -318,6 +434,8 @@ export const getCampaignCallAttempts = query({
         const campaignLeads = stateRows
             .map((row) => {
                 const lead = leadsById.get(String(row.lead_id)) ?? null;
+                const latestCall =
+                    latestRecentCallByLeadId.get(String(row.lead_id)) ?? null;
                 const stateToCallStatus: Record<
                     string,
                     Doc<"outreachCalls">["call_status"]
@@ -344,13 +462,19 @@ export const getCampaignCallAttempts = query({
                             ? 1
                             : 0,
                     latestCallId:
+                        latestCall?._id ??
                         row.active_call_id ??
                         (null as Id<"outreachCalls"> | null),
-                    latestInitiatedAt: row.last_attempt_at ?? row._creationTime,
+                    latestInitiatedAt:
+                        latestCall?.initiated_at ??
+                        row.last_attempt_at ??
+                        row._creationTime,
                     latestCallStatus:
+                        latestCall?.call_status ??
                         stateToCallStatus[row.state] ??
                         ("completed" as Doc<"outreachCalls">["call_status"]),
-                    latestOutcome: row.last_outcome ?? null,
+                    latestOutcome:
+                        latestCall?.outcome ?? row.last_outcome ?? null,
                 };
             })
             .sort((a, b) => b.latestInitiatedAt - a.latestInitiatedAt);

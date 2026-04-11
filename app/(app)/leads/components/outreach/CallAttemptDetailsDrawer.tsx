@@ -18,8 +18,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
-import { OUTCOME_LABELS } from "./constants";
 import type { CampaignCallAttemptDetails } from "./types";
+import { getOutreachOutcomeLabel } from "@/lib/outreach/outcomes";
 import { formatDateTimeHumanReadable } from "@/utils/dateandtimes";
 import { RecordingPlayer } from "./RecordingPlayer";
 
@@ -229,10 +229,10 @@ export function CallAttemptDetailsDrawer({
                                                     <Badge variant="secondary">
                                                         Outcome:{" "}
                                                         {details.call.outcome
-                                                            ? (OUTCOME_LABELS[
+                                                            ? (getOutreachOutcomeLabel(
                                                                   details.call
-                                                                      .outcome
-                                                              ] ??
+                                                                      .outcome,
+                                                              ) ??
                                                               details.call
                                                                   .outcome)
                                                             : "-"}
@@ -573,10 +573,10 @@ export function CallAttemptDetailsDrawer({
                                                                             "No campaign"}{" "}
                                                                         •{" "}
                                                                         {historyCall.outcome
-                                                                            ? (OUTCOME_LABELS[
+                                                                            ? (getOutreachOutcomeLabel(
                                                                                   historyCall
-                                                                                      .outcome
-                                                                              ] ??
+                                                                                      .outcome,
+                                                                              ) ??
                                                                               historyCall.outcome)
                                                                             : "No outcome"}
                                                                     </p>

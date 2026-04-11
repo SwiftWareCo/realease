@@ -1,33 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { WizardStep } from "./constants";
-import type { CreateCampaignInput } from "./types";
+import type { CampaignTemplate, CreateCampaignInput } from "./types";
 
 export function CampaignCreateWizard({
+    templates,
     isCreating,
     onCreate,
 }: {
+    templates: CampaignTemplate[];
     isCreating: boolean;
     onCreate: (input: CreateCampaignInput) => Promise<void>;
 }) {
-    const [step, setStep] = useState<1 | 2>(1);
-    const [name, setName] = useState("");
+    const [step, setStep] = useState<"template" | "details">("template");
+    const [selectedTemplateKey, setSelectedTemplateKey] = useState<
+        CampaignTemplate["key"] | null
+    >(templates[0]?.key ?? null);
+    const [name, setName] = useState(templates[0]?.defaultName ?? "");
     const [description, setDescription] = useState("");
-    const [followUpSmsEnabled, setFollowUpSmsEnabled] = useState(true);
-    const [followUpSmsDefaultTemplate, setFollowUpSmsDefaultTemplate] =
-        useState("");
 
-    const canContinue = name.trim().length > 0;
+    const selectedTemplate = useMemo(
+        () =>
+            templates.find((template) => template.key === selectedTemplateKey) ??
+            null,
+        [selectedTemplateKey, templates],
+    );
 
     const handleCreate = async () => {
+        if (!selectedTemplate) {
+            toast.error("Select a campaign template.");
+            return;
+        }
         if (!name.trim()) {
             toast.error("Campaign name is required.");
             return;
@@ -35,40 +44,62 @@ export function CampaignCreateWizard({
         await onCreate({
             name: name.trim(),
             description: description.trim() || undefined,
-            follow_up_sms: {
-                enabled: followUpSmsEnabled,
-                delay_minutes: 3,
-                default_template:
-                    followUpSmsDefaultTemplate.trim() || undefined,
-                send_only_on_outcomes: followUpSmsEnabled
-                    ? ["no_answer", "voicemail_left"]
-                    : [],
-            },
+            template_key: selectedTemplate.key,
+            template_version: selectedTemplate.version,
         });
-
-        setStep(1);
-        setName("");
+        setStep("template");
+        setSelectedTemplateKey(templates[0]?.key ?? null);
+        setName(templates[0]?.defaultName ?? "");
         setDescription("");
-        setFollowUpSmsEnabled(true);
-        setFollowUpSmsDefaultTemplate("");
     };
 
     return (
         <div className="space-y-4">
             <div className="flex items-center gap-4">
                 <WizardStep
-                    active={step === 1}
-                    done={step > 1}
-                    label="Basics"
+                    active={step === "template"}
+                    done={step === "details"}
+                    label="Template"
                 />
                 <WizardStep
-                    active={step === 2}
+                    active={step === "details"}
                     done={false}
-                    label="Follow-up SMS"
+                    label="Details"
                 />
             </div>
 
-            {step === 1 && (
+            {step === "template" && (
+                <div className="grid gap-3 md:grid-cols-2">
+                    {templates.map((template) => {
+                        const selected = template.key === selectedTemplateKey;
+                        return (
+                            <button
+                                key={template.key}
+                                type="button"
+                                onClick={() => {
+                                    setSelectedTemplateKey(template.key);
+                                    setName(template.defaultName);
+                                }}
+                                className={`rounded-xl border p-4 text-left transition-colors ${
+                                    selected
+                                        ? "border-primary bg-primary/5"
+                                        : "hover:border-primary/40 hover:bg-muted/30"
+                                }`}
+                            >
+                                <p className="text-base font-semibold">{template.label}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Template v{template.version}
+                                </p>
+                                <p className="mt-3 text-sm text-muted-foreground">
+                                    {template.description}
+                                </p>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {step === "details" && (
                 <div className="space-y-3">
                     <Input
                         placeholder="Campaign name"
@@ -79,79 +110,31 @@ export function CampaignCreateWizard({
                         placeholder="Description (optional)"
                         value={description}
                         onChange={(event) => setDescription(event.target.value)}
-                        rows={2}
+                        rows={3}
                     />
-                </div>
-            )}
-
-            {step === 2 && (
-                <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-3 rounded-md border p-3">
-                        <div className="space-y-1">
-                            <Label
-                                htmlFor="create-follow-up-sms-enabled"
-                                className="text-sm font-medium"
-                            >
-                                Enable follow-up SMS
-                            </Label>
-                            <p className="text-xs text-muted-foreground">
-                                Sends only after 3 no-answer attempts in this
-                                campaign.
-                            </p>
-                        </div>
-                        <Checkbox
-                            id="create-follow-up-sms-enabled"
-                            checked={followUpSmsEnabled}
-                            onCheckedChange={(checked) =>
-                                setFollowUpSmsEnabled(checked === true)
-                            }
-                        />
-                    </div>
-                    <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-                        Follow-up SMS sends 3 minutes after final call outcome.
-                    </p>
-                    <div className="space-y-2">
-                        <Label
-                            htmlFor="create-follow-up-sms-template"
-                            className="text-xs text-muted-foreground"
-                        >
-                            Default SMS template
-                        </Label>
-                        <Textarea
-                            id="create-follow-up-sms-template"
-                            rows={3}
-                            value={followUpSmsDefaultTemplate}
-                            onChange={(event) =>
-                                setFollowUpSmsDefaultTemplate(
-                                    event.target.value,
-                                )
-                            }
-                            disabled={!followUpSmsEnabled}
-                            placeholder="Hi {{lead_name}}, sorry we missed you. This is {{campaign_name}}. Reply STOP to opt out."
-                        />
-                        <p className="text-[11px] text-muted-foreground">
-                            Variables: {`{{lead_name}}`}, {`{{campaign_name}}`},{" "}
-                            {`{{outcome}}`}, {`{{call_summary}}`}.
+                    {selectedTemplate && (
+                        <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                            This campaign will start with the {selectedTemplate.label.toLowerCase()} defaults. Safe settings can be adjusted after creation.
                         </p>
-                    </div>
+                    )}
                 </div>
             )}
 
             <div className="flex justify-end gap-2">
-                {step === 2 && (
-                    <Button variant="outline" onClick={() => setStep(1)}>
+                {step === "details" && (
+                    <Button variant="outline" onClick={() => setStep("template")}>
                         Back
                     </Button>
                 )}
-                {step === 1 ? (
-                    <Button onClick={() => setStep(2)} disabled={!canContinue}>
+                {step === "template" ? (
+                    <Button
+                        onClick={() => setStep("details")}
+                        disabled={!selectedTemplate}
+                    >
                         Next
                     </Button>
                 ) : (
-                    <Button
-                        onClick={handleCreate}
-                        disabled={isCreating || !canContinue}
-                    >
+                    <Button onClick={handleCreate} disabled={isCreating || !name.trim()}>
                         {isCreating ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

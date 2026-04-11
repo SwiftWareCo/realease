@@ -11,7 +11,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Archive, Edit3, Play, Square, Trash2 } from "lucide-react";
+import { Archive, Edit3, Eye, Pause, Play, Trash2 } from "lucide-react";
 import { WEEKDAYS, getCampaignStatusBadge } from "./constants";
 import type { CampaignRow } from "./types";
 import {
@@ -26,14 +26,14 @@ function formatUpdatedAt(timestamp: number): string {
 export function CampaignsTable({
     campaigns,
     onEditCampaign,
-    onStartOutreach,
+    onToggleCampaignStatus,
     onDeleteCampaign,
     onOpenCampaign,
     isDeletingCampaign,
 }: {
     campaigns: CampaignRow[];
     onEditCampaign: (campaign: CampaignRow) => void;
-    onStartOutreach: (campaign: CampaignRow) => void;
+    onToggleCampaignStatus: (campaign: CampaignRow) => void;
     onDeleteCampaign: (campaign: CampaignRow) => void;
     onOpenCampaign: (campaign: CampaignRow) => void;
     isDeletingCampaign: boolean;
@@ -42,11 +42,9 @@ export function CampaignsTable({
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-base">
-                        No Campaigns Yet
-                    </CardTitle>
+                    <CardTitle className="text-base">No Campaigns Yet</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                        Create a campaign to start outbound qualification.
+                        Start outreach from the header to create a campaign and enroll leads.
                     </p>
                 </CardHeader>
             </Card>
@@ -67,9 +65,7 @@ export function CampaignsTable({
                             <TableHead>Calling Window</TableHead>
                             <TableHead>Retry</TableHead>
                             <TableHead>Updated</TableHead>
-                            <TableHead className="text-right">
-                                Actions
-                            </TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -80,12 +76,11 @@ export function CampaignsTable({
                                 onClick={() => onOpenCampaign(campaign)}
                             >
                                 <TableCell>
-                                    <div className="font-medium">
-                                        {campaign.name}
-                                    </div>
+                                    <div className="font-medium">{campaign.name}</div>
                                     <div className="text-xs text-muted-foreground">
-                                        {campaign.description ||
-                                            campaign.timezone}
+                                        {campaign.templateLabel
+                                            ? `${campaign.templateLabel} | ${campaign.description || campaign.timezone}`
+                                            : campaign.description || campaign.timezone}
                                     </div>
                                 </TableCell>
                                 <TableCell>
@@ -104,8 +99,7 @@ export function CampaignsTable({
                                         .map(
                                             (weekday) =>
                                                 WEEKDAYS.find(
-                                                    (item) =>
-                                                        item.value === weekday,
+                                                    (item) => item.value === weekday,
                                                 )?.label,
                                         )
                                         .filter(Boolean)
@@ -116,11 +110,7 @@ export function CampaignsTable({
                                         {campaign.retryPolicy.max_attempts} max
                                     </Badge>{" "}
                                     <Badge variant="outline">
-                                        {
-                                            campaign.retryPolicy
-                                                .min_minutes_between_attempts
-                                        }
-                                        m cooldown
+                                        {campaign.retryPolicy.min_minutes_between_attempts}m cooldown
                                     </Badge>
                                 </TableCell>
                                 <TableCell className="text-xs text-muted-foreground">
@@ -128,6 +118,54 @@ export function CampaignsTable({
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex items-center justify-end gap-2">
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onOpenCampaign(campaign);
+                                            }}
+                                            disabled={isDeletingCampaign}
+                                            aria-label={`Open ${campaign.name}`}
+                                        >
+                                            <Eye className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onEditCampaign(campaign);
+                                            }}
+                                            disabled={isDeletingCampaign}
+                                            aria-label={`Edit ${campaign.name}`}
+                                        >
+                                            <Edit3 className="h-4 w-4" />
+                                        </Button>
+                                        {(campaign.status === "active" ||
+                                            campaign.status === "paused") && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    onToggleCampaignStatus(campaign);
+                                                }}
+                                                disabled={isDeletingCampaign}
+                                            >
+                                                {campaign.status === "active" ? (
+                                                    <>
+                                                        <Pause className="mr-1.5 h-4 w-4" />
+                                                        Pause
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Play className="mr-1.5 h-4 w-4" />
+                                                        Resume
+                                                    </>
+                                                )}
+                                            </Button>
+                                        )}
                                         <Button
                                             size="icon"
                                             variant="ghost"
@@ -141,15 +179,6 @@ export function CampaignsTable({
                                                 onDeleteCampaign(campaign);
                                             }}
                                             disabled={isDeletingCampaign}
-                                            onMouseDown={(event) =>
-                                                event.stopPropagation()
-                                            }
-                                            onPointerDown={(event) =>
-                                                event.stopPropagation()
-                                            }
-                                            onKeyDown={(event) =>
-                                                event.stopPropagation()
-                                            }
                                             aria-label={
                                                 campaign.hasCallHistory
                                                     ? `Archive ${campaign.name}`
@@ -160,75 +189,6 @@ export function CampaignsTable({
                                                 <Archive className="h-4 w-4" />
                                             ) : (
                                                 <Trash2 className="h-4 w-4" />
-                                            )}
-                                        </Button>
-                                        <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                onEditCampaign(campaign);
-                                            }}
-                                            disabled={isDeletingCampaign}
-                                            onMouseDown={(event) =>
-                                                event.stopPropagation()
-                                            }
-                                            onPointerDown={(event) =>
-                                                event.stopPropagation()
-                                            }
-                                            onKeyDown={(event) =>
-                                                event.stopPropagation()
-                                            }
-                                        >
-                                            <Edit3 className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                onStartOutreach(campaign);
-                                            }}
-                                            disabled={isDeletingCampaign}
-                                            variant={
-                                                campaign.hasCallHistory &&
-                                                campaign.status === "active"
-                                                    ? "destructive"
-                                                    : "default"
-                                            }
-                                            onMouseDown={(event) =>
-                                                event.stopPropagation()
-                                            }
-                                            onPointerDown={(event) =>
-                                                event.stopPropagation()
-                                            }
-                                            onKeyDown={(event) =>
-                                                event.stopPropagation()
-                                            }
-                                            aria-label={
-                                                campaign.hasCallHistory &&
-                                                campaign.status === "active"
-                                                    ? "Stop Outreach"
-                                                    : campaign.hasCallHistory &&
-                                                        campaign.status ===
-                                                            "paused"
-                                                      ? "Resume Outreach"
-                                                      : "Start Outreach"
-                                            }
-                                        >
-                                            {campaign.hasCallHistory &&
-                                            campaign.status === "active" ? (
-                                                <>
-                                                    <Square className="mr-1.5 h-4 w-4" />
-                                                    Stop Outreach
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Play className="mr-1.5 h-4 w-4" />
-                                                    {campaign.hasCallHistory &&
-                                                    campaign.status === "paused"
-                                                        ? "Resume Outreach"
-                                                        : "Start Outreach"}
-                                                </>
                                             )}
                                         </Button>
                                     </div>

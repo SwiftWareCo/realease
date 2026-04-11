@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -33,37 +31,43 @@ import { StartOutreachWizardModal } from "./outreach/StartOutreachWizardModal";
 import type {
     CampaignRow,
     CampaignSettingsInput,
+    CampaignTemplate,
     CreateCampaignInput,
     StartOutreachResult,
 } from "./outreach/types";
 
 export function OutreachLeadPicker({
+    startDialogOpen,
+    onStartDialogOpenChange,
     createDialogOpen,
     onCreateDialogOpenChange,
 }: {
+    startDialogOpen: boolean;
+    onStartDialogOpenChange: (open: boolean) => void;
     createDialogOpen: boolean;
     onCreateDialogOpenChange: (open: boolean) => void;
 }) {
     const router = useRouter();
-    const [editingCampaignId, setEditingCampaignId] =
-        useState<Id<"outreachCampaigns"> | null>(null);
-    const [wizardCampaignId, setWizardCampaignId] =
-        useState<Id<"outreachCampaigns"> | null>(null);
-    const [deleteCampaignId, setDeleteCampaignId] =
-        useState<Id<"outreachCampaigns"> | null>(null);
-
+    const [editingCampaignId, setEditingCampaignId] = useState<
+        Id<"outreachCampaigns"> | null
+    >(null);
+    const [deleteCampaignId, setDeleteCampaignId] = useState<
+        Id<"outreachCampaigns"> | null
+    >(null);
     const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
     const [isSavingCampaign, setIsSavingCampaign] = useState(false);
     const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
-    const [isTogglingOutreach, setIsTogglingOutreach] = useState(false);
-    const [isStarting, setIsStarting] = useState(false);
-    const [lastStartResult, setLastStartResult] =
-        useState<StartOutreachResult | null>(null);
+    const [isUpdatingCampaignStatus, setIsUpdatingCampaignStatus] =
+        useState(false);
+    const [isSubmittingOutreach, setIsSubmittingOutreach] = useState(false);
 
     const campaignsRaw = useQuery(api.outreach.queries.getCampaignsForPicker, {
         includeInactive: false,
     });
     const campaigns = campaignsRaw as CampaignRow[] | undefined;
+
+    const templatesRaw = useQuery(api.outreach.queries.getCampaignTemplates, {});
+    const templates = templatesRaw as CampaignTemplate[] | undefined;
 
     const createCampaign = useMutation(api.outreach.mutations.createCampaign);
     const updateCampaign = useMutation(
@@ -73,22 +77,17 @@ export function OutreachLeadPicker({
     const startOutreach = useAction(api.outreach.actions.startCampaignOutreach);
 
     const editingCampaign =
-        campaigns?.find((campaign) => campaign._id === editingCampaignId) ??
-        null;
-    const wizardCampaign =
-        campaigns?.find((campaign) => campaign._id === wizardCampaignId) ??
-        null;
+        campaigns?.find((campaign) => campaign._id === editingCampaignId) ?? null;
     const campaignPendingDelete =
-        campaigns?.find((campaign) => campaign._id === deleteCampaignId) ??
-        null;
+        campaigns?.find((campaign) => campaign._id === deleteCampaignId) ?? null;
 
     const handleCreateCampaign = async (input: CreateCampaignInput) => {
         setIsCreatingCampaign(true);
         try {
             const campaignId = await createCampaign(input);
-            onCreateDialogOpenChange(false);
-            setWizardCampaignId(campaignId);
             toast.success("Campaign created.");
+            onCreateDialogOpenChange(false);
+            router.push(`/leads/outreach/${campaignId}`);
         } catch (error) {
             console.error("Failed to create campaign", error);
             toast.error("Failed to create campaign.");
@@ -139,91 +138,66 @@ export function OutreachLeadPicker({
         }
     };
 
-    const handleStartOutreach = async (
-        campaignId: Id<"outreachCampaigns">,
-        leadIds: Id<"leads">[],
-    ) => {
-        if (leadIds.length === 0) {
-            return;
-        }
-
-        setIsStarting(true);
+    const handleSubmitOutreach = async (input: {
+        templateKey?: CampaignTemplate["key"];
+        campaignId?: Id<"outreachCampaigns">;
+        campaignName?: string;
+        leadIds: Id<"leads">[];
+    }) => {
+        setIsSubmittingOutreach(true);
         try {
-            const result = (await startOutreach({
-                campaignId,
-                leadIds,
-            })) as StartOutreachResult;
-
-            setLastStartResult(result);
-
+            const result = (await startOutreach(input)) as StartOutreachResult;
             if (result.enrolledCount > 0) {
-                toast.success(
-                    `Enrolled ${result.enrolledCount} leads in campaign.`,
-                );
+                if (result.review.target.dispatchMode === "next_window") {
+                    toast.success(
+                        `Enrolled ${result.enrolledCount} leads. Calls are queued for the next valid window.`,
+                    );
+                } else {
+                    toast.success(
+                        `Enrolled ${result.enrolledCount} leads and scheduled outreach.`,
+                    );
+                }
             }
             if (result.skippedCount > 0) {
-                toast.warning(`Skipped ${result.skippedCount} leads.`);
+                toast.warning(`${result.skippedCount} selected leads were skipped.`);
             }
-
-            if (result.enrolledCount > 0) {
+            if (result.campaignId) {
                 router.push(`/leads/outreach/${result.campaignId}`);
             }
-            setWizardCampaignId(null);
+            onStartDialogOpenChange(false);
         } catch (error) {
             console.error("Failed to start outreach", error);
-            toast.error("Failed to start outreach.");
+            toast.error("Failed to enroll and schedule outreach.");
         } finally {
-            setIsStarting(false);
+            setIsSubmittingOutreach(false);
         }
     };
 
-    const handleCampaignPrimaryAction = async (campaign: CampaignRow) => {
-        if (campaign.hasCallHistory && campaign.status === "active") {
-            setIsTogglingOutreach(true);
-            try {
-                await updateCampaign({
-                    campaignId: campaign._id,
-                    status: "paused",
-                });
-                toast.success(`Outreach stopped for "${campaign.name}".`);
-            } catch (error) {
-                console.error("Failed to stop outreach", error);
-                toast.error("Failed to stop outreach.");
-            } finally {
-                setIsTogglingOutreach(false);
-            }
-            return;
+    const handleToggleCampaignStatus = async (campaign: CampaignRow) => {
+        const nextStatus = campaign.status === "active" ? "paused" : "active";
+        setIsUpdatingCampaignStatus(true);
+        try {
+            await updateCampaign({
+                campaignId: campaign._id,
+                status: nextStatus,
+            });
+            toast.success(
+                nextStatus === "active"
+                    ? `Campaign "${campaign.name}" resumed.`
+                    : `Campaign "${campaign.name}" paused.`,
+            );
+        } catch (error) {
+            console.error("Failed to update campaign status", error);
+            toast.error("Failed to update campaign status.");
+        } finally {
+            setIsUpdatingCampaignStatus(false);
         }
-
-        if (campaign.hasCallHistory && campaign.status === "paused") {
-            setIsTogglingOutreach(true);
-            try {
-                await updateCampaign({
-                    campaignId: campaign._id,
-                    status: "active",
-                });
-                toast.success(`Outreach resumed for "${campaign.name}".`);
-            } catch (error) {
-                console.error("Failed to resume outreach", error);
-                toast.error("Failed to resume outreach.");
-            } finally {
-                setIsTogglingOutreach(false);
-            }
-            return;
-        }
-
-        setWizardCampaignId(campaign._id);
-    };
-
-    const handleDeleteCampaign = (campaign: CampaignRow) => {
-        setDeleteCampaignId(campaign._id);
     };
 
     const getCampaignActionErrorMessage = (error: unknown): string => {
         if (!(error instanceof Error)) {
             return "Failed to update campaign.";
         }
-
         if (
             error.message.includes(
                 "Cannot delete campaign with call history. Archive it instead.",
@@ -231,7 +205,6 @@ export function OutreachLeadPicker({
         ) {
             return "This campaign has call history and cannot be deleted. Archive it instead.";
         }
-
         return error.message || "Failed to update campaign.";
     };
 
@@ -240,34 +213,26 @@ export function OutreachLeadPicker({
             return;
         }
 
-        const targetCampaign = campaignPendingDelete;
-        const shouldArchive = targetCampaign.hasCallHistory;
         setIsDeletingCampaign(true);
         try {
+            const shouldArchive = campaignPendingDelete.hasCallHistory;
             await toast.promise(
                 shouldArchive
                     ? updateCampaign({
-                          campaignId: targetCampaign._id,
+                          campaignId: campaignPendingDelete._id,
                           status: "archived",
                       })
-                    : deleteCampaign({ campaignId: targetCampaign._id }),
+                    : deleteCampaign({ campaignId: campaignPendingDelete._id }),
                 {
                     loading: shouldArchive
-                        ? `Archiving "${targetCampaign.name}"...`
-                        : `Deleting "${targetCampaign.name}"...`,
+                        ? `Archiving "${campaignPendingDelete.name}"...`
+                        : `Deleting "${campaignPendingDelete.name}"...`,
                     success: shouldArchive
-                        ? `Campaign "${targetCampaign.name}" archived.`
-                        : `Campaign "${targetCampaign.name}" deleted.`,
+                        ? `Campaign "${campaignPendingDelete.name}" archived.`
+                        : `Campaign "${campaignPendingDelete.name}" deleted.`,
                     error: getCampaignActionErrorMessage,
                 },
             );
-
-            if (editingCampaignId === targetCampaign._id) {
-                setEditingCampaignId(null);
-            }
-            if (wizardCampaignId === targetCampaign._id) {
-                setWizardCampaignId(null);
-            }
             setDeleteCampaignId(null);
         } catch (error) {
             console.error("Failed to delete campaign", error);
@@ -276,7 +241,7 @@ export function OutreachLeadPicker({
         }
     };
 
-    if (campaigns === undefined) {
+    if (campaigns === undefined || templates === undefined) {
         return (
             <div className="space-y-4">
                 <Skeleton className="h-20" />
@@ -292,12 +257,10 @@ export function OutreachLeadPicker({
                 onOpenCampaign={(campaign) =>
                     router.push(`/leads/outreach/${campaign._id}`)
                 }
-                onEditCampaign={(campaign) =>
-                    setEditingCampaignId(campaign._id)
-                }
-                onStartOutreach={handleCampaignPrimaryAction}
-                onDeleteCampaign={handleDeleteCampaign}
-                isDeletingCampaign={isDeletingCampaign || isTogglingOutreach}
+                onEditCampaign={(campaign) => setEditingCampaignId(campaign._id)}
+                onToggleCampaignStatus={handleToggleCampaignStatus}
+                onDeleteCampaign={(campaign) => setDeleteCampaignId(campaign._id)}
+                isDeletingCampaign={isDeletingCampaign || isUpdatingCampaignStatus}
             />
 
             <AlertDialog
@@ -348,22 +311,6 @@ export function OutreachLeadPicker({
                 </AlertDialogContent>
             </AlertDialog>
 
-            {lastStartResult && (
-                <Card>
-                    <CardContent className="flex flex-wrap items-center gap-2 pt-4 text-sm">
-                        <Badge variant="outline">
-                            Requested: {lastStartResult.requestedCount}
-                        </Badge>
-                        <Badge variant="outline">
-                            Enrolled: {lastStartResult.enrolledCount}
-                        </Badge>
-                        <Badge variant="outline">
-                            Skipped: {lastStartResult.skippedCount}
-                        </Badge>
-                    </CardContent>
-                </Card>
-            )}
-
             <Dialog
                 open={createDialogOpen}
                 onOpenChange={onCreateDialogOpenChange}
@@ -372,11 +319,12 @@ export function OutreachLeadPicker({
                     <DialogHeader>
                         <DialogTitle>Create Campaign</DialogTitle>
                         <DialogDescription>
-                            Provider defaults come from environment config. You
-                            only set campaign behavior here.
+                            Create a campaign from a predefined template, then
+                            adjust the safe settings after it exists.
                         </DialogDescription>
                     </DialogHeader>
                     <CampaignCreateWizard
+                        templates={templates}
                         isCreating={isCreatingCampaign}
                         onCreate={handleCreateCampaign}
                     />
@@ -410,15 +358,12 @@ export function OutreachLeadPicker({
             </Dialog>
 
             <StartOutreachWizardModal
-                campaign={wizardCampaign}
-                open={!!wizardCampaign}
-                isStarting={isStarting}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        setWizardCampaignId(null);
-                    }
-                }}
-                onStart={handleStartOutreach}
+                campaigns={campaigns}
+                templates={templates}
+                open={startDialogOpen}
+                isSubmitting={isSubmittingOutreach}
+                onOpenChange={onStartDialogOpenChange}
+                onSubmit={handleSubmitOutreach}
             />
         </div>
     );

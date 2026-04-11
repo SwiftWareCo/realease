@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { OUTREACH_OUTCOME_LABELS } from "@/lib/outreach/outcomes";
 import { CheckCircle2, Circle } from "lucide-react";
 import type { CampaignStatus, Weekday } from "./types";
 
@@ -24,20 +25,13 @@ export const REASON_LABELS: Record<string, string> = {
     blocked_by_terminal_outcome: "Terminal Outcome",
     campaign_not_active: "Campaign Not Active",
     lead_not_found: "Lead Not Found",
+    already_in_this_campaign: "Already In This Campaign",
+    template_mismatch: "Wrong Template",
     outside_calling_window: "Outside Calling Window",
     cooldown_active: "Cooldown Active",
 };
 
-export const OUTCOME_LABELS: Record<string, string> = {
-    connected_interested: "Interested",
-    connected_not_interested: "Not Interested",
-    callback_requested: "Callback",
-    voicemail_left: "Voicemail",
-    no_answer: "No Answer",
-    wrong_number: "Wrong Number",
-    do_not_call: "Do Not Call",
-    failed: "Failed",
-};
+export const OUTCOME_LABELS = OUTREACH_OUTCOME_LABELS;
 
 export function getCampaignStatusBadge(status: CampaignStatus) {
     switch (status) {

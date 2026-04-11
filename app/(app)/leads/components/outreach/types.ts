@@ -5,8 +5,16 @@ type CampaignsForPickerResult = FunctionReturnType<
     typeof api.outreach.queries.getCampaignsForPicker
 >;
 
-type CampaignLeadPickerResult = FunctionReturnType<
-    typeof api.outreach.queries.getCampaignLeadPicker
+type CampaignTemplatesResult = FunctionReturnType<
+    typeof api.outreach.queries.getCampaignTemplates
+>;
+
+type OutreachLeadPickerResult = FunctionReturnType<
+    typeof api.outreach.queries.getOutreachLeadPicker
+>;
+
+type LeadEnrollmentReviewResult = FunctionReturnType<
+    typeof api.outreach.queries.getLeadEnrollmentReview
 >;
 
 export type CampaignCallsData = FunctionReturnType<
@@ -28,8 +36,10 @@ export type CreateCampaignInput = FunctionArgs<
 >;
 
 export type CampaignRow = CampaignsForPickerResult[number];
-export type PickerData = CampaignLeadPickerResult;
-export type PickerLead = CampaignLeadPickerResult["leads"][number];
+export type CampaignTemplate = CampaignTemplatesResult[number];
+export type PickerData = OutreachLeadPickerResult;
+export type PickerLead = OutreachLeadPickerResult["leads"][number];
+export type LeadEnrollmentReview = LeadEnrollmentReviewResult;
 
 export type CampaignStatus = CampaignRow["status"];
 export type Weekday = CampaignRow["callingWindow"]["allowed_weekdays"][number];

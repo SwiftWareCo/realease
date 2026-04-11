@@ -33,114 +33,181 @@ import {
     ShieldAlert,
     Users,
 } from "lucide-react";
-import { OUTCOME_LABELS, REASON_LABELS, WizardStep } from "./constants";
-import type { PickerData } from "./types";
+import { REASON_LABELS, WizardStep } from "./constants";
+import type {
+    CampaignRow,
+    CampaignTemplate,
+    LeadEnrollmentReview,
+    PickerData,
+} from "./types";
+import { getOutreachOutcomeLabel } from "@/lib/outreach/outcomes";
+import { formatDateTimeHumanReadable } from "@/utils/dateandtimes";
 
-type StartOutreachCampaign = {
-    _id: Id<"outreachCampaigns">;
-    name: string;
+type WizardStepKey = "template" | "leads" | "campaign" | "review";
+
+type SubmitPayload = {
+    templateKey?: CampaignTemplate["key"];
+    campaignId?: Id<"outreachCampaigns">;
+    campaignName?: string;
+    leadIds: Id<"leads">[];
 };
 
+function getStepLabel(step: WizardStepKey): string {
+    switch (step) {
+        case "template":
+            return "Template";
+        case "leads":
+            return "Lead Selection";
+        case "campaign":
+            return "Campaign";
+        case "review":
+            return "Review";
+    }
+}
+
 export function StartOutreachWizardModal({
-    campaign,
+    campaigns,
+    templates,
+    fixedCampaign = null,
     open,
-    isStarting,
+    isSubmitting,
     onOpenChange,
-    onStart,
+    onSubmit,
 }: {
-    campaign: StartOutreachCampaign | null;
+    campaigns: CampaignRow[];
+    templates: CampaignTemplate[];
+    fixedCampaign?: CampaignRow | null;
     open: boolean;
-    isStarting: boolean;
+    isSubmitting: boolean;
     onOpenChange: (open: boolean) => void;
-    onStart: (
-        campaignId: Id<"outreachCampaigns">,
-        leadIds: Id<"leads">[],
-    ) => Promise<void>;
+    onSubmit: (payload: SubmitPayload) => Promise<void>;
 }) {
-    const [wizardStep, setWizardStep] = useState<1 | 2>(1);
+    const defaultTemplateKey = fixedCampaign?.templateKey ?? templates[0]?.key ?? null;
+    const [step, setStep] = useState<WizardStepKey>(
+        fixedCampaign ? "leads" : "template",
+    );
+    const [selectedTemplateKey, setSelectedTemplateKey] = useState<
+        CampaignTemplate["key"] | null
+    >(defaultTemplateKey);
     const [search, setSearch] = useState("");
-    const [selectedLeadIdsByCampaign, setSelectedLeadIdsByCampaign] = useState<
-        Record<string, string[]>
-    >({});
+    const [targetMode, setTargetMode] = useState<"existing" | "new">(
+        fixedCampaign ? "existing" : "new",
+    );
+    const [selectedCampaignId, setSelectedCampaignId] = useState<
+        Id<"outreachCampaigns"> | null
+    >(fixedCampaign?._id ?? null);
+    const [campaignName, setCampaignName] = useState("");
+    const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
 
-    const campaignKey = campaign ? String(campaign._id) : null;
+    const activeTemplate = useMemo(
+        () =>
+            templates.find((template) => template.key === selectedTemplateKey) ??
+            null,
+        [selectedTemplateKey, templates],
+    );
 
-    const resetWizardState = () => {
-        setWizardStep(1);
-        setSearch("");
-    };
+    const matchingCampaigns = useMemo(() => {
+        if (fixedCampaign) {
+            return [fixedCampaign];
+        }
+        return campaigns.filter(
+            (campaign) => campaign.templateKey === selectedTemplateKey,
+        );
+    }, [campaigns, fixedCampaign, selectedTemplateKey]);
 
-    const pickerQueryArgs = open
-        ? campaign
+    const steps: WizardStepKey[] = fixedCampaign
+        ? ["leads", "review"]
+        : ["template", "leads", "campaign", "review"];
+    const currentStepIndex = steps.indexOf(step);
+    const effectiveTargetMode =
+        fixedCampaign || matchingCampaigns.length > 0
+            ? targetMode
+            : "new";
+    const effectiveSelectedCampaignId =
+        fixedCampaign?._id ??
+        (effectiveTargetMode === "existing"
+            ? (selectedCampaignId ?? matchingCampaigns[0]?._id ?? null)
+            : null);
+    const effectiveTemplateKey =
+        fixedCampaign?.templateKey ?? selectedTemplateKey ?? null;
+    const effectiveCampaignName = campaignName || activeTemplate?.defaultName || "";
+
+    const pickerDataRaw = useQuery(
+        api.outreach.queries.getOutreachLeadPicker,
+        open && (effectiveTemplateKey || fixedCampaign?._id)
             ? {
-                  campaignId: campaign._id,
+                  templateKey: effectiveTemplateKey ?? undefined,
+                  campaignId: fixedCampaign?._id,
                   limit: 500,
               }
-            : "skip"
-        : "skip";
-    const pickerDataRaw = useQuery(
-        api.outreach.queries.getCampaignLeadPicker,
-        pickerQueryArgs,
+            : "skip",
     );
     const pickerData = pickerDataRaw as PickerData | undefined;
-    const isLoadingPicker = open
-        ? campaign
-            ? pickerData === undefined
-            : false
-        : false;
 
-    const selectableLeadIdSet = useMemo(() => {
-        if (!pickerData) return null;
-        return new Set(
-            pickerData.leads
-                .filter((lead) => lead.selectable)
-                .map((lead) => String(lead.leadId)),
-        );
-    }, [pickerData]);
-
-    const selectedLeadIds = useMemo(() => {
-        if (!campaignKey) {
-            return new Set<string>();
-        }
-        const saved = selectedLeadIdsByCampaign[campaignKey] ?? [];
-        if (!selectableLeadIdSet) {
-            return new Set(saved);
-        }
-        return new Set(saved.filter((leadId) => selectableLeadIdSet.has(leadId)));
-    }, [campaignKey, selectedLeadIdsByCampaign, selectableLeadIdSet]);
+    const reviewDataRaw = useQuery(
+        api.outreach.queries.getLeadEnrollmentReview,
+        open &&
+            (effectiveTemplateKey || fixedCampaign?._id) &&
+            selectedLeadIds.length > 0 &&
+            (fixedCampaign ||
+                effectiveTargetMode === "new" ||
+                effectiveSelectedCampaignId)
+            ? {
+                  templateKey: effectiveTemplateKey ?? undefined,
+                  campaignId:
+                      fixedCampaign?._id ??
+                      (effectiveTargetMode === "existing"
+                          ? effectiveSelectedCampaignId ?? undefined
+                          : undefined),
+                  leadIds: selectedLeadIds as Id<"leads">[],
+              }
+            : "skip",
+    );
+    const reviewData = reviewDataRaw as LeadEnrollmentReview | undefined;
 
     const filteredLeads = useMemo(() => {
-        if (!pickerData) return [];
-        const q = search.trim().toLowerCase();
-        if (!q) return pickerData.leads;
+        if (!pickerData) {
+            return [];
+        }
+        const query = search.trim().toLowerCase();
+        if (!query) {
+            return pickerData.leads;
+        }
         return pickerData.leads.filter((lead) => {
             return (
-                lead.name.toLowerCase().includes(q) ||
-                lead.phone.toLowerCase().includes(q)
+                lead.name.toLowerCase().includes(query) ||
+                lead.phone.toLowerCase().includes(query)
             );
         });
     }, [pickerData, search]);
 
-    const selectableLeadIds = useMemo(() => {
-        return filteredLeads
-            .filter((lead) => lead.selectable)
-            .map((lead) => String(lead.leadId));
-    }, [filteredLeads]);
+    const selectedLeadIdSet = useMemo(
+        () => new Set(selectedLeadIds),
+        [selectedLeadIds],
+    );
+
+    const selectableLeadIds = useMemo(
+        () =>
+            filteredLeads
+                .filter((lead) => lead.selectable)
+                .map((lead) => String(lead.leadId)),
+        [filteredLeads],
+    );
 
     const allSelectableChecked =
         selectableLeadIds.length > 0 &&
-        selectableLeadIds.every((leadId) => selectedLeadIds.has(leadId));
+        selectableLeadIds.every((leadId) => selectedLeadIdSet.has(leadId));
 
-    const selectedInView = useMemo(() => {
-        return filteredLeads.filter((lead) =>
-            selectedLeadIds.has(String(lead.leadId)),
-        ).length;
-    }, [filteredLeads, selectedLeadIds]);
+    const selectedInView = filteredLeads.filter((lead) =>
+        selectedLeadIdSet.has(String(lead.leadId)),
+    ).length;
 
-    const reasonCounts = useMemo(() => {
+    const blockedReasonCounts = useMemo(() => {
         const counts = new Map<string, number>();
         for (const lead of filteredLeads) {
-            if (lead.selectable) continue;
+            if (lead.selectable) {
+                continue;
+            }
             for (const reason of lead.reasons) {
                 counts.set(reason, (counts.get(reason) ?? 0) + 1);
             }
@@ -148,74 +215,106 @@ export function StartOutreachWizardModal({
         return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
     }, [filteredLeads]);
 
-    const updateSelectedLeadIds = (updater: (prev: Set<string>) => Set<string>) => {
-        if (!campaignKey) {
-            return;
-        }
+    const resetState = () => {
+        setStep(fixedCampaign ? "leads" : "template");
+        setSearch("");
+        setSelectedLeadIds([]);
+        setSelectedTemplateKey(defaultTemplateKey);
+        setSelectedCampaignId(fixedCampaign?._id ?? null);
+        setTargetMode(
+            fixedCampaign
+                ? "existing"
+                : campaigns.some((campaign) => campaign.templateKey === defaultTemplateKey)
+                  ? "existing"
+                  : "new",
+        );
+        setCampaignName(
+            templates.find((template) => template.key === defaultTemplateKey)
+                ?.defaultName ?? "",
+        );
+    };
 
-        setSelectedLeadIdsByCampaign((prevByCampaign) => {
-            const previousSelection = prevByCampaign[campaignKey] ?? [];
-            const nextSelectionSet = updater(new Set(previousSelection));
-            const nextSelection = Array.from(nextSelectionSet);
-            const unchanged =
-                previousSelection.length === nextSelection.length &&
-                previousSelection.every(
-                    (leadId, index) => leadId === nextSelection[index],
-                );
-            if (unchanged) {
-                return prevByCampaign;
-            }
-            return {
-                ...prevByCampaign,
-                [campaignKey]: nextSelection,
-            };
-        });
+    const handleTemplateSelection = (template: CampaignTemplate) => {
+        const nextMatchingCampaigns = campaigns.filter(
+            (campaign) => campaign.templateKey === template.key,
+        );
+        setSelectedTemplateKey(template.key);
+        setSearch("");
+        setSelectedLeadIds([]);
+        setStep(fixedCampaign ? "leads" : "template");
+        setCampaignName(template.defaultName);
+        if (!fixedCampaign) {
+            setTargetMode(
+                nextMatchingCampaigns.length > 0 ? "existing" : "new",
+            );
+            setSelectedCampaignId(nextMatchingCampaigns[0]?._id ?? null);
+        }
     };
 
     const toggleLead = (leadId: string) => {
-        if (selectableLeadIdSet && !selectableLeadIdSet.has(leadId)) {
-            return;
-        }
-        updateSelectedLeadIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(leadId)) {
-                next.delete(leadId);
-            } else {
-                next.add(leadId);
-            }
-            return next;
-        });
+        setSelectedLeadIds((current) =>
+            current.includes(leadId)
+                ? current.filter((value) => value !== leadId)
+                : [...current, leadId],
+        );
     };
 
     const toggleAllSelectable = () => {
-        updateSelectedLeadIds((prev) => {
-            const next = new Set(prev);
+        setSelectedLeadIds((current) => {
             if (allSelectableChecked) {
-                selectableLeadIds.forEach((leadId) => next.delete(leadId));
-            } else {
-                selectableLeadIds.forEach((leadId) => next.add(leadId));
+                return current.filter((leadId) => !selectableLeadIds.includes(leadId));
             }
-            return next;
+            return Array.from(new Set([...current, ...selectableLeadIds]));
         });
     };
 
-    const handleStart = async () => {
-        if (!campaign || selectedLeadIds.size === 0) {
+    const goNext = () => {
+        const nextStep = steps[currentStepIndex + 1];
+        if (nextStep) {
+            setStep(nextStep);
+        }
+    };
+
+    const goBack = () => {
+        const previousStep = steps[currentStepIndex - 1];
+        if (previousStep) {
+            setStep(previousStep);
+        }
+    };
+
+    const handleSubmit = async () => {
+        if (!selectedTemplateKey || selectedLeadIds.length === 0) {
             return;
         }
-
-        await onStart(
-            campaign._id,
-            Array.from(selectedLeadIds) as Id<"leads">[],
-        );
+        await onSubmit({
+            templateKey: effectiveTemplateKey ?? undefined,
+            campaignId:
+                fixedCampaign?._id ??
+                (effectiveTargetMode === "existing"
+                    ? (effectiveSelectedCampaignId ?? undefined)
+                    : undefined),
+            campaignName:
+                !fixedCampaign && effectiveTargetMode === "new"
+                    ? effectiveCampaignName.trim() || activeTemplate?.defaultName
+                    : undefined,
+            leadIds: selectedLeadIds as Id<"leads">[],
+        });
     };
+
+    const canAdvanceFromTemplate = Boolean(effectiveTemplateKey);
+    const canAdvanceFromLeads = selectedLeadIds.length > 0;
+    const canAdvanceFromCampaign =
+        effectiveTargetMode === "new"
+            ? Boolean(effectiveCampaignName.trim())
+            : Boolean(effectiveSelectedCampaignId);
+    const eligibleCount = reviewData?.summary.eligibleCount ?? 0;
 
     return (
         <Dialog
             open={open}
             onOpenChange={(nextOpen) => {
                 if (!nextOpen) {
-                    resetWizardState();
+                    resetState();
                 }
                 onOpenChange(nextOpen);
             }}
@@ -223,365 +322,467 @@ export function StartOutreachWizardModal({
             <DialogContent className="max-h-[92vh] overflow-hidden sm:max-w-[1100px]">
                 <DialogHeader>
                     <DialogTitle>
-                        Start Outreach: {campaign?.name ?? "Campaign"}
+                        {fixedCampaign ? "Add Leads" : "Start Outreach"}
                     </DialogTitle>
                     <DialogDescription>
-                        Select leads, review runtime rules, then start outbound
-                        calls.
+                        Pick a template, choose leads, then explicitly enroll and
+                        schedule the eligible leads.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex items-center gap-4">
-                    <WizardStep
-                        active={wizardStep === 1}
-                        done={wizardStep > 1}
-                        label="Lead Selection"
-                    />
-                    <WizardStep
-                        active={wizardStep === 2}
-                        done={false}
-                        label="Review & Start"
-                    />
+                <div className="flex flex-wrap items-center gap-4">
+                    {steps.map((wizardStep, index) => (
+                        <WizardStep
+                            key={wizardStep}
+                            active={step === wizardStep}
+                            done={currentStepIndex > index}
+                            label={getStepLabel(wizardStep)}
+                        />
+                    ))}
                 </div>
 
-                {isLoadingPicker ? (
-                    <div className="flex h-[460px] items-center justify-center">
-                        <Loader2
-                            className="h-7 w-7 animate-spin text-muted-foreground"
-                            aria-label="Loading campaign leads"
-                        />
-                    </div>
-                ) : wizardStep === 1 ? (
-                    pickerData ? (
-                        <div className="space-y-3">
-                            <div className="flex flex-wrap items-center gap-2 text-xs">
-                                <Badge
-                                    variant="outline"
-                                    className="gap-1.5 py-0.5"
+                {step === "template" && (
+                    <div className="grid gap-3 md:grid-cols-2">
+                        {templates.map((template) => {
+                            const selected = template.key === selectedTemplateKey;
+                            return (
+                                <button
+                                    key={template.key}
+                                    type="button"
+                                    onClick={() => handleTemplateSelection(template)}
+                                    className={`rounded-xl border p-4 text-left transition-colors ${
+                                        selected
+                                            ? "border-primary bg-primary/5"
+                                            : "hover:border-primary/40 hover:bg-muted/30"
+                                    }`}
                                 >
-                                    <Users className="h-3.5 w-3.5" />
-                                    In View: {filteredLeads.length}
-                                </Badge>
-                                <Badge
-                                    variant="outline"
-                                    className="gap-1.5 py-0.5"
-                                >
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                                    Selectable:{" "}
-                                    {
-                                        filteredLeads.filter(
-                                            (lead) => lead.selectable,
-                                        ).length
-                                    }
-                                </Badge>
-                                <Badge
-                                    variant="outline"
-                                    className="gap-1.5 py-0.5"
-                                >
-                                    <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
-                                    Skipped:{" "}
-                                    {
-                                        filteredLeads.filter(
-                                            (lead) => !lead.selectable,
-                                        ).length
-                                    }
-                                </Badge>
-                                <Badge
-                                    variant="outline"
-                                    className="gap-1.5 py-0.5"
-                                >
-                                    <Phone className="h-3.5 w-3.5 text-blue-600" />
-                                    Selected: {selectedInView}
-                                </Badge>
-                            </div>
-
-                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Checkbox
-                                        checked={allSelectableChecked}
-                                        onCheckedChange={toggleAllSelectable}
-                                        aria-label="Select all selectable leads"
-                                    />
-                                    <span className="text-sm text-muted-foreground">
-                                        Select all selectable leads in current
-                                        view
-                                    </span>
-                                </div>
-                                <div className="relative w-full md:w-[280px]">
-                                    <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        value={search}
-                                        onChange={(event) =>
-                                            setSearch(event.target.value)
-                                        }
-                                        placeholder="Search by name or phone"
-                                        className="pl-8"
-                                    />
-                                </div>
-                            </div>
-
-                            <ScrollArea className="h-[420px] rounded-md border">
-                                <Table>
-                                    <TableHeader className="sticky top-0 z-10 bg-background">
-                                        <TableRow>
-                                            <TableHead className="w-12" />
-                                            <TableHead>Lead</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Attempts</TableHead>
-                                            <TableHead>
-                                                Latest Outcome
-                                            </TableHead>
-                                            <TableHead>Eligibility</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {filteredLeads.map((lead) => {
-                                            const leadId = String(lead.leadId);
-                                            const checked =
-                                                selectedLeadIds.has(leadId);
-                                            return (
-                                                <TableRow key={leadId}>
-                                                    <TableCell className="align-top">
-                                                        <Checkbox
-                                                            checked={checked}
-                                                            onCheckedChange={() =>
-                                                                toggleLead(
-                                                                    leadId,
-                                                                )
-                                                            }
-                                                            disabled={
-                                                                !lead.selectable
-                                                            }
-                                                            aria-label={`Select ${lead.name}`}
-                                                        />
-                                                    </TableCell>
-                                                    <TableCell className="align-top">
-                                                        <div className="font-medium">
-                                                            {lead.name}
-                                                        </div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            {lead.phone}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="align-top">
-                                                        <Badge variant="outline">
-                                                            {lead.status}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="align-top">
-                                                        {
-                                                            lead.attemptsInCampaign
-                                                        }
-                                                    </TableCell>
-                                                    <TableCell className="align-top">
-                                                        {lead.latestCampaignOutcome ? (
-                                                            <Badge variant="secondary">
-                                                                {OUTCOME_LABELS[
-                                                                    lead
-                                                                        .latestCampaignOutcome
-                                                                ] ??
-                                                                    lead.latestCampaignOutcome}
-                                                            </Badge>
-                                                        ) : (
-                                                            <span className="text-muted-foreground">
-                                                                -
-                                                            </span>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="align-top">
-                                                        {lead.selectable ? (
-                                                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                                                                Selectable
-                                                            </Badge>
-                                                        ) : (
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {lead.reasons.map(
-                                                                    (
-                                                                        reason,
-                                                                    ) => (
-                                                                        <Badge
-                                                                            key={
-                                                                                reason
-                                                                            }
-                                                                            variant="destructive"
-                                                                            className="text-[11px]"
-                                                                        >
-                                                                            {REASON_LABELS[
-                                                                                reason
-                                                                            ] ??
-                                                                                reason}
-                                                                        </Badge>
-                                                                    ),
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
-                                {filteredLeads.length === 0 && (
-                                    <div className="p-8 text-center text-sm text-muted-foreground">
-                                        No leads match your search.
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                            <p className="text-base font-semibold">
+                                                {template.label}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Template v{template.version}
+                                            </p>
+                                        </div>
+                                        {selected && (
+                                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                                                Selected
+                                            </Badge>
+                                        )}
                                     </div>
-                                )}
-                            </ScrollArea>
-                        </div>
-                    ) : (
-                        <div className="h-[460px]" />
-                    )
-                ) : pickerData ? (
-                    <div className="space-y-3">
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-base">
-                                    Review: Calling Logic Applied At Start
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3 text-sm">
-                                <p className="text-muted-foreground">
-                                    The system re-checks every selected lead at
-                                    execution time before any call is placed.
-                                    Each attempt is inserted with
-                                    <code> call_status=queued </code>
-                                    before provider placement and
-                                    <code> retell_call_id </code>
-                                    is written after successful dispatch.
-                                </p>
-                                <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-                                    <li>
-                                        Campaign must be <code>active</code>.
-                                    </li>
-                                    <li>
-                                        Current local campaign time must be
-                                        inside <code>calling_window</code>.
-                                    </li>
-                                    <li>
-                                        Lead phone must normalize to dialable
-                                        E.164.
-                                    </li>
-                                    <li>
-                                        Lead must not be{" "}
-                                        <code>do_not_call</code>.
-                                    </li>
-                                    <li>
-                                        Lead status must be <code>new</code> or{" "}
-                                        <code>contacted</code>.
-                                    </li>
-                                    <li>
-                                        No active call exists for the lead (
-                                        <code>queued</code>,{" "}
-                                        <code>ringing</code>,{" "}
-                                        <code>in_progress</code>).
-                                    </li>
-                                    <li>
-                                        Attempts in this campaign are below
-                                        <code> retry_policy.max_attempts</code>.
-                                    </li>
-                                    <li>
-                                        Latest campaign outcome is not terminal
-                                        (<code>do_not_call</code>,{" "}
-                                        <code>wrong_number</code>).
-                                    </li>
-                                    <li>
-                                        Last campaign attempt is older than
-                                        <code>
-                                            {" "}
-                                            retry_policy.min_minutes_between_attempts
-                                        </code>
-                                        .
-                                    </li>
-                                </ul>
-                            </CardContent>
-                        </Card>
+                                    <p className="mt-3 text-sm text-muted-foreground">
+                                        {template.description}
+                                    </p>
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
 
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-base">
-                                    Batch Summary
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-2 text-sm">
-                                <div className="flex flex-wrap gap-2">
-                                    <Badge variant="outline">
-                                        Selected: {selectedLeadIds.size}
+                {step === "leads" && (
+                    <div className="space-y-3">
+                        {!pickerData ? (
+                            <div className="flex h-[460px] items-center justify-center">
+                                <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    <Badge variant="outline" className="gap-1.5 py-0.5">
+                                        <Users className="h-3.5 w-3.5" />
+                                        In View: {filteredLeads.length}
                                     </Badge>
-                                    <Badge variant="outline">
-                                        Search View: {filteredLeads.length}
+                                    <Badge variant="outline" className="gap-1.5 py-0.5">
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                        Selectable: {filteredLeads.filter((lead) => lead.selectable).length}
                                     </Badge>
-                                    <Badge variant="outline">
-                                        Campaign Max Attempts:{" "}
-                                        {pickerData.maxAttempts}
+                                    <Badge variant="outline" className="gap-1.5 py-0.5">
+                                        <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                                        Blocked: {filteredLeads.filter((lead) => !lead.selectable).length}
+                                    </Badge>
+                                    <Badge variant="outline" className="gap-1.5 py-0.5">
+                                        <Phone className="h-3.5 w-3.5 text-blue-600" />
+                                        Selected: {selectedInView}
                                     </Badge>
                                 </div>
-                                {reasonCounts.length > 0 && (
+
+                                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            checked={allSelectableChecked}
+                                            onCheckedChange={toggleAllSelectable}
+                                            aria-label="Select all selectable leads"
+                                        />
+                                        <span className="text-sm text-muted-foreground">
+                                            Select all eligible leads in view
+                                        </span>
+                                    </div>
+                                    <div className="relative w-full md:w-[280px]">
+                                        <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            value={search}
+                                            onChange={(event) => setSearch(event.target.value)}
+                                            placeholder="Search by name or phone"
+                                            className="pl-8"
+                                        />
+                                    </div>
+                                </div>
+
+                                {blockedReasonCounts.length > 0 && (
                                     <div className="flex flex-wrap gap-1">
-                                        {reasonCounts.map(([reason, count]) => (
+                                        {blockedReasonCounts.map(([reason, count]) => (
                                             <Badge
                                                 key={reason}
                                                 variant="destructive"
                                                 className="text-[11px]"
                                             >
-                                                {REASON_LABELS[reason] ??
-                                                    reason}
-                                                : {count}
+                                                {REASON_LABELS[reason] ?? reason}: {count}
                                             </Badge>
                                         ))}
                                     </div>
                                 )}
+
+                                <ScrollArea className="h-[420px] rounded-md border">
+                                    <Table>
+                                        <TableHeader className="sticky top-0 z-10 bg-background">
+                                            <TableRow>
+                                                <TableHead className="w-12" />
+                                                <TableHead>Lead</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead>Attempts</TableHead>
+                                                <TableHead>Latest Outcome</TableHead>
+                                                <TableHead>Eligibility</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {filteredLeads.map((lead) => {
+                                                const leadId = String(lead.leadId);
+                                                return (
+                                                    <TableRow key={leadId}>
+                                                        <TableCell className="align-top">
+                                                            <Checkbox
+                                                                checked={selectedLeadIdSet.has(leadId)}
+                                                                onCheckedChange={() => toggleLead(leadId)}
+                                                                disabled={!lead.selectable}
+                                                                aria-label={`Select ${lead.name}`}
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="align-top">
+                                                            <div className="font-medium">{lead.name}</div>
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {lead.phone}
+                                                            </div>
+                                                            {lead.conflictCampaignName && (
+                                                                <div className="text-[11px] text-muted-foreground">
+                                                                    Active in {lead.conflictCampaignName}
+                                                                </div>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="align-top">
+                                                            <Badge variant="outline">{lead.status}</Badge>
+                                                        </TableCell>
+                                                        <TableCell className="align-top">
+                                                            {lead.attemptsInCampaign}
+                                                        </TableCell>
+                                                        <TableCell className="align-top">
+                                                            {lead.latestCampaignOutcome ? (
+                                                                <Badge variant="secondary">
+                                                                    {getOutreachOutcomeLabel(
+                                                                        lead.latestCampaignOutcome,
+                                                                    )}
+                                                                </Badge>
+                                                            ) : (
+                                                                <span className="text-muted-foreground">-</span>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="align-top">
+                                                            {lead.selectable ? (
+                                                                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                                                                    Eligible
+                                                                </Badge>
+                                                            ) : (
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {lead.reasons.map((reason) => (
+                                                                        <Badge
+                                                                            key={`${leadId}-${reason}`}
+                                                                            variant="destructive"
+                                                                            className="text-[11px]"
+                                                                        >
+                                                                            {REASON_LABELS[reason] ?? reason}
+                                                                        </Badge>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </ScrollArea>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {step === "campaign" && activeTemplate && (
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base">
+                                    Use Existing Campaign
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                                <Button
+                                    variant={
+                                        effectiveTargetMode === "existing"
+                                            ? "default"
+                                            : "outline"
+                                    }
+                                    onClick={() => setTargetMode("existing")}
+                                    disabled={matchingCampaigns.length === 0}
+                                >
+                                    Existing {activeTemplate.label}
+                                </Button>
+                                <div className="space-y-2">
+                                    {matchingCampaigns.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground">
+                                            No existing {activeTemplate.shortLabel.toLowerCase()} campaigns yet.
+                                        </p>
+                                    ) : (
+                                        matchingCampaigns.map((campaign) => (
+                                            <button
+                                                key={campaign._id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setTargetMode("existing");
+                                                    setSelectedCampaignId(campaign._id);
+                                                }}
+                                                className={`w-full rounded-lg border p-3 text-left ${
+                                                    effectiveTargetMode === "existing" &&
+                                                    effectiveSelectedCampaignId === campaign._id
+                                                        ? "border-primary bg-primary/5"
+                                                        : "hover:bg-muted/40"
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className="font-medium">{campaign.name}</p>
+                                                    <Badge variant="outline">{campaign.status}</Badge>
+                                                </div>
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    {campaign.description || campaign.timezone}
+                                                </p>
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base">
+                                    Create New Campaign
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                <Button
+                                    variant={
+                                        effectiveTargetMode === "new"
+                                            ? "default"
+                                            : "outline"
+                                    }
+                                    onClick={() => setTargetMode("new")}
+                                >
+                                    New {activeTemplate.label}
+                                </Button>
+                                <div className="space-y-2">
+                                    <label className="text-xs text-muted-foreground">
+                                        Campaign name
+                                    </label>
+                                    <Input
+                                        value={effectiveCampaignName}
+                                        onChange={(event) => setCampaignName(event.target.value)}
+                                        disabled={effectiveTargetMode !== "new"}
+                                        placeholder={activeTemplate.defaultName}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        New campaigns start from template defaults and can be edited after launch.
+                                    </p>
+                                </div>
                             </CardContent>
                         </Card>
                     </div>
-                ) : (
-                    <div className="h-[460px]" />
+                )}
+
+                {step === "review" && (
+                    <div className="space-y-3">
+                        {!reviewData ? (
+                            <div className="flex h-[420px] items-center justify-center">
+                                <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : (
+                            <>
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-base">
+                                            Enrollment Summary
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3 text-sm">
+                                        <div className="flex flex-wrap gap-2">
+                                            <Badge variant="outline">
+                                                Selected: {reviewData.summary.selectedCount}
+                                            </Badge>
+                                            <Badge variant="outline">
+                                                Eligible: {reviewData.summary.eligibleCount}
+                                            </Badge>
+                                            <Badge variant="outline">
+                                                Conflicts: {reviewData.summary.conflictCount}
+                                            </Badge>
+                                            <Badge variant="outline">
+                                                Ineligible: {reviewData.summary.ineligibleCount}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-muted-foreground">
+                                            Final confirmation enrolls eligible leads and schedules them against the campaign rules.
+                                        </p>
+                                        {reviewData.target.dispatchMode === "next_window" &&
+                                            reviewData.target.nextCallableAt && (
+                                                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900">
+                                                    This campaign is outside its calling window. Eligible leads will be queued for the next valid window at {formatDateTimeHumanReadable(reviewData.target.nextCallableAt)}.
+                                                </p>
+                                            )}
+                                    </CardContent>
+                                </Card>
+
+                                <div className="grid gap-3 lg:grid-cols-3">
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-base">
+                                                Eligible Leads
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-2 text-sm">
+                                            {reviewData.eligibleLeads.length === 0 ? (
+                                                <p className="text-muted-foreground">No eligible leads selected.</p>
+                                            ) : (
+                                                reviewData.eligibleLeads.map((lead) => (
+                                                    <div key={lead.leadId} className="rounded-md border p-3">
+                                                        <p className="font-medium">{lead.name}</p>
+                                                        <p className="text-xs text-muted-foreground">{lead.phone}</p>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-base">
+                                                Conflicts
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-2 text-sm">
+                                            {reviewData.conflictLeads.length === 0 ? (
+                                                <p className="text-muted-foreground">No cross-campaign conflicts.</p>
+                                            ) : (
+                                                reviewData.conflictLeads.map((lead) => (
+                                                    <div key={lead.leadId} className="rounded-md border p-3">
+                                                        <p className="font-medium">{lead.name}</p>
+                                                        <p className="text-xs text-muted-foreground">{lead.phone}</p>
+                                                        <p className="mt-1 text-xs text-muted-foreground">
+                                                            {lead.conflictCampaignName
+                                                                ? `Already active in ${lead.conflictCampaignName}.`
+                                                                : "Already active in another campaign."}
+                                                        </p>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-base">
+                                                Ineligible
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-2 text-sm">
+                                            {reviewData.ineligibleLeads.length === 0 ? (
+                                                <p className="text-muted-foreground">No ineligible leads selected.</p>
+                                            ) : (
+                                                reviewData.ineligibleLeads.map((lead) => (
+                                                    <div key={lead.leadId} className="rounded-md border p-3">
+                                                        <p className="font-medium">{lead.name}</p>
+                                                        <p className="text-xs text-muted-foreground">{lead.phone}</p>
+                                                        <div className="mt-2 flex flex-wrap gap-1">
+                                                            {lead.reasons.map((reason) => (
+                                                                <Badge
+                                                                    key={`${lead.leadId}-${reason}`}
+                                                                    variant="destructive"
+                                                                    className="text-[11px]"
+                                                                >
+                                                                    {REASON_LABELS[reason] ?? reason}
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 )}
 
                 <div className="flex items-center justify-between gap-2 border-t pt-4">
                     <Button
                         variant="outline"
                         onClick={() => {
-                            resetWizardState();
+                            resetState();
                             onOpenChange(false);
                         }}
                     >
                         Cancel
                     </Button>
                     <div className="flex items-center gap-2">
-                        {wizardStep === 2 && (
-                            <Button
-                                variant="outline"
-                                onClick={() => setWizardStep(1)}
-                            >
+                        {currentStepIndex > 0 && (
+                            <Button variant="outline" onClick={goBack}>
                                 Back
                             </Button>
                         )}
-                        {wizardStep === 1 ? (
-                            <Button
-                                onClick={() => setWizardStep(2)}
-                                disabled={
-                                    isLoadingPicker ||
-                                    selectedLeadIds.size === 0
-                                }
-                            >
-                                Review ({selectedLeadIds.size})
+                        {step === "template" && (
+                            <Button onClick={goNext} disabled={!canAdvanceFromTemplate}>
+                                Next
                             </Button>
-                        ) : (
+                        )}
+                        {step === "leads" && (
+                            <Button onClick={goNext} disabled={!canAdvanceFromLeads}>
+                                Continue ({selectedLeadIds.length})
+                            </Button>
+                        )}
+                        {step === "campaign" && (
+                            <Button onClick={goNext} disabled={!canAdvanceFromCampaign}>
+                                Review
+                            </Button>
+                        )}
+                        {step === "review" && (
                             <Button
-                                onClick={handleStart}
-                                disabled={
-                                    isLoadingPicker ||
-                                    isStarting ||
-                                    selectedLeadIds.size === 0
-                                }
+                                onClick={handleSubmit}
+                                disabled={isSubmitting || eligibleCount === 0}
                             >
-                                {isStarting ? (
+                                {isSubmitting ? (
                                     <>
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Starting...
+                                        Enrolling...
                                     </>
                                 ) : (
-                                    `Start Outreach (${selectedLeadIds.size})`
+                                    `Enroll & Schedule (${eligibleCount})`
                                 )}
                             </Button>
                         )}

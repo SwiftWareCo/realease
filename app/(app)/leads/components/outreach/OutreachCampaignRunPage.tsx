@@ -72,6 +72,7 @@ export function OutreachCampaignRunPage({
 
     return (
         <CampaignRunView
+            campaign={selectedCampaign}
             data={runData}
             onBack={() => router.push("/leads/outreach")}
         />

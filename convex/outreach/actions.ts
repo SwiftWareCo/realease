@@ -5,6 +5,11 @@ import { api, internal } from "../_generated/api";
 import { action, internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { isValidPhoneNumber, normalizePhoneNumber } from "./phone";
+import {
+    buildDefaultCampaignName,
+    getOutreachCampaignTemplate,
+    outreachCampaignTemplateKeyValidator,
+} from "./templates";
 
 type CallStatus =
     | "queued"
@@ -216,38 +221,127 @@ function renderSmsTemplate(
 
 type EnrollBatchResult = {
     enrolled: Array<{ lead_id: Id<"leads">; stateId: string }>;
-    skipped: Array<{ lead_id: Id<"leads">; reason: string }>;
+    skipped: Array<{
+        lead_id: Id<"leads">;
+        reasons: string[];
+        conflict_campaign_id?: Id<"outreachCampaigns"> | null;
+        conflict_campaign_name?: string | null;
+    }>;
+};
+
+type LeadEnrollmentReview = {
+    target: {
+        campaignId: Id<"outreachCampaigns"> | null;
+        dispatchMode: string;
+        nextCallableAt: number | null;
+    };
+    summary: {
+        eligibleCount: number;
+    };
+    eligibleLeads: Array<{
+        leadId: Id<"leads">;
+    }>;
+    conflictLeads: Array<{
+        leadId: Id<"leads">;
+        reasons: string[];
+        conflictCampaignId: Id<"outreachCampaigns"> | null;
+        conflictCampaignName: string | null;
+    }>;
+    ineligibleLeads: Array<{
+        leadId: Id<"leads">;
+        reasons: string[];
+        conflictCampaignId: Id<"outreachCampaigns"> | null;
+        conflictCampaignName: string | null;
+    }>;
 };
 
 export const startCampaignOutreach = action({
     args: {
-        campaignId: v.id("outreachCampaigns"),
+        templateKey: v.optional(outreachCampaignTemplateKeyValidator),
+        campaignId: v.optional(v.id("outreachCampaigns")),
+        campaignName: v.optional(v.string()),
         leadIds: v.array(v.id("leads")),
     },
-    handler: async (ctx, args) => {
-        // Auth: verify the calling user owns this campaign.
-        await ctx.runQuery(
-            internal.outreach.auth.validateCampaignOwnership,
-            { campaignId: args.campaignId },
+    handler: async (ctx, args): Promise<{
+        campaignId: Id<"outreachCampaigns"> | null;
+        enrolledCount: number;
+        skippedCount: number;
+        requestedCount: number;
+        review: LeadEnrollmentReview;
+        enrolled: EnrollBatchResult["enrolled"];
+        skipped: EnrollBatchResult["skipped"];
+    }> => {
+        if (args.campaignId) {
+            await ctx.runQuery(
+                internal.outreach.auth.validateCampaignOwnership,
+                { campaignId: args.campaignId },
+            );
+        }
+
+        const initialReview: LeadEnrollmentReview = await ctx.runQuery(
+            internal.outreach.queries.getLeadEnrollmentReviewInternal,
+            {
+                templateKey: args.templateKey,
+                campaignId: args.campaignId,
+                leadIds: args.leadIds,
+            },
         );
 
-        // Enroll leads via the new state-driven flow.
-        // Enrollment creates state rows and schedules evaluation — no immediate dispatch.
-        const enrollResult = (await ctx.runMutation(
-            internal.outreach.campaignLeadState.enrollLeadsInCampaignBatch,
-            {
-                campaign_id: args.campaignId,
-                lead_ids: args.leadIds,
-            },
-        )) as EnrollBatchResult;
+        let resolvedCampaignId = args.campaignId ?? null;
+        if (!resolvedCampaignId && initialReview.summary.eligibleCount > 0) {
+            if (!args.templateKey) {
+                throw new Error("Choose a campaign template before creating a new campaign.");
+            }
+            const template = getOutreachCampaignTemplate(args.templateKey);
+            resolvedCampaignId = await ctx.runMutation(
+                api.outreach.mutations.createCampaign,
+                {
+                    name:
+                        args.campaignName?.trim() ||
+                        buildDefaultCampaignName(args.templateKey),
+                    template_key: args.templateKey,
+                    template_version: template.version,
+                },
+            );
+        }
+
+        const enrollResult: EnrollBatchResult = resolvedCampaignId
+            ? ((await ctx.runMutation(
+                  internal.outreach.campaignLeadState.enrollLeadsInCampaignBatch,
+                  {
+                      campaign_id: resolvedCampaignId,
+                      lead_ids: initialReview.eligibleLeads.map(
+                          (lead) => lead.leadId,
+                      ),
+                      template_key: args.templateKey,
+                  },
+              )) as EnrollBatchResult)
+            : { enrolled: [], skipped: [] };
+
+        const skipped = [
+            ...initialReview.conflictLeads.map((lead) => ({
+                lead_id: lead.leadId,
+                reasons: lead.reasons,
+                conflict_campaign_id: lead.conflictCampaignId,
+                conflict_campaign_name: lead.conflictCampaignName,
+            })),
+            ...initialReview.ineligibleLeads.map((lead) => ({
+                lead_id: lead.leadId,
+                reasons: lead.reasons,
+                conflict_campaign_id: lead.conflictCampaignId,
+                conflict_campaign_name: lead.conflictCampaignName,
+            })),
+            ...enrollResult.skipped,
+        ];
 
         return {
-            campaignId: args.campaignId,
+            campaignId: resolvedCampaignId,
             enrolledCount: enrollResult.enrolled.length,
-            skippedCount: enrollResult.skipped.length,
+            skippedCount: skipped.length,
             requestedCount: args.leadIds.length,
+            review: initialReview,
             enrolled: enrollResult.enrolled,
-            skipped: enrollResult.skipped,
+            skipped,
         };
     },
 });
