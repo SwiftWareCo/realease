@@ -50,6 +50,12 @@ const SELLER_PIPELINE_STAGE_VALIDATOR = v.union(
     v.literal("sold"),
 );
 
+const CAMPAIGN_LEAD_OUTCOME_ACTION_VALIDATOR = v.union(
+    v.literal("continue"),
+    v.literal("stop_calling"),
+    v.literal("pause_for_realtor"),
+);
+
 const OUTCOME_VALIDATOR = v.union(
     v.literal("connected_interested"),
     v.literal("connected_not_interested"),
@@ -69,6 +75,9 @@ const OUTCOME_ROUTING_VALIDATOR = v.array(
         next_seller_pipeline_stage: v.optional(SELLER_PIPELINE_STAGE_VALIDATOR),
         send_follow_up_sms: v.optional(v.boolean()),
         custom_sms_template: v.optional(v.string()),
+        campaign_lead_action: v.optional(
+            CAMPAIGN_LEAD_OUTCOME_ACTION_VALIDATOR,
+        ),
     }),
 );
 
@@ -78,6 +87,73 @@ const FOLLOW_UP_SMS_VALIDATOR = v.object({
     default_template: v.optional(v.string()),
     send_only_on_outcomes: v.optional(v.array(OUTCOME_VALIDATOR)),
 });
+
+type OutcomeRoutingRule = NonNullable<
+    Doc<"outreachCampaigns">["outcome_routing"]
+>[number];
+
+const TERMINAL_OUTCOMES: ReadonlySet<Doc<"outreachCalls">["outcome"]> =
+    new Set(["do_not_call", "wrong_number"]);
+const SMS_TRIGGER_OUTCOMES: ReadonlySet<Doc<"outreachCalls">["outcome"]> =
+    new Set(["no_answer", "voicemail_left"]);
+
+function getDefaultCampaignLeadAction(
+    outcome: Doc<"outreachCalls">["outcome"],
+): OutcomeRoutingRule["campaign_lead_action"] {
+    switch (outcome) {
+        case "connected_interested":
+        case "connected_not_interested":
+            return "stop_calling";
+        case "callback_requested":
+            return "pause_for_realtor";
+        default:
+            return "continue";
+    }
+}
+
+function sanitizeOutcomeRouting(
+    rules: OutcomeRoutingRule[],
+): OutcomeRoutingRule[] {
+    return rules.map((rule) => {
+        if (TERMINAL_OUTCOMES.has(rule.outcome)) {
+            return {
+                outcome: rule.outcome,
+                send_follow_up_sms: false,
+            };
+        }
+
+        const customSmsTemplate = normalizeOptionalString(
+            rule.custom_sms_template,
+        );
+        const sanitized: OutcomeRoutingRule = {
+            outcome: rule.outcome,
+        };
+        if (rule.next_lead_status !== undefined) {
+            sanitized.next_lead_status = rule.next_lead_status;
+        }
+        if (rule.next_buyer_pipeline_stage !== undefined) {
+            sanitized.next_buyer_pipeline_stage =
+                rule.next_buyer_pipeline_stage;
+        }
+        if (rule.next_seller_pipeline_stage !== undefined) {
+            sanitized.next_seller_pipeline_stage =
+                rule.next_seller_pipeline_stage;
+        }
+        sanitized.campaign_lead_action =
+            rule.campaign_lead_action ?? getDefaultCampaignLeadAction(rule.outcome);
+        if (SMS_TRIGGER_OUTCOMES.has(rule.outcome)) {
+            if (rule.send_follow_up_sms !== undefined) {
+                sanitized.send_follow_up_sms = rule.send_follow_up_sms;
+            }
+            if (rule.send_follow_up_sms !== false && customSmsTemplate) {
+                sanitized.custom_sms_template = customSmsTemplate;
+            }
+        } else {
+            sanitized.send_follow_up_sms = false;
+        }
+        return sanitized;
+    });
+}
 
 const OUTREACH_SMS_DIRECTION_VALIDATOR = v.union(
     v.literal("inbound"),
@@ -284,6 +360,19 @@ export const createCampaign = mutation({
         retell_phone_number_id: v.optional(v.string()),
         twilio_messaging_service_sid: v.optional(v.string()),
         timezone: v.optional(v.string()),
+        calling_window: v.optional(
+            v.object({
+                start_hour_local: v.number(),
+                end_hour_local: v.number(),
+                allowed_weekdays: v.array(WEEKDAY_VALIDATOR),
+            }),
+        ),
+        retry_policy: v.optional(
+            v.object({
+                max_attempts: v.number(),
+                min_minutes_between_attempts: v.number(),
+            }),
+        ),
         outcome_routing: v.optional(OUTCOME_ROUTING_VALIDATOR),
         follow_up_sms: v.optional(FOLLOW_UP_SMS_VALIDATOR),
     },
@@ -341,12 +430,12 @@ export const createCampaign = mutation({
             twilio_messaging_service_sid:
                 resolvedTwilioMessagingServiceSid || undefined,
             timezone: resolvedTimezone,
-            calling_window: template?.callingWindow ?? {
+            calling_window: args.calling_window ?? template?.callingWindow ?? {
                 start_hour_local: 9,
                 end_hour_local: 18,
                 allowed_weekdays: [1, 2, 3, 4, 5],
             },
-            retry_policy: template?.retryPolicy ?? {
+            retry_policy: args.retry_policy ?? template?.retryPolicy ?? {
                 max_attempts: 3,
                 min_minutes_between_attempts: 60,
             },
@@ -365,7 +454,9 @@ export const createCampaign = mutation({
                     template?.followUpSms.send_only_on_outcomes ??
                     ["no_answer", "voicemail_left"],
             },
-            outcome_routing: args.outcome_routing ?? template?.outcomeRouting,
+            outcome_routing: args.outcome_routing
+                ? sanitizeOutcomeRouting(args.outcome_routing)
+                : template?.outcomeRouting,
             created_by_user_id: userId,
             created_at: now,
             updated_at: now,
@@ -453,7 +544,9 @@ export const updateCampaignSettings = mutation({
             updates.retry_policy = args.retry_policy;
         }
         if (args.outcome_routing !== undefined) {
-            updates.outcome_routing = args.outcome_routing ?? undefined;
+            updates.outcome_routing = args.outcome_routing
+                ? sanitizeOutcomeRouting(args.outcome_routing)
+                : undefined;
         }
         if (args.follow_up_sms !== undefined) {
             updates.follow_up_sms = args.follow_up_sms
@@ -996,7 +1089,22 @@ async function transitionStateOnCallEventImpl(
         active_call_id: undefined,
     };
 
-    if (outcome === "connected_interested") {
+    if (outcome === "do_not_call" || outcome === "wrong_number") {
+        await ctx.db.patch(stateRow._id, {
+            ...baseUpdates,
+            state: "terminal_blocked",
+            next_action_at_ms: undefined,
+        });
+        return;
+    }
+
+    const routeRule = campaign?.outcome_routing?.find(
+        (rule) => rule.outcome === outcome,
+    );
+    const campaignLeadAction =
+        routeRule?.campaign_lead_action ?? getDefaultCampaignLeadAction(outcome);
+
+    if (campaignLeadAction === "stop_calling") {
         await ctx.db.patch(stateRow._id, {
             ...baseUpdates,
             state: "done",
@@ -1005,10 +1113,10 @@ async function transitionStateOnCallEventImpl(
         return;
     }
 
-    if (outcome === "do_not_call" || outcome === "wrong_number") {
+    if (campaignLeadAction === "pause_for_realtor") {
         await ctx.db.patch(stateRow._id, {
             ...baseUpdates,
-            state: "terminal_blocked",
+            state: "paused_for_realtor",
             next_action_at_ms: undefined,
         });
         return;

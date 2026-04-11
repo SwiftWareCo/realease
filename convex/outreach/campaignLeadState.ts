@@ -32,9 +32,28 @@ const ACTIVE_CALL_STATUSES: ReadonlySet<Doc<"outreachCalls">["call_status"]> =
 const TRANSIENT_RETRY_BACKOFF_MS = 30_000; // 30 seconds
 const SLOT_RETRY_DELAY_MS = 60_000; // 60 seconds
 
+type CampaignLeadOutcomeAction =
+    | "continue"
+    | "stop_calling"
+    | "pause_for_realtor";
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function getDefaultCampaignLeadAction(
+    outcome: Doc<"outreachCalls">["outcome"],
+): CampaignLeadOutcomeAction {
+    switch (outcome) {
+        case "connected_interested":
+        case "connected_not_interested":
+            return "stop_calling";
+        case "callback_requested":
+            return "pause_for_realtor";
+        default:
+            return "continue";
+    }
+}
 
 function campaignCallingWindow(
     campaign: Doc<"outreachCampaigns">,
@@ -525,8 +544,24 @@ export const transitionStateOnCallEvent = internalMutation({
             active_call_id: undefined,
         };
 
-        // Terminal success.
-        if (outcome === "connected_interested") {
+        // Terminal blocked.
+        if (outcome === "do_not_call" || outcome === "wrong_number") {
+            await ctx.db.patch(stateRow._id, {
+                ...baseUpdates,
+                state: "terminal_blocked",
+                next_action_at_ms: undefined,
+            });
+            return;
+        }
+
+        const routeRule = campaign?.outcome_routing?.find(
+            (rule) => rule.outcome === outcome,
+        );
+        const campaignLeadAction =
+            routeRule?.campaign_lead_action ??
+            getDefaultCampaignLeadAction(outcome);
+
+        if (campaignLeadAction === "stop_calling") {
             await ctx.db.patch(stateRow._id, {
                 ...baseUpdates,
                 state: "done",
@@ -535,11 +570,10 @@ export const transitionStateOnCallEvent = internalMutation({
             return;
         }
 
-        // Terminal blocked.
-        if (outcome === "do_not_call" || outcome === "wrong_number") {
+        if (campaignLeadAction === "pause_for_realtor") {
             await ctx.db.patch(stateRow._id, {
                 ...baseUpdates,
-                state: "terminal_blocked",
+                state: "paused_for_realtor",
                 next_action_at_ms: undefined,
             });
             return;

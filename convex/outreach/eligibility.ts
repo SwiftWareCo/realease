@@ -3,6 +3,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { isValidPhoneNumber } from "./phone";
 import type { OutreachCampaignTemplateKey } from "./templates";
 import { getOutreachCampaignTemplate } from "./templates";
+import { getLatestCampaignCallSnapshot } from "./latestCalls";
 
 type DataCtx = QueryCtx | MutationCtx;
 
@@ -96,11 +97,16 @@ async function getCurrentCampaignStats(
         };
     }
 
+    const latestCall = await getLatestCampaignCallSnapshot(ctx, {
+        campaignId,
+        leadId,
+    });
+
     return {
         attemptsInCampaign: stateRow.attempts_in_campaign,
         hasActiveCall:
             stateRow.state === "queued" || stateRow.state === "in_progress",
-        latestOutcome: stateRow.last_outcome ?? null,
+        latestOutcome: latestCall?.outcome ?? null,
         alreadyInCampaign: !TERMINAL_STATES.has(stateRow.state),
     };
 }

@@ -40,16 +40,17 @@ export type CampaignTemplate = CampaignTemplatesResult[number];
 export type PickerData = OutreachLeadPickerResult;
 export type PickerLead = OutreachLeadPickerResult["leads"][number];
 export type LeadEnrollmentReview = LeadEnrollmentReviewResult;
+export type CampaignRuntimeSummary = CampaignTemplate["runtimeSummary"];
 
 export type CampaignStatus = CampaignRow["status"];
 export type Weekday = CampaignRow["callingWindow"]["allowed_weekdays"][number];
+export type OutcomeRoutingRule = CampaignRuntimeSummary["outcomeRouting"][number];
 
 // UI-local, flattened edit form model that maps into updateCampaignSettings args.
 export type CampaignSettingsInput = {
     name: string;
     description: string;
     status: CampaignStatus;
-    timezone: string;
     startHour: number;
     endHour: number;
     allowedWeekdays: Weekday[];
@@ -57,4 +58,5 @@ export type CampaignSettingsInput = {
     cooldownMinutes: number;
     followUpSmsEnabled: boolean;
     followUpSmsDefaultTemplate: string;
+    outcomeRouting: OutcomeRoutingRule[];
 };

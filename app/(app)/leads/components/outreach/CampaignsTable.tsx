@@ -79,8 +79,8 @@ export function CampaignsTable({
                                     <div className="font-medium">{campaign.name}</div>
                                     <div className="text-xs text-muted-foreground">
                                         {campaign.templateLabel
-                                            ? `${campaign.templateLabel} | ${campaign.description || campaign.timezone}`
-                                            : campaign.description || campaign.timezone}
+                                            ? `${campaign.templateLabel}${campaign.description ? ` | ${campaign.description}` : ""}`
+                                            : campaign.description || "No description"}
                                     </div>
                                 </TableCell>
                                 <TableCell>

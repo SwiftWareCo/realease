@@ -14,6 +14,14 @@ import {
     resolveCampaignTemplateKey,
 } from "./templates";
 import { getNextWindowOpenMs, isInsideCallingWindow } from "./callingWindow";
+import {
+    getLatestCampaignCallSnapshotsByLeadId,
+    type LatestCampaignCallSnapshot,
+} from "./latestCalls";
+import {
+    buildCampaignRuntimeSummary,
+    buildCampaignRuntimeSummaryForTemplate,
+} from "./runtimeSummary";
 
 function resolveEffectiveTemplateKey(args: {
     campaign?: Doc<"outreachCampaigns"> | null;
@@ -40,6 +48,118 @@ function getCampaignTemplateMeta(templateKey: string | undefined) {
     );
 }
 
+function buildLeadStateExplainability(args: {
+    row: Doc<"outreachCampaignLeadStates">;
+    campaign: Doc<"outreachCampaigns">;
+    latestCall: LatestCampaignCallSnapshot | null;
+    now: number;
+}) {
+    const { row, campaign, latestCall, now } = args;
+    const maxAttempts = campaign.retry_policy.max_attempts;
+    const nextAttemptNumber = Math.min(
+        row.attempts_in_campaign + 1,
+        maxAttempts,
+    );
+    const latestOutcome = latestCall?.outcome ?? row.last_outcome ?? null;
+    const nextActionAt = row.next_action_at_ms ?? null;
+    const nextActionTiming =
+        nextActionAt !== null && nextActionAt > now ? " when due" : "";
+
+    switch (row.state) {
+        case "eligible":
+            return {
+                campaignState: row.state,
+                stateReason:
+                    nextActionAt !== null && nextActionAt > now
+                        ? "Ready for outreach and waiting for the next valid calling window."
+                        : "Ready for outreach and eligible for the next scheduler pass.",
+                nextActionAt,
+                nextActionLabel: `Queue call attempt ${nextAttemptNumber} of ${maxAttempts}${nextActionTiming}`,
+                stopReason: null,
+            };
+        case "queued":
+            return {
+                campaignState: row.state,
+                stateReason: "A call has been queued for this lead.",
+                nextActionAt,
+                nextActionLabel: "Wait for the call to start",
+                stopReason: null,
+            };
+        case "in_progress":
+            return {
+                campaignState: row.state,
+                stateReason: "A call is currently in progress for this lead.",
+                nextActionAt,
+                nextActionLabel: "Wait for the call outcome",
+                stopReason: null,
+            };
+        case "cooldown":
+            return {
+                campaignState: row.state,
+                stateReason: `Cooling down before retry attempt ${nextAttemptNumber} of ${maxAttempts}.`,
+                nextActionAt,
+                nextActionLabel: `Retry attempt ${nextAttemptNumber} of ${maxAttempts}`,
+                stopReason: null,
+            };
+        case "sms_pending":
+            return {
+                campaignState: row.state,
+                stateReason:
+                    "Waiting to send follow-up SMS after the no-answer or voicemail sequence.",
+                nextActionAt,
+                nextActionLabel: "Send follow-up SMS",
+                stopReason: null,
+            };
+        case "paused_for_realtor":
+            return {
+                campaignState: row.state,
+                stateReason: latestOutcome
+                    ? `Paused for realtor review because latest outcome was ${latestOutcome}.`
+                    : "Paused for realtor review by a campaign outcome rule.",
+                nextActionAt,
+                nextActionLabel: "Realtor review required before more outreach",
+                stopReason: "paused_for_realtor",
+            };
+        case "error":
+            return {
+                campaignState: row.state,
+                stateReason:
+                    row.last_error ??
+                    "The scheduler hit an error while processing this lead.",
+                nextActionAt,
+                nextActionLabel:
+                    nextActionAt !== null ? "Retry after error" : "Needs review",
+                stopReason: null,
+            };
+        case "terminal_blocked":
+            return {
+                campaignState: row.state,
+                stateReason: latestOutcome
+                    ? `Blocked because latest outcome was ${latestOutcome}.`
+                    : "Blocked by a terminal campaign rule.",
+                nextActionAt,
+                nextActionLabel: "No further outreach",
+                stopReason: latestOutcome ?? "terminal_outcome",
+            };
+        case "done":
+            return {
+                campaignState: row.state,
+                stateReason:
+                    row.attempts_in_campaign >= maxAttempts
+                        ? "Done because maximum attempts were reached."
+                        : latestOutcome
+                          ? `Done because latest outcome was ${latestOutcome}.`
+                          : "Done because campaign outreach is complete for this lead.",
+                nextActionAt,
+                nextActionLabel: "No further outreach",
+                stopReason:
+                    row.attempts_in_campaign >= maxAttempts
+                        ? "max_attempts_reached"
+                        : latestOutcome,
+            };
+    }
+}
+
 function getTargetCampaignConfig(args: {
     campaign?: Doc<"outreachCampaigns"> | null;
     templateKey: (typeof OUTREACH_CAMPAIGN_TEMPLATE_KEYS)[number];
@@ -63,6 +183,10 @@ function getTargetCampaignConfig(args: {
         targetKind: args.campaign ? "existing" : "new",
         templateVersion:
             args.campaign?.template_version ?? template.version,
+        runtimeSummary: buildCampaignRuntimeSummary({
+            campaign: args.campaign ?? null,
+            template,
+        }),
     };
 }
 
@@ -138,6 +262,7 @@ async function buildLeadEnrollmentReviewPayload(
             callingWindow: targetConfig.callingWindow,
             dispatchMode: canCallNow ? "immediate" : "next_window",
             nextCallableAt,
+            runtimeSummary: targetConfig.runtimeSummary,
         },
         summary: {
             selectedCount: reviewLeads.length,
@@ -173,6 +298,9 @@ export const getCampaignTemplates = query({
                 description: template.description,
                 recommendedLeadType: template.recommendedLeadType,
                 defaultName: buildDefaultCampaignName(template.key),
+                runtimeSummary: buildCampaignRuntimeSummaryForTemplate(
+                    template.key,
+                ),
             };
         });
     },
@@ -211,6 +339,7 @@ export const getOutreachLeadPicker = query({
             maxAttempts:
                 campaign?.retry_policy.max_attempts ??
                 getOutreachCampaignTemplate(templateKey).retryPolicy.max_attempts,
+            runtimeSummary: review.target.runtimeSummary,
             totalLeads: review.allLeads.length,
             selectableCount: review.summary.eligibleCount,
             leads: review.allLeads,
@@ -307,34 +436,44 @@ export const getCampaignsForPicker = query({
                 const templateMeta = getCampaignTemplateMeta(
                     resolvedTemplateKey ?? undefined,
                 );
+                const runtimeSummary = resolvedTemplateKey
+                    ? buildCampaignRuntimeSummary({
+                          campaign,
+                          template: getOutreachCampaignTemplate(
+                              resolvedTemplateKey,
+                          ),
+                      })
+                    : null;
+
                 return {
-                _id: campaign._id,
-                name: campaign.name,
-                description: campaign.description ?? null,
-                status: campaign.status,
-                templateKey: resolvedTemplateKey,
-                templateVersion:
-                    campaign.template_version ?? templateMeta?.version ?? null,
-                templateLabel: templateMeta?.label ?? null,
-                timezone: campaign.timezone,
-                retellAgentId: campaign.retell_agent_id,
-                retellPhoneNumberId: campaign.retell_phone_number_id ?? null,
-                twilioMessagingServiceSid:
-                    campaign.twilio_messaging_service_sid ?? null,
-                followUpSms: {
-                    enabled: campaign.follow_up_sms?.enabled ?? false,
-                    delay_minutes: campaign.follow_up_sms?.delay_minutes ?? 3,
-                    default_template:
-                        campaign.follow_up_sms?.default_template ?? null,
-                    send_only_on_outcomes:
-                        campaign.follow_up_sms?.send_only_on_outcomes ?? [],
-                },
-                retryPolicy: campaign.retry_policy,
-                callingWindow: campaign.calling_window,
-                updatedAt: campaign.updated_at,
-                hasCallHistory:
-                    hasCallHistoryByCampaignId.get(String(campaign._id)) ??
-                    false,
+                    _id: campaign._id,
+                    name: campaign.name,
+                    description: campaign.description ?? null,
+                    status: campaign.status,
+                    templateKey: resolvedTemplateKey,
+                    templateVersion:
+                        campaign.template_version ?? templateMeta?.version ?? null,
+                    templateLabel: templateMeta?.label ?? null,
+                    timezone: campaign.timezone,
+                    retellAgentId: campaign.retell_agent_id,
+                    retellPhoneNumberId: campaign.retell_phone_number_id ?? null,
+                    twilioMessagingServiceSid:
+                        campaign.twilio_messaging_service_sid ?? null,
+                    followUpSms: {
+                        enabled: campaign.follow_up_sms?.enabled ?? false,
+                        delay_minutes: campaign.follow_up_sms?.delay_minutes ?? 3,
+                        default_template:
+                            campaign.follow_up_sms?.default_template ?? null,
+                        send_only_on_outcomes:
+                            campaign.follow_up_sms?.send_only_on_outcomes ?? [],
+                    },
+                    retryPolicy: campaign.retry_policy,
+                    callingWindow: campaign.calling_window,
+                    runtimeSummary,
+                    updatedAt: campaign.updated_at,
+                    hasCallHistory:
+                        hasCallHistoryByCampaignId.get(String(campaign._id)) ??
+                        false,
                 };
             });
     },
@@ -377,9 +516,13 @@ export const getCampaignCallAttempts = query({
             .order("desc")
             .take(take);
 
+        const campaignTemplateKey = resolveCampaignTemplateKey(campaign);
+        const campaignTemplate = campaignTemplateKey
+            ? getOutreachCampaignTemplate(campaignTemplateKey)
+            : null;
+
         // Build lead cache from state rows + recent calls.
         const leadsById = new Map<string, Doc<"leads"> | null>();
-        const latestRecentCallByLeadId = new Map<string, Doc<"outreachCalls">>();
         for (const row of stateRows) {
             const key = String(row.lead_id);
             if (!leadsById.has(key)) {
@@ -391,27 +534,14 @@ export const getCampaignCallAttempts = query({
             if (!leadsById.has(key)) {
                 leadsById.set(key, await ctx.db.get(call.lead_id));
             }
-            if (!latestRecentCallByLeadId.has(key)) {
-                latestRecentCallByLeadId.set(key, call);
-            }
         }
-        for (const row of stateRows) {
-            const key = String(row.lead_id);
-            if (latestRecentCallByLeadId.has(key)) {
-                continue;
-            }
-            const leadCalls = await ctx.db
-                .query("outreachCalls")
-                .withIndex("by_lead_id", (q) => q.eq("lead_id", row.lead_id))
-                .order("desc")
-                .take(20);
-            const latestCallForCampaign =
-                leadCalls.find((call) => call.campaign_id === args.campaignId) ??
-                null;
-            if (latestCallForCampaign) {
-                latestRecentCallByLeadId.set(key, latestCallForCampaign);
-            }
-        }
+        const latestCallByLeadId = await getLatestCampaignCallSnapshotsByLeadId(
+            ctx,
+            {
+                campaignId: args.campaignId,
+                leadIds: stateRows.map((row) => row.lead_id),
+            },
+        );
 
         // Build summary from state rows (approximate — counts enrolled leads).
         const summary = {
@@ -435,7 +565,13 @@ export const getCampaignCallAttempts = query({
             .map((row) => {
                 const lead = leadsById.get(String(row.lead_id)) ?? null;
                 const latestCall =
-                    latestRecentCallByLeadId.get(String(row.lead_id)) ?? null;
+                    latestCallByLeadId.get(String(row.lead_id)) ?? null;
+                const explainability = buildLeadStateExplainability({
+                    row,
+                    campaign,
+                    latestCall,
+                    now: Date.now(),
+                });
                 const stateToCallStatus: Record<
                     string,
                     Doc<"outreachCalls">["call_status"]
@@ -445,6 +581,7 @@ export const getCampaignCallAttempts = query({
                     in_progress: "in_progress",
                     cooldown: "completed",
                     sms_pending: "completed",
+                    paused_for_realtor: "completed",
                     error: "failed",
                     terminal_blocked: "completed",
                     done: "completed",
@@ -456,6 +593,11 @@ export const getCampaignCallAttempts = query({
                     leadStatus: lead?.status ?? null,
                     leadDoNotCall: lead?.do_not_call ?? false,
                     leadSmsOptOut: lead?.sms_opt_out ?? false,
+                    campaignState: explainability.campaignState,
+                    stateReason: explainability.stateReason,
+                    nextActionAt: explainability.nextActionAt,
+                    nextActionLabel: explainability.nextActionLabel,
+                    stopReason: explainability.stopReason,
                     attempts: row.attempts_in_campaign,
                     activeCalls:
                         row.state === "queued" || row.state === "in_progress"
@@ -474,7 +616,7 @@ export const getCampaignCallAttempts = query({
                         stateToCallStatus[row.state] ??
                         ("completed" as Doc<"outreachCalls">["call_status"]),
                     latestOutcome:
-                        latestCall?.outcome ?? row.last_outcome ?? null,
+                        latestCall?.outcome ?? null,
                 };
             })
             .sort((a, b) => b.latestInitiatedAt - a.latestInitiatedAt);
@@ -485,6 +627,16 @@ export const getCampaignCallAttempts = query({
                 name: campaign.name,
                 status: campaign.status,
                 timezone: campaign.timezone,
+                templateKey: campaignTemplateKey,
+                templateLabel: campaignTemplate?.label ?? null,
+                templateVersion:
+                    campaign.template_version ?? campaignTemplate?.version ?? null,
+                runtimeSummary: campaignTemplate
+                    ? buildCampaignRuntimeSummary({
+                          campaign,
+                          template: campaignTemplate,
+                      })
+                    : null,
             },
             summary,
             campaignLeads,

@@ -16,6 +16,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Table,
@@ -42,6 +43,7 @@ import type {
 } from "./types";
 import { getOutreachOutcomeLabel } from "@/lib/outreach/outcomes";
 import { formatDateTimeHumanReadable } from "@/utils/dateandtimes";
+import { RuntimeSummaryCard } from "./RuntimeSummaryCard";
 
 type WizardStepKey = "template" | "leads" | "campaign" | "review";
 
@@ -128,9 +130,19 @@ export function StartOutreachWizardModal({
         (effectiveTargetMode === "existing"
             ? (selectedCampaignId ?? matchingCampaigns[0]?._id ?? null)
             : null);
+    const selectedCampaignForSummary =
+        matchingCampaigns.find(
+            (campaign) => campaign._id === effectiveSelectedCampaignId,
+        ) ??
+        matchingCampaigns[0] ??
+        null;
     const effectiveTemplateKey =
         fixedCampaign?.templateKey ?? selectedTemplateKey ?? null;
     const effectiveCampaignName = campaignName || activeTemplate?.defaultName || "";
+    const campaignStepRuntimeSummary =
+        effectiveTargetMode === "existing"
+            ? selectedCampaignForSummary?.runtimeSummary
+            : activeTemplate?.runtimeSummary;
 
     const pickerDataRaw = useQuery(
         api.outreach.queries.getOutreachLeadPicker,
@@ -342,41 +354,49 @@ export function StartOutreachWizardModal({
                 </div>
 
                 {step === "template" && (
-                    <div className="grid gap-3 md:grid-cols-2">
-                        {templates.map((template) => {
-                            const selected = template.key === selectedTemplateKey;
-                            return (
-                                <button
-                                    key={template.key}
-                                    type="button"
-                                    onClick={() => handleTemplateSelection(template)}
-                                    className={`rounded-xl border p-4 text-left transition-colors ${
-                                        selected
-                                            ? "border-primary bg-primary/5"
-                                            : "hover:border-primary/40 hover:bg-muted/30"
-                                    }`}
-                                >
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <p className="text-base font-semibold">
-                                                {template.label}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                Template v{template.version}
-                                            </p>
+                    <div className="space-y-3">
+                        <div className="grid gap-3 md:grid-cols-2">
+                            {templates.map((template) => {
+                                const selected =
+                                    template.key === selectedTemplateKey;
+                                return (
+                                    <button
+                                        key={template.key}
+                                        type="button"
+                                        onClick={() =>
+                                            handleTemplateSelection(template)
+                                        }
+                                        className={`rounded-xl border p-4 text-left transition-colors ${
+                                            selected
+                                                ? "border-primary bg-primary/5"
+                                                : "hover:border-primary/40 hover:bg-muted/30"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-base font-semibold">
+                                                    {template.label}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Template v{template.version}
+                                                </p>
+                                            </div>
+                                            {selected && (
+                                                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                                                    Selected
+                                                </Badge>
+                                            )}
                                         </div>
-                                        {selected && (
-                                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                                                Selected
-                                            </Badge>
-                                        )}
-                                    </div>
-                                    <p className="mt-3 text-sm text-muted-foreground">
-                                        {template.description}
-                                    </p>
-                                </button>
-                            );
-                        })}
+                                        <p className="mt-3 text-sm text-muted-foreground">
+                                            {template.description}
+                                        </p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <RuntimeSummaryCard
+                            summary={activeTemplate?.runtimeSummary}
+                        />
                     </div>
                 )}
 
@@ -527,93 +547,101 @@ export function StartOutreachWizardModal({
                 )}
 
                 {step === "campaign" && activeTemplate && (
-                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-base">
-                                    Use Existing Campaign
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-2">
-                                <Button
-                                    variant={
-                                        effectiveTargetMode === "existing"
-                                            ? "default"
-                                            : "outline"
-                                    }
-                                    onClick={() => setTargetMode("existing")}
-                                    disabled={matchingCampaigns.length === 0}
-                                >
-                                    Existing {activeTemplate.label}
-                                </Button>
-                                <div className="space-y-2">
-                                    {matchingCampaigns.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">
-                                            No existing {activeTemplate.shortLabel.toLowerCase()} campaigns yet.
-                                        </p>
-                                    ) : (
-                                        matchingCampaigns.map((campaign) => (
-                                            <button
-                                                key={campaign._id}
-                                                type="button"
-                                                onClick={() => {
-                                                    setTargetMode("existing");
-                                                    setSelectedCampaignId(campaign._id);
-                                                }}
-                                                className={`w-full rounded-lg border p-3 text-left ${
-                                                    effectiveTargetMode === "existing" &&
-                                                    effectiveSelectedCampaignId === campaign._id
-                                                        ? "border-primary bg-primary/5"
-                                                        : "hover:bg-muted/40"
-                                                }`}
-                                            >
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <p className="font-medium">{campaign.name}</p>
-                                                    <Badge variant="outline">{campaign.status}</Badge>
-                                                </div>
-                                                <p className="mt-1 text-xs text-muted-foreground">
-                                                    {campaign.description || campaign.timezone}
-                                                </p>
-                                            </button>
-                                        ))
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
+                    <div className="space-y-3">
+                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base">
+                                        Use Existing Campaign
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-2">
+                                    <Button
+                                        variant={
+                                            effectiveTargetMode === "existing"
+                                                ? "default"
+                                                : "outline"
+                                        }
+                                        onClick={() => setTargetMode("existing")}
+                                        disabled={matchingCampaigns.length === 0}
+                                    >
+                                        Existing {activeTemplate.label}
+                                    </Button>
+                                    <div className="space-y-2">
+                                        {matchingCampaigns.length === 0 ? (
+                                            <p className="text-sm text-muted-foreground">
+                                                No existing {activeTemplate.shortLabel.toLowerCase()} campaigns yet.
+                                            </p>
+                                        ) : (
+                                            matchingCampaigns.map((campaign) => (
+                                                <button
+                                                    key={campaign._id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setTargetMode("existing");
+                                                        setSelectedCampaignId(campaign._id);
+                                                    }}
+                                                    className={`w-full rounded-lg border p-3 text-left ${
+                                                        effectiveTargetMode === "existing" &&
+                                                        effectiveSelectedCampaignId === campaign._id
+                                                            ? "border-primary bg-primary/5"
+                                                            : "hover:bg-muted/40"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <p className="font-medium">{campaign.name}</p>
+                                                        <Badge variant="outline">{campaign.status}</Badge>
+                                                    </div>
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        {campaign.description ||
+                                                            "No description"}
+                                                    </p>
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
 
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-base">
-                                    Create New Campaign
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                <Button
-                                    variant={
-                                        effectiveTargetMode === "new"
-                                            ? "default"
-                                            : "outline"
-                                    }
-                                    onClick={() => setTargetMode("new")}
-                                >
-                                    New {activeTemplate.label}
-                                </Button>
-                                <div className="space-y-2">
-                                    <label className="text-xs text-muted-foreground">
-                                        Campaign name
-                                    </label>
-                                    <Input
-                                        value={effectiveCampaignName}
-                                        onChange={(event) => setCampaignName(event.target.value)}
-                                        disabled={effectiveTargetMode !== "new"}
-                                        placeholder={activeTemplate.defaultName}
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        New campaigns start from template defaults and can be edited after launch.
-                                    </p>
-                                </div>
-                            </CardContent>
-                        </Card>
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base">
+                                        Create New Campaign
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <Button
+                                        variant={
+                                            effectiveTargetMode === "new"
+                                                ? "default"
+                                                : "outline"
+                                        }
+                                        onClick={() => setTargetMode("new")}
+                                    >
+                                        New {activeTemplate.label}
+                                    </Button>
+                                    <div className="space-y-2">
+                                        <Label
+                                            htmlFor="start-outreach-campaign-name"
+                                            className="text-xs text-muted-foreground"
+                                        >
+                                            Campaign name
+                                        </Label>
+                                        <Input
+                                            id="start-outreach-campaign-name"
+                                            value={effectiveCampaignName}
+                                            onChange={(event) => setCampaignName(event.target.value)}
+                                            disabled={effectiveTargetMode !== "new"}
+                                            placeholder={activeTemplate.defaultName}
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            New campaigns start from template defaults and can be edited after launch.
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                        <RuntimeSummaryCard summary={campaignStepRuntimeSummary} />
                     </div>
                 )}
 
@@ -657,6 +685,10 @@ export function StartOutreachWizardModal({
                                             )}
                                     </CardContent>
                                 </Card>
+
+                                <RuntimeSummaryCard
+                                    summary={reviewData.target.runtimeSummary}
+                                />
 
                                 <div className="grid gap-3 lg:grid-cols-3">
                                     <Card>

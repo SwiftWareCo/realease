@@ -72,12 +72,11 @@ The current campaign settings form exposes:
 
 1. name and description
 2. status
-3. timezone
-4. calling window
-5. max attempts
-6. cooldown
-7. follow-up SMS enabled
-8. default follow-up SMS template
+3. calling window
+4. max attempts
+5. cooldown
+6. follow-up SMS enabled
+7. default follow-up SMS template
 
 It does not expose:
 
@@ -157,6 +156,78 @@ Keep the existing MVP launch flow from [plan.md](/home/braille/projects/RealEase
 
 This should be treated as **Phase 2: Runtime Visibility And Post-Outcome Logic**.
 
+## Implementation Update
+The first two Phase 2 implementation slices are complete:
+
+1. A shared latest-call resolver now reads latest campaign call snapshots from `outreachCalls`.
+2. `outreachCalls` now has a `by_campaign_id_and_lead_id_and_initiated_at` index for efficient per-lead latest-call lookup within a campaign.
+3. The enrollment eligibility/review path now uses latest campaign call outcome data instead of `outreachCampaignLeadStates.last_outcome` for user-facing latest outcome display and terminal-outcome eligibility checks.
+4. Campaign detail lead rows now use the same latest-call sourcing and no longer fall back to state-row `last_outcome` for `latestOutcome`.
+5. Backend queries now return a normalized `runtimeSummary` for templates, campaign picker rows, enrollment review targets, lead picker payloads, and campaign detail payloads.
+6. Read-only runtime summary UI is now shown in template selection, inline campaign selection/create, final review, standalone campaign create, campaign settings, and campaign detail.
+7. Campaign detail now embeds compact runtime rules in the campaign header box with the campaign name, status, summary counts, and `Add Leads` action.
+8. Campaign create and edit dialogs now use wider, scrollable layouts to prevent runtime summary and rule editor overflow.
+9. Campaign settings now exposes a guarded post-outcome rule editor for safe routing fields:
+   - next lead status
+   - next buyer pipeline stage
+   - next seller pipeline stage
+   - supported follow-up SMS decisions
+   - optional custom SMS template
+10. Outcome routing now separates lead-management updates from internal campaign behavior through `campaign_lead_action`:
+   - `continue`
+   - `stop_calling`
+   - `pause_for_realtor`
+11. Terminal outcomes such as `do_not_call` and `wrong_number` are guarded, hidden from the edit UI, and sanitized server-side so they stop outreach and cannot re-enable SMS.
+12. Campaign detail lead rows now include query-level state explainability fields:
+   - `campaignState`
+   - `stateReason`
+   - `nextActionAt`
+   - `nextActionLabel`
+   - `stopReason`
+13. Campaign creation now allows editing campaign name, description, calling window, retry policy, and follow-up SMS before creating the campaign. Timezone remains backend/default configuration rather than a visible user control.
+
+New finding:
+
+1. `outreachCampaignLeadStates.last_outcome` is still useful as scheduler/runtime state, especially while processing corrections and retries, but should remain non-authoritative for user-facing "latest outcome" display.
+2. Retell currently supplies call result/outcome data. Buyer/seller pipeline stage changes are chosen by RealEase campaign outcome rules, not directly by the Retell agent.
+3. `pause_for_realtor` currently pauses the lead inside the campaign and surfaces the state in campaign detail. A separate notification/task system would be needed for real push/email/in-app realtor notifications.
+
+Still pending:
+
+1. deeper UX polish for the post-outcome editor after real usage
+2. broader campaign analytics beyond per-lead state explainability
+3. a safe Retell agent-instruction editor for campaign templates
+4. advanced workflow branching or free-form scripting, which remains intentionally out of scope
+
+## Retell Agent Behavior Editing Addendum
+
+Campaign outcome routing and Retell agent behavior should stay separate in the product model:
+
+1. Retell agent behavior controls what the voice agent says, asks, and how it handles the conversation.
+2. RealEase campaign outcome rules control what happens after Retell returns a result, such as lead status changes, pipeline stage changes, campaign pausing, retries, and follow-up SMS decisions.
+
+Recommended approach:
+
+1. Do not expose raw Retell agent configuration or arbitrary prompt scripting in the campaign create flow.
+2. Add a later guarded "Agent Instructions" template editor for safe campaign-copy fields:
+   - call objective
+   - opening line
+   - tone/persona
+   - required qualification questions
+   - objection-handling notes
+   - voicemail guidance
+   - compliance/disclosure copy, if required
+3. Store those fields as versioned RealEase template metadata first, then compile them into Retell agent variables or Retell agent versions.
+4. Require a preview/review step before publishing a changed template so existing running campaigns are not silently changed.
+5. Keep unsafe runtime controls backend-owned:
+   - Retell agent ID selection
+   - phone number assignment
+   - outcome enum contract
+   - webhook handling
+   - scheduler behavior
+
+This should be a separate Phase 3-style slice unless the product requires user-editable calling scripts before more runtime analytics work.
+
 ## Phase 2 Goals
 
 ### Goal 1. Make campaign runtime behavior visible before launch
@@ -203,15 +274,16 @@ Add a compact but explicit summary in the campaign start flow and settings.
 The summary should show:
 
 1. template label and version
-2. local timezone
-3. calling days
-4. calling hours
-5. maximum attempts
-6. minutes between attempts
-7. which outcomes trigger follow-up SMS
-8. which outcomes stop further outreach
-9. which outcomes update lead stage/status
-10. whether selected leads will start now or queue for the next valid window
+2. calling days
+3. calling hours in 12-hour format
+4. maximum attempts
+5. minutes between attempts
+6. which outcomes trigger follow-up SMS
+7. which outcomes stop further outreach
+8. which outcomes update lead stage/status
+9. whether selected leads will start now or queue for the next valid window
+
+Timezone should not be shown or editable in the standard campaign UI. Keep it as backend/default configuration unless a dedicated advanced operations surface is introduced later.
 
 This should appear in:
 
@@ -308,6 +380,8 @@ Queries should return explicit fields such as:
 ### Step 1. Normalize latest-outcome sourcing
 Fix remaining stale-outcome reads first.
 
+Status: completed for the known user-facing review/add-leads/detail latest outcome paths.
+
 Why first:
 
 1. avoids building more UI on inconsistent data
@@ -316,6 +390,8 @@ Why first:
 
 ### Step 2. Add read-only runtime summary surfaces
 Implement visibility before editing.
+
+Status: completed for launch template selection, inline campaign selection/create, final review, standalone create, settings, and detail surfaces.
 
 Why second:
 
@@ -326,6 +402,8 @@ Why second:
 ### Step 3. Add safe post-outcome editor
 Expose outcome routing with strong validation and guardrails.
 
+Status: completed for safe schema-backed routing fields. Terminal outcomes are guarded in UI and sanitized server-side.
+
 Why third:
 
 1. builds on the now-visible runtime model
@@ -333,6 +411,8 @@ Why third:
 
 ### Step 4. Add state explainability on the campaign detail route
 Show why each lead is where it is and what will happen next.
+
+Status: completed for campaign detail lead rows and selected-lead detail header.
 
 Why fourth:
 

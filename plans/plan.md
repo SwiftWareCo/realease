@@ -3,6 +3,28 @@
 ## Decision Summary
 Adopt **Option 2 (Lead-First Quick Launch)** as the primary UX flow, with added guardrails so setup remains clear and predictable.
 
+## Implementation Update
+The MVP launch flow remains the active baseline. The first two Phase 2 slices have now been implemented on top of it:
+
+1. latest campaign outcome display is normalized through a shared latest-call resolver backed by `outreachCalls`
+2. review/add-leads/detail latest outcome surfaces no longer depend on `outreachCampaignLeadStates.last_outcome` for display
+3. campaign templates, campaign picker rows, enrollment review payloads, and campaign detail payloads now include read-only runtime summary data
+4. the launch wizard, standalone campaign create wizard, final review step, campaign settings form, and campaign detail route now show "How This Campaign Runs" style runtime summaries
+5. campaign detail keeps compact runtime rules in the same campaign header box as the campaign name, status, summary counts, and `Add Leads` action
+6. campaign create/edit dialogs use wider, scrollable layouts so runtime summaries and rule editors do not overflow vertically
+7. campaign settings includes a guarded post-outcome rule editor for safe outcome routing fields
+8. campaign detail lead rows include state explainability fields for current state, reason, next action, next action time, and stop reason
+9. campaign creation supports editing campaign name, description, calling window, retry policy, and follow-up SMS before create; timezone remains backend/default configuration rather than a visible user control
+10. outcome rules now distinguish internal campaign behavior (`continue`, `stop_calling`, `pause_for_realtor`) from lead status/stage updates
+11. guarded terminal outcomes are hidden from the edit UI and sanitized server-side
+
+Still pending from the broader product direction:
+
+1. deeper UX polish for the post-outcome editor after real usage
+2. a real realtor notification/task system for paused-for-review leads
+3. a guarded Retell agent-instruction editor for campaign templates
+4. advanced workflow branching or free-form scripting, which remains intentionally out of scope
+
 This revision is based on clarified product intent:
 - campaigns are a collection of selected leads plus predefined outreach instructions,
 - leads can belong to only one campaign at a time,
@@ -22,6 +44,7 @@ Constraints:
 1. A lead may belong to **one active campaign at a time**.
 2. Predefined campaign templates should exist for key intents (at minimum `Buyer Outreach` and `Seller Outreach`).
 3. Template logic should be editable by users with guardrails (avoid unsafe/broken campaign definitions).
+4. Editing "what the agent does on Retell" should be modeled as guarded template-instruction fields, not raw Retell configuration or free-form workflow scripting. Safe fields can include call objective, opening line, tone/persona, required qualification questions, objection-handling notes, voicemail guidance, and compliance/disclosure copy. RealEase should version and review those template changes before compiling them into Retell agent variables or Retell agent versions.
 
 ## Why Option 2 Is Now The Best Fit
 1. Single obvious start point (`Start Outreach`) is less confusing for users.

@@ -32,6 +32,7 @@ import { LeadConversationDrawer } from "./LeadConversationDrawer";
 import { StartOutreachWizardModal } from "./StartOutreachWizardModal";
 import { toast } from "sonner";
 import { getOutreachOutcomeLabel } from "@/lib/outreach/outcomes";
+import { RuntimeSummaryCard } from "./RuntimeSummaryCard";
 
 function formatDateTime(timestamp: number): string {
     return formatDateTimeHumanReadable(timestamp);
@@ -99,6 +100,7 @@ export function CampaignRunView({
         return [
             { label: "Attempts", value: String(selectedLead.attempts) },
             { label: "Active Calls", value: String(selectedLead.activeCalls) },
+            { label: "State", value: selectedLead.campaignState },
             {
                 label: "Last Status",
                 value: selectedLead.latestCallStatus,
@@ -109,6 +111,10 @@ export function CampaignRunView({
                     ? (getOutreachOutcomeLabel(selectedLead.latestOutcome) ??
                       selectedLead.latestOutcome)
                     : "-",
+            },
+            {
+                label: "Next",
+                value: selectedLead.nextActionLabel,
             },
         ];
     }, [selectedLead]);
@@ -159,63 +165,75 @@ export function CampaignRunView({
     return (
         <div className="space-y-3">
             <Card>
-                <CardContent className="flex flex-col gap-2 pt-4 md:flex-row md:items-center md:justify-between">
-                    <div className="space-y-0.5">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="-ml-2 h-7"
-                            onClick={onBack}
-                        >
-                            <ArrowLeft className="mr-1 h-4 w-4" />
-                            Back to Campaigns
-                        </Button>
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-lg font-semibold">
-                                {data.campaign.name}
-                            </h2>
-                            {getCampaignStatusBadge(data.campaign.status)}
+                <CardContent className="space-y-4 pt-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="space-y-0.5">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="-ml-2 h-7"
+                                onClick={onBack}
+                            >
+                                <ArrowLeft className="mr-1 h-4 w-4" />
+                                Back to Campaigns
+                            </Button>
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-lg font-semibold">
+                                    {data.campaign.name}
+                                </h2>
+                                {getCampaignStatusBadge(data.campaign.status)}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Campaign run view with latest attempts and lead state.
+                            </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                            Campaign run view with latest attempts and lead state.
-                        </p>
+
+                        <div className="flex flex-col gap-2 md:items-end">
+                            <div className="grid grid-cols-2 gap-1.5 text-[11px] sm:grid-cols-4">
+                                <Badge
+                                    variant="outline"
+                                    className="justify-center py-1"
+                                >
+                                    Total: {data.summary.total}
+                                </Badge>
+                                <Badge
+                                    variant="outline"
+                                    className="justify-center py-1"
+                                >
+                                    Active:{" "}
+                                    {data.summary.queued +
+                                        data.summary.ringing +
+                                        data.summary.in_progress}
+                                </Badge>
+                                <Badge
+                                    variant="outline"
+                                    className="justify-center py-1"
+                                >
+                                    Completed: {data.summary.completed}
+                                </Badge>
+                                <Badge
+                                    variant="outline"
+                                    className="justify-center py-1"
+                                >
+                                    Failed: {data.summary.failed}
+                                </Badge>
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setAddLeadsOpen(true)}
+                            >
+                                Add Leads
+                            </Button>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5 text-[11px] sm:grid-cols-4">
-                        <Badge
-                            variant="outline"
-                            className="justify-center py-1"
-                        >
-                            Total: {data.summary.total}
-                        </Badge>
-                        <Badge
-                            variant="outline"
-                            className="justify-center py-1"
-                        >
-                            Active:{" "}
-                            {data.summary.queued +
-                                data.summary.ringing +
-                                data.summary.in_progress}
-                        </Badge>
-                        <Badge
-                            variant="outline"
-                            className="justify-center py-1"
-                        >
-                            Completed: {data.summary.completed}
-                        </Badge>
-                        <Badge
-                            variant="outline"
-                            className="justify-center py-1"
-                        >
-                            Failed: {data.summary.failed}
-                        </Badge>
-                    </div>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setAddLeadsOpen(true)}
-                    >
-                        Add Leads
-                    </Button>
+
+                    <RuntimeSummaryCard
+                        summary={data.campaign.runtimeSummary}
+                        title="Campaign Runtime Rules"
+                        compact
+                        embedded
+                    />
                 </CardContent>
             </Card>
 
@@ -274,6 +292,9 @@ export function CampaignRunView({
                                                 <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
                                                     {lead.attempts} attempts
                                                 </Badge>
+                                                <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+                                                    {lead.campaignState}
+                                                </Badge>
                                                 {lead.activeCalls > 0 && (
                                                     <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
                                                         {lead.activeCalls}{" "}
@@ -313,22 +334,40 @@ export function CampaignRunView({
                             </Button>
                         </div>
                         {selectedLead && (
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-                                <Badge variant="outline" className="py-0">
-                                    Lead: {selectedLead.leadName}
-                                </Badge>
-                                <Badge variant="outline" className="py-0">
-                                    {selectedLead.leadPhone}
-                                </Badge>
-                                {selectedLeadSummaryBadges.map((item) => (
-                                    <Badge
-                                        key={`${item.label}-${item.value}`}
-                                        variant="secondary"
-                                        className="py-0"
-                                    >
-                                        {item.label}: {item.value}
+                            <div className="mt-2 space-y-2">
+                                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                    <Badge variant="outline" className="py-0">
+                                        Lead: {selectedLead.leadName}
                                     </Badge>
-                                ))}
+                                    <Badge variant="outline" className="py-0">
+                                        {selectedLead.leadPhone}
+                                    </Badge>
+                                    {selectedLeadSummaryBadges.map((item) => (
+                                        <Badge
+                                            key={`${item.label}-${item.value}`}
+                                            variant="secondary"
+                                            className="py-0"
+                                        >
+                                            {item.label}: {item.value}
+                                        </Badge>
+                                    ))}
+                                </div>
+                                <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                                    <p>{selectedLead.stateReason}</p>
+                                    {selectedLead.nextActionAt && (
+                                        <p className="mt-1">
+                                            Next action time:{" "}
+                                            {formatDateTime(
+                                                selectedLead.nextActionAt,
+                                            )}
+                                        </p>
+                                    )}
+                                    {selectedLead.stopReason && (
+                                        <p className="mt-1">
+                                            Stop reason: {selectedLead.stopReason}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </CardHeader>

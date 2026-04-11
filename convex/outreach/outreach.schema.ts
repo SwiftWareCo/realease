@@ -34,6 +34,12 @@ const sellerPipelineStageSchema = v.union(
     v.literal("sold"),
 );
 
+const campaignLeadOutcomeActionSchema = v.union(
+    v.literal("continue"),
+    v.literal("stop_calling"),
+    v.literal("pause_for_realtor"),
+);
+
 export const outreachCampaignStatusSchema = v.union(
     v.literal("draft"),
     v.literal("active"),
@@ -130,6 +136,9 @@ export const outreachCampaignsTable = defineTable({
                 ),
                 send_follow_up_sms: v.optional(v.boolean()),
                 custom_sms_template: v.optional(v.string()),
+                campaign_lead_action: v.optional(
+                    campaignLeadOutcomeActionSchema,
+                ),
             }),
         ),
     ),
@@ -172,7 +181,12 @@ export const outreachCallsTable = defineTable({
     .index("by_call_status", ["call_status"])
     .index("by_follow_up_sms_status", ["follow_up_sms_status"])
     .index("by_outcome", ["outcome"])
-    .index("by_campaign_id_and_initiated_at", ["campaign_id", "initiated_at"]);
+    .index("by_campaign_id_and_initiated_at", ["campaign_id", "initiated_at"])
+    .index("by_campaign_id_and_lead_id_and_initiated_at", [
+        "campaign_id",
+        "lead_id",
+        "initiated_at",
+    ]);
 
 export const outreachWebhookEventsTable = defineTable({
     call_id: v.optional(v.id("outreachCalls")),
@@ -240,6 +254,7 @@ export const campaignLeadStateSchema = v.union(
     v.literal("in_progress"),
     v.literal("cooldown"),
     v.literal("sms_pending"),
+    v.literal("paused_for_realtor"),
     v.literal("error"),
     v.literal("terminal_blocked"),
     v.literal("done"),

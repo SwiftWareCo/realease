@@ -108,7 +108,6 @@ export function OutreachLeadPicker({
                 name: input.name.trim(),
                 description: input.description.trim() || null,
                 status: input.status,
-                timezone: input.timezone.trim(),
                 calling_window: {
                     start_hour_local: input.startHour,
                     end_hour_local: input.endHour,
@@ -127,6 +126,33 @@ export function OutreachLeadPicker({
                         ? ["no_answer", "voicemail_left"]
                         : [],
                 },
+                outcome_routing: input.outcomeRouting.map((rule) => ({
+                    outcome: rule.outcome,
+                    ...(rule.nextLeadStatus
+                        ? { next_lead_status: rule.nextLeadStatus }
+                        : {}),
+                    ...(rule.nextBuyerPipelineStage
+                        ? {
+                              next_buyer_pipeline_stage:
+                                  rule.nextBuyerPipelineStage,
+                          }
+                        : {}),
+                    ...(rule.nextSellerPipelineStage
+                        ? {
+                              next_seller_pipeline_stage:
+                                  rule.nextSellerPipelineStage,
+                          }
+                        : {}),
+                    ...(rule.sendFollowUpSms !== null
+                        ? { send_follow_up_sms: rule.sendFollowUpSms }
+                        : {}),
+                    ...(rule.customSmsTemplate?.trim()
+                        ? { custom_sms_template: rule.customSmsTemplate.trim() }
+                        : {}),
+                    ...(rule.campaignLeadAction
+                        ? { campaign_lead_action: rule.campaignLeadAction }
+                        : {}),
+                })),
             });
             toast.success("Campaign settings updated.");
             setEditingCampaignId(null);
@@ -315,7 +341,7 @@ export function OutreachLeadPicker({
                 open={createDialogOpen}
                 onOpenChange={onCreateDialogOpenChange}
             >
-                <DialogContent className="sm:max-w-[620px]">
+                <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-[960px]">
                     <DialogHeader>
                         <DialogTitle>Create Campaign</DialogTitle>
                         <DialogDescription>
@@ -323,11 +349,13 @@ export function OutreachLeadPicker({
                             adjust the safe settings after it exists.
                         </DialogDescription>
                     </DialogHeader>
-                    <CampaignCreateWizard
-                        templates={templates}
-                        isCreating={isCreatingCampaign}
-                        onCreate={handleCreateCampaign}
-                    />
+                    <div className="max-h-[calc(90vh-8rem)] overflow-y-auto pr-2">
+                        <CampaignCreateWizard
+                            templates={templates}
+                            isCreating={isCreatingCampaign}
+                            onCreate={handleCreateCampaign}
+                        />
+                    </div>
                 </DialogContent>
             </Dialog>
 
@@ -339,7 +367,7 @@ export function OutreachLeadPicker({
                     }
                 }}
             >
-                <DialogContent className="sm:max-w-[640px]">
+                <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-[980px]">
                     <DialogHeader>
                         <DialogTitle>Edit Campaign</DialogTitle>
                         <DialogDescription>
@@ -347,13 +375,15 @@ export function OutreachLeadPicker({
                             SMS behavior.
                         </DialogDescription>
                     </DialogHeader>
-                    {editingCampaign && (
-                        <CampaignSettingsForm
-                            campaign={editingCampaign}
-                            isSaving={isSavingCampaign}
-                            onSave={handleSaveCampaign}
-                        />
-                    )}
+                    <div className="max-h-[calc(90vh-8rem)] overflow-y-auto pr-2">
+                        {editingCampaign && (
+                            <CampaignSettingsForm
+                                campaign={editingCampaign}
+                                isSaving={isSavingCampaign}
+                                onSave={handleSaveCampaign}
+                            />
+                        )}
+                    </div>
                 </DialogContent>
             </Dialog>
 

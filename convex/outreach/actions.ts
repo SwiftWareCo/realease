@@ -120,6 +120,10 @@ type FollowUpSmsDispatchContext = {
                 | "sold";
             send_follow_up_sms?: boolean;
             custom_sms_template?: string;
+            campaign_lead_action?:
+                | "continue"
+                | "stop_calling"
+                | "pause_for_realtor";
         }> | null;
     } | null;
 };
