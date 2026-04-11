@@ -99,9 +99,11 @@ export function CampaignSettingsForm({
     const [outcomeRouting, setOutcomeRouting] = useState<OutcomeRoutingRule[]>(
         campaign.runtimeSummary?.outcomeRouting ?? [],
     );
+    const isRunning = campaign.status === "active";
 
     const saveDisabled =
         isSaving ||
+        isRunning ||
         !name.trim() ||
         allowedWeekdays.length === 0 ||
         maxAttempts < 1 ||
@@ -507,6 +509,12 @@ export function CampaignSettingsForm({
                 title="Current Runtime Rules"
                 compact
             />
+            {isRunning && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    This campaign is active. Pause it before editing runtime
+                    settings or outcome rules.
+                </div>
+            )}
             <div className="space-y-2">
                 <Label htmlFor="campaign-settings-name">Campaign name</Label>
                 <Input

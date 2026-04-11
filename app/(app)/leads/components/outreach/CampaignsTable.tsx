@@ -137,8 +137,15 @@ export function CampaignsTable({
                                                 event.stopPropagation();
                                                 onEditCampaign(campaign);
                                             }}
-                                            disabled={isDeletingCampaign}
-                                            aria-label={`Edit ${campaign.name}`}
+                                            disabled={
+                                                isDeletingCampaign ||
+                                                campaign.status === "active"
+                                            }
+                                            aria-label={
+                                                campaign.status === "active"
+                                                    ? `Pause ${campaign.name} before editing`
+                                                    : `Edit ${campaign.name}`
+                                            }
                                         >
                                             <Edit3 className="h-4 w-4" />
                                         </Button>

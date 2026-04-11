@@ -12,6 +12,7 @@ import {
     outreachCampaignsTable,
     outreachCallsTable,
     outreachCampaignLeadStatesTable,
+    outreachCampaignTemplatesTable,
     outreachSmsMessagesTable,
     outreachWebhookEventsTable,
 } from "./outreach/outreach.schema";
@@ -25,6 +26,7 @@ export default defineSchema({
     metricHistory: metricHistoryTable,
     ingestionCheckpoints: ingestionCheckpointTable,
     outreachCampaigns: outreachCampaignsTable,
+    outreachCampaignTemplates: outreachCampaignTemplatesTable,
     outreachCalls: outreachCallsTable,
     outreachCampaignLeadStates: outreachCampaignLeadStatesTable,
     outreachWebhookEvents: outreachWebhookEventsTable,

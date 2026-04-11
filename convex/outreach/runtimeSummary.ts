@@ -43,6 +43,7 @@ export function buildCampaignRuntimeSummary(args: {
 
     return {
         templateKey: args.template.key,
+        customTemplateId: args.template.customTemplateId ?? null,
         templateLabel: args.template.label,
         templateVersion: campaign?.template_version ?? args.template.version,
         timezone,

@@ -9,7 +9,10 @@ import { v } from "convex/values";
 import { normalizePhoneNumber } from "./phone";
 import { getCurrentUserIdOrThrow } from "./auth";
 import {
+    buildTemplateDefinitionFromCustomTemplate,
     getOutreachCampaignTemplate,
+    normalizeAgentInstructions,
+    outreachAgentInstructionsValidator,
     outreachCampaignTemplateKeyValidator,
 } from "./templates";
 
@@ -341,11 +344,86 @@ async function resolveLeadId(
     }
 }
 
+export const createCampaignTemplate = mutation({
+    args: {
+        base_template_key: outreachCampaignTemplateKeyValidator,
+        label: v.string(),
+        description: v.string(),
+        agent_instructions: outreachAgentInstructionsValidator,
+        calling_window: v.optional(
+            v.object({
+                start_hour_local: v.number(),
+                end_hour_local: v.number(),
+                allowed_weekdays: v.array(WEEKDAY_VALIDATOR),
+            }),
+        ),
+        retry_policy: v.optional(
+            v.object({
+                max_attempts: v.number(),
+                min_minutes_between_attempts: v.number(),
+            }),
+        ),
+        follow_up_sms: v.optional(FOLLOW_UP_SMS_VALIDATOR),
+        outcome_routing: v.optional(OUTCOME_ROUTING_VALIDATOR),
+    },
+    handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        const baseTemplate = getOutreachCampaignTemplate(args.base_template_key);
+        const label = args.label.trim();
+        if (!label) {
+            throw new Error("Template name is required.");
+        }
+        if (args.calling_window?.allowed_weekdays.length === 0) {
+            throw new Error("Choose at least one calling day.");
+        }
+        if (
+            args.retry_policy &&
+            (args.retry_policy.max_attempts < 1 ||
+                args.retry_policy.min_minutes_between_attempts < 0)
+        ) {
+            throw new Error("Template retry policy is invalid.");
+        }
+        const now = Date.now();
+        const sanitizedFollowUpSms = args.follow_up_sms
+            ? {
+                  ...args.follow_up_sms,
+                  default_template:
+                      normalizeOptionalString(
+                          args.follow_up_sms.default_template,
+                      ) ?? undefined,
+                  delay_minutes: FIXED_FOLLOW_UP_SMS_DELAY_MINUTES,
+              }
+            : baseTemplate.followUpSms;
+
+        return await ctx.db.insert("outreachCampaignTemplates", {
+            owner_user_id: userId,
+            base_template_key: args.base_template_key,
+            label,
+            short_label: label,
+            description: args.description.trim() || baseTemplate.description,
+            recommended_lead_type: baseTemplate.recommendedLeadType,
+            default_name_prefix: label,
+            calling_window: args.calling_window ?? baseTemplate.callingWindow,
+            retry_policy: args.retry_policy ?? baseTemplate.retryPolicy,
+            follow_up_sms: sanitizedFollowUpSms,
+            outcome_routing: args.outcome_routing
+                ? sanitizeOutcomeRouting(args.outcome_routing)
+                : baseTemplate.outcomeRouting,
+            agent_instructions: normalizeAgentInstructions(
+                args.agent_instructions,
+            ),
+            created_at: now,
+            updated_at: now,
+        });
+    },
+});
+
 export const createCampaign = mutation({
     args: {
         name: v.string(),
         description: v.optional(v.string()),
         template_key: v.optional(outreachCampaignTemplateKeyValidator),
+        custom_template_id: v.optional(v.id("outreachCampaignTemplates")),
         template_version: v.optional(v.number()),
         status: v.optional(
             v.union(
@@ -386,9 +464,20 @@ export const createCampaign = mutation({
             process.env.TWILIO_DEFAULT_MESSAGING_SERVICE_SID?.trim();
         const envDefaultTimezone =
             process.env.OUTREACH_DEFAULT_TIMEZONE?.trim();
-        const template = args.template_key
-            ? getOutreachCampaignTemplate(args.template_key)
+        const customTemplate = args.custom_template_id
+            ? await ctx.db.get(args.custom_template_id)
             : null;
+        if (
+            args.custom_template_id &&
+            (!customTemplate || customTemplate.owner_user_id !== userId)
+        ) {
+            throw new Error("Campaign template not found.");
+        }
+        const template = customTemplate
+            ? buildTemplateDefinitionFromCustomTemplate(customTemplate)
+            : args.template_key
+              ? getOutreachCampaignTemplate(args.template_key)
+              : null;
 
         const resolvedRetellAgentId =
             args.retell_agent_id?.trim() || envRetellAgentId;
@@ -424,7 +513,11 @@ export const createCampaign = mutation({
             description: args.description?.trim() || undefined,
             status: args.status ?? "active",
             template_key: template?.key,
+            custom_template_id: customTemplate?._id,
             template_version: templateVersion,
+            agent_instructions: template?.agentInstructions
+                ? normalizeAgentInstructions(template.agentInstructions)
+                : undefined,
             retell_agent_id: resolvedRetellAgentId,
             retell_phone_number_id: resolvedRetellPhoneNumberId || undefined,
             twilio_messaging_service_sid:
@@ -508,6 +601,22 @@ export const updateCampaignSettings = mutation({
         }
         if (campaign.created_by_user_id !== userId) {
             throw new Error("Campaign not found");
+        }
+        const updatesOnlyStatus =
+            args.name === undefined &&
+            args.description === undefined &&
+            args.timezone === undefined &&
+            args.retell_agent_id === undefined &&
+            args.retell_phone_number_id === undefined &&
+            args.twilio_messaging_service_sid === undefined &&
+            args.calling_window === undefined &&
+            args.retry_policy === undefined &&
+            args.outcome_routing === undefined &&
+            args.follow_up_sms === undefined;
+        if (campaign.status === "active" && !updatesOnlyStatus) {
+            throw new Error(
+                "Pause this campaign before editing its runtime settings.",
+            );
         }
 
         const updates: Record<string, unknown> = {

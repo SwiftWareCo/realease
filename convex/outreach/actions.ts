@@ -6,9 +6,11 @@ import { action, internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { isValidPhoneNumber, normalizePhoneNumber } from "./phone";
 import {
+    buildRetellCampaignInstructions,
     buildDefaultCampaignName,
     getOutreachCampaignTemplate,
     outreachCampaignTemplateKeyValidator,
+    type OutreachAgentInstructions,
 } from "./templates";
 
 type CallStatus =
@@ -236,6 +238,8 @@ type EnrollBatchResult = {
 type LeadEnrollmentReview = {
     target: {
         campaignId: Id<"outreachCampaigns"> | null;
+        templateKey: "buyer_outreach" | "seller_outreach";
+        customTemplateId: Id<"outreachCampaignTemplates"> | null;
         dispatchMode: string;
         nextCallableAt: number | null;
     };
@@ -262,6 +266,7 @@ type LeadEnrollmentReview = {
 export const startCampaignOutreach = action({
     args: {
         templateKey: v.optional(outreachCampaignTemplateKeyValidator),
+        customTemplateId: v.optional(v.id("outreachCampaignTemplates")),
         campaignId: v.optional(v.id("outreachCampaigns")),
         campaignName: v.optional(v.string()),
         leadIds: v.array(v.id("leads")),
@@ -286,6 +291,7 @@ export const startCampaignOutreach = action({
             internal.outreach.queries.getLeadEnrollmentReviewInternal,
             {
                 templateKey: args.templateKey,
+                customTemplateId: args.customTemplateId,
                 campaignId: args.campaignId,
                 leadIds: args.leadIds,
             },
@@ -293,17 +299,20 @@ export const startCampaignOutreach = action({
 
         let resolvedCampaignId = args.campaignId ?? null;
         if (!resolvedCampaignId && initialReview.summary.eligibleCount > 0) {
-            if (!args.templateKey) {
+            const effectiveTemplateKey =
+                args.templateKey ?? initialReview.target.templateKey;
+            if (!effectiveTemplateKey) {
                 throw new Error("Choose a campaign template before creating a new campaign.");
             }
-            const template = getOutreachCampaignTemplate(args.templateKey);
+            const template = getOutreachCampaignTemplate(effectiveTemplateKey);
             resolvedCampaignId = await ctx.runMutation(
                 api.outreach.mutations.createCampaign,
                 {
                     name:
                         args.campaignName?.trim() ||
-                        buildDefaultCampaignName(args.templateKey),
-                    template_key: args.templateKey,
+                        buildDefaultCampaignName(effectiveTemplateKey),
+                    template_key: effectiveTemplateKey,
+                    custom_template_id: args.customTemplateId,
                     template_version: template.version,
                 },
             );
@@ -317,7 +326,8 @@ export const startCampaignOutreach = action({
                       lead_ids: initialReview.eligibleLeads.map(
                           (lead) => lead.leadId,
                       ),
-                      template_key: args.templateKey,
+                      template_key:
+                          args.templateKey ?? initialReview.target.templateKey,
                   },
               )) as EnrollBatchResult)
             : { enrolled: [], skipped: [] };
@@ -369,7 +379,13 @@ export const dispatchQueuedCampaignCall = internalAction({
         const dispatchConfig = await ctx.runQuery(
             internal.outreach.queries.getCampaignDispatchConfig,
             { campaignId: args.campaignId },
-        );
+        ) as {
+            campaignId: Id<"outreachCampaigns">;
+            campaignName: string;
+            retellAgentId: string;
+            agentInstructions: OutreachAgentInstructions | null;
+            retellOutboundNumber: string | null;
+        };
         const retellApiKey = process.env.RETELL_API_KEY?.trim();
         const configuredFromNumber =
             dispatchConfig.retellOutboundNumber?.trim() ||
@@ -440,6 +456,15 @@ export const dispatchQueuedCampaignCall = internalAction({
                             lead_id: String(args.leadId),
                             outreach_call_id: String(args.callId),
                         },
+                        retell_llm_dynamic_variables:
+                            dispatchConfig.agentInstructions
+                                ? {
+                                      campaign_instructions:
+                                          buildRetellCampaignInstructions(
+                                              dispatchConfig.agentInstructions,
+                                          ),
+                                  }
+                                : undefined,
                     }),
                 },
             );

@@ -132,6 +132,7 @@ export function CampaignRunView({
 
     const handleStartOutreach = async (input: {
         templateKey?: CampaignTemplate["key"];
+        customTemplateId?: Id<"outreachCampaignTemplates">;
         campaignId?: Id<"outreachCampaigns">;
         campaignName?: string;
         leadIds: Id<"leads">[];

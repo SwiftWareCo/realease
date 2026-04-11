@@ -1,6 +1,10 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
-import { outreachCampaignTemplateKeyValidator } from "./templates";
+import {
+    outreachAgentInstructionsValidator,
+    outreachCampaignTemplateKeyValidator,
+    outreachTemplateLeadTypeValidator,
+} from "./templates";
 
 const weekdaySchema = v.union(
     v.literal(0),
@@ -101,7 +105,9 @@ export const outreachCampaignsTable = defineTable({
     description: v.optional(v.string()),
     status: outreachCampaignStatusSchema,
     template_key: v.optional(outreachCampaignTemplateKeyValidator),
+    custom_template_id: v.optional(v.id("outreachCampaignTemplates")),
     template_version: v.optional(v.number()),
+    agent_instructions: v.optional(outreachAgentInstructionsValidator),
     retell_agent_id: v.string(),
     retell_phone_number_id: v.optional(v.string()),
     twilio_messaging_service_sid: v.optional(v.string()),
@@ -148,7 +154,52 @@ export const outreachCampaignsTable = defineTable({
 })
     .index("by_status", ["status"])
     .index("by_retell_agent_id", ["retell_agent_id"])
-    .index("by_created_by_user_id", ["created_by_user_id"]);
+    .index("by_created_by_user_id", ["created_by_user_id"])
+    .index("by_custom_template_id", ["custom_template_id"]);
+
+export const outreachCampaignTemplatesTable = defineTable({
+    owner_user_id: v.id("users"),
+    base_template_key: outreachCampaignTemplateKeyValidator,
+    label: v.string(),
+    short_label: v.string(),
+    description: v.string(),
+    recommended_lead_type: outreachTemplateLeadTypeValidator,
+    default_name_prefix: v.string(),
+    calling_window: v.object({
+        start_hour_local: v.number(),
+        end_hour_local: v.number(),
+        allowed_weekdays: v.array(weekdaySchema),
+    }),
+    retry_policy: v.object({
+        max_attempts: v.number(),
+        min_minutes_between_attempts: v.number(),
+    }),
+    follow_up_sms: v.object({
+        enabled: v.boolean(),
+        delay_minutes: v.number(),
+        default_template: v.optional(v.string()),
+        send_only_on_outcomes: v.optional(v.array(outreachCallOutcomeSchema)),
+    }),
+    outcome_routing: v.array(
+        v.object({
+            outcome: outreachCallOutcomeSchema,
+            next_lead_status: v.optional(leadStatusSchema),
+            next_buyer_pipeline_stage: v.optional(buyerPipelineStageSchema),
+            next_seller_pipeline_stage: v.optional(sellerPipelineStageSchema),
+            send_follow_up_sms: v.optional(v.boolean()),
+            custom_sms_template: v.optional(v.string()),
+            campaign_lead_action: v.optional(campaignLeadOutcomeActionSchema),
+        }),
+    ),
+    agent_instructions: outreachAgentInstructionsValidator,
+    created_at: v.number(),
+    updated_at: v.number(),
+})
+    .index("by_owner_user_id", ["owner_user_id"])
+    .index("by_owner_user_id_and_base_template_key", [
+        "owner_user_id",
+        "base_template_key",
+    ]);
 
 export const outreachCallsTable = defineTable({
     lead_id: v.id("leads"),

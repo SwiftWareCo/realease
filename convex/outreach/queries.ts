@@ -7,9 +7,11 @@ import {
 } from "./eligibility";
 import { getCurrentUserIdOrThrow, requireCampaignOwner } from "./auth";
 import {
+    buildTemplateDefinitionFromCustomTemplate,
     buildDefaultCampaignName,
     getOutreachCampaignTemplate,
     OUTREACH_CAMPAIGN_TEMPLATE_KEYS,
+    type OutreachCampaignTemplateDefinition,
     outreachCampaignTemplateKeyValidator,
     resolveCampaignTemplateKey,
 } from "./templates";
@@ -37,6 +39,63 @@ function resolveEffectiveTemplateKey(args: {
     throw new Error(
         "Campaign template is not configured. Choose a template or update the campaign metadata.",
     );
+}
+
+function buildDefaultCampaignNameFromTemplate(
+    template: OutreachCampaignTemplateDefinition,
+    timestampMs = Date.now(),
+): string {
+    if (!template.customTemplateId) {
+        return buildDefaultCampaignName(template.key, timestampMs);
+    }
+    const date = new Date(timestampMs);
+    const yyyy = String(date.getFullYear());
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${template.defaultNamePrefix} ${yyyy}-${mm}-${dd}`;
+}
+
+async function resolveCustomTemplate(
+    ctx: QueryCtx,
+    customTemplateId: Id<"outreachCampaignTemplates"> | null | undefined,
+    userId: Id<"users"> | null,
+): Promise<Doc<"outreachCampaignTemplates"> | null> {
+    if (!customTemplateId) {
+        return null;
+    }
+    const template = await ctx.db.get(customTemplateId);
+    if (!template) {
+        throw new Error("Campaign template not found.");
+    }
+    if (userId !== null && template.owner_user_id !== userId) {
+        throw new Error("Campaign template not found.");
+    }
+    return template;
+}
+
+async function resolveEffectiveTemplateDefinition(
+    ctx: QueryCtx,
+    args: {
+        campaign?: Doc<"outreachCampaigns"> | null;
+        templateKey?: (typeof OUTREACH_CAMPAIGN_TEMPLATE_KEYS)[number] | null;
+        customTemplateId?: Id<"outreachCampaignTemplates"> | null;
+        userId: Id<"users"> | null;
+    },
+): Promise<OutreachCampaignTemplateDefinition> {
+    const customTemplate = await resolveCustomTemplate(
+        ctx,
+        args.campaign?.custom_template_id ?? args.customTemplateId ?? null,
+        args.userId,
+    );
+    if (customTemplate) {
+        return buildTemplateDefinitionFromCustomTemplate(customTemplate);
+    }
+
+    const templateKey = resolveEffectiveTemplateKey({
+        campaign: args.campaign,
+        templateKey: args.templateKey ?? null,
+    });
+    return getOutreachCampaignTemplate(templateKey);
 }
 
 function getCampaignTemplateMeta(templateKey: string | undefined) {
@@ -162,9 +221,9 @@ function buildLeadStateExplainability(args: {
 
 function getTargetCampaignConfig(args: {
     campaign?: Doc<"outreachCampaigns"> | null;
-    templateKey: (typeof OUTREACH_CAMPAIGN_TEMPLATE_KEYS)[number];
+    template: OutreachCampaignTemplateDefinition;
 }) {
-    const template = getOutreachCampaignTemplate(args.templateKey);
+    const template = args.template;
     const timezone =
         args.campaign?.timezone ??
         process.env.OUTREACH_DEFAULT_TIMEZONE?.trim() ??
@@ -179,7 +238,7 @@ function getTargetCampaignConfig(args: {
             template.retryPolicy.max_attempts,
         campaignId: args.campaign?._id ?? null,
         campaignName:
-            args.campaign?.name ?? buildDefaultCampaignName(args.templateKey),
+            args.campaign?.name ?? buildDefaultCampaignNameFromTemplate(template),
         targetKind: args.campaign ? "existing" : "new",
         templateVersion:
             args.campaign?.template_version ?? template.version,
@@ -201,7 +260,7 @@ async function resolveOwnedCampaign(
 async function buildLeadEnrollmentReviewPayload(
     ctx: QueryCtx,
     args: {
-        templateKey: (typeof OUTREACH_CAMPAIGN_TEMPLATE_KEYS)[number];
+        template: OutreachCampaignTemplateDefinition;
         campaign?: Doc<"outreachCampaigns"> | null;
         leadIds?: Id<"leads">[];
         limit?: number;
@@ -209,7 +268,7 @@ async function buildLeadEnrollmentReviewPayload(
 ) {
     const targetConfig = getTargetCampaignConfig({
         campaign: args.campaign,
-        templateKey: args.templateKey,
+        template: args.template,
     });
     const leads = args.leadIds
         ? (
@@ -229,7 +288,7 @@ async function buildLeadEnrollmentReviewPayload(
                 {
                     campaignId: targetConfig.campaignId,
                     maxAttempts: targetConfig.maxAttempts,
-                    templateKey: args.templateKey,
+                    templateKey: args.template.key,
                 },
                 lead,
             ),
@@ -256,7 +315,8 @@ async function buildLeadEnrollmentReviewPayload(
             kind: targetConfig.targetKind,
             campaignId: targetConfig.campaignId,
             campaignName: targetConfig.campaignName,
-            templateKey: args.templateKey,
+            templateKey: args.template.key,
+            customTemplateId: args.template.customTemplateId ?? null,
             templateVersion: targetConfig.templateVersion,
             timezone: targetConfig.timezone,
             callingWindow: targetConfig.callingWindow,
@@ -286,11 +346,13 @@ async function buildLeadEnrollmentReviewPayload(
 export const getCampaignTemplates = query({
     args: {},
     handler: async (ctx) => {
-        await getCurrentUserIdOrThrow(ctx);
-
-        return OUTREACH_CAMPAIGN_TEMPLATE_KEYS.map((templateKey) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        const systemTemplates = OUTREACH_CAMPAIGN_TEMPLATE_KEYS.map((templateKey) => {
             const template = getOutreachCampaignTemplate(templateKey);
             return {
+                source: "system" as const,
+                selectionKey: `system:${template.key}`,
+                templateId: null as Id<"outreachCampaignTemplates"> | null,
                 key: template.key,
                 version: template.version,
                 label: template.label,
@@ -301,32 +363,68 @@ export const getCampaignTemplates = query({
                 runtimeSummary: buildCampaignRuntimeSummaryForTemplate(
                     template.key,
                 ),
+                agentInstructions: template.agentInstructions,
             };
         });
+
+        const customTemplates = await ctx.db
+            .query("outreachCampaignTemplates")
+            .withIndex("by_owner_user_id", (q) =>
+                q.eq("owner_user_id", userId),
+            )
+            .order("desc")
+            .take(100);
+
+        return [
+            ...systemTemplates,
+            ...customTemplates.map((customTemplate) => {
+                const template =
+                    buildTemplateDefinitionFromCustomTemplate(customTemplate);
+                return {
+                    source: "custom" as const,
+                    selectionKey: `custom:${customTemplate._id}`,
+                    templateId: customTemplate._id,
+                    key: template.key,
+                    version: template.version,
+                    label: template.label,
+                    shortLabel: template.shortLabel,
+                    description: template.description,
+                    recommendedLeadType: template.recommendedLeadType,
+                    defaultName: buildDefaultCampaignNameFromTemplate(template),
+                    runtimeSummary: buildCampaignRuntimeSummary({
+                        template,
+                    }),
+                    agentInstructions: template.agentInstructions,
+                };
+            }),
+        ];
     },
 });
 
 export const getOutreachLeadPicker = query({
     args: {
         templateKey: v.optional(outreachCampaignTemplateKeyValidator),
+        customTemplateId: v.optional(v.id("outreachCampaignTemplates")),
         campaignId: v.optional(v.id("outreachCampaigns")),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        await getCurrentUserIdOrThrow(ctx);
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const campaign = args.campaignId
             ? await resolveOwnedCampaign(ctx, args.campaignId)
             : null;
-        const templateKey = resolveEffectiveTemplateKey({
+        const template = await resolveEffectiveTemplateDefinition(ctx, {
             campaign,
             templateKey: args.templateKey ?? null,
+            customTemplateId: args.customTemplateId ?? null,
+            userId,
         });
         const limit =
             args.limit !== undefined
                 ? Math.max(1, Math.floor(args.limit))
                 : 500;
         const review = await buildLeadEnrollmentReviewPayload(ctx, {
-            templateKey,
+            template,
             campaign,
             limit,
         });
@@ -335,10 +433,11 @@ export const getOutreachLeadPicker = query({
             campaignId: review.target.campaignId,
             campaignName: review.target.campaignName,
             templateKey: review.target.templateKey,
+            customTemplateId: review.target.customTemplateId,
             templateVersion: review.target.templateVersion,
             maxAttempts:
                 campaign?.retry_policy.max_attempts ??
-                getOutreachCampaignTemplate(templateKey).retryPolicy.max_attempts,
+                template.retryPolicy.max_attempts,
             runtimeSummary: review.target.runtimeSummary,
             totalLeads: review.allLeads.length,
             selectableCount: review.summary.eligibleCount,
@@ -350,19 +449,23 @@ export const getOutreachLeadPicker = query({
 export const getLeadEnrollmentReviewInternal = internalQuery({
     args: {
         templateKey: v.optional(outreachCampaignTemplateKeyValidator),
+        customTemplateId: v.optional(v.id("outreachCampaignTemplates")),
         campaignId: v.optional(v.id("outreachCampaigns")),
         leadIds: v.array(v.id("leads")),
     },
     handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const campaign = args.campaignId
             ? await ctx.db.get(args.campaignId)
             : null;
-        const templateKey = resolveEffectiveTemplateKey({
+        const template = await resolveEffectiveTemplateDefinition(ctx, {
             campaign,
             templateKey: args.templateKey ?? null,
+            customTemplateId: args.customTemplateId ?? null,
+            userId,
         });
         return await buildLeadEnrollmentReviewPayload(ctx, {
-            templateKey,
+            template,
             campaign,
             leadIds: args.leadIds,
         });
@@ -372,21 +475,24 @@ export const getLeadEnrollmentReviewInternal = internalQuery({
 export const getLeadEnrollmentReview = query({
     args: {
         templateKey: v.optional(outreachCampaignTemplateKeyValidator),
+        customTemplateId: v.optional(v.id("outreachCampaignTemplates")),
         campaignId: v.optional(v.id("outreachCampaigns")),
         leadIds: v.array(v.id("leads")),
     },
     handler: async (ctx, args) => {
-        await getCurrentUserIdOrThrow(ctx);
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const campaign = args.campaignId
             ? await resolveOwnedCampaign(ctx, args.campaignId)
             : null;
-        const templateKey = resolveEffectiveTemplateKey({
+        const template = await resolveEffectiveTemplateDefinition(ctx, {
             campaign,
             templateKey: args.templateKey ?? null,
+            customTemplateId: args.customTemplateId ?? null,
+            userId,
         });
 
         return await buildLeadEnrollmentReviewPayload(ctx, {
-            templateKey,
+            template,
             campaign,
             leadIds: args.leadIds,
         });
@@ -418,6 +524,22 @@ export const getCampaignsForPicker = query({
                 Boolean(existingCall),
             );
         }
+        const customTemplatesById = new Map<
+            string,
+            Doc<"outreachCampaignTemplates"> | null
+        >();
+        for (const campaign of campaigns) {
+            if (!campaign.custom_template_id) {
+                continue;
+            }
+            const key = String(campaign.custom_template_id);
+            if (!customTemplatesById.has(key)) {
+                customTemplatesById.set(
+                    key,
+                    await ctx.db.get(campaign.custom_template_id),
+                );
+            }
+        }
         const includeInactive = args.includeInactive ?? false;
 
         return campaigns
@@ -433,15 +555,16 @@ export const getCampaignsForPicker = query({
             .sort((a, b) => b.updated_at - a.updated_at)
             .map((campaign) => {
                 const resolvedTemplateKey = resolveCampaignTemplateKey(campaign);
-                const templateMeta = getCampaignTemplateMeta(
-                    resolvedTemplateKey ?? undefined,
-                );
-                const runtimeSummary = resolvedTemplateKey
+                const customTemplate = campaign.custom_template_id
+                    ? customTemplatesById.get(String(campaign.custom_template_id))
+                    : null;
+                const templateMeta = customTemplate
+                    ? buildTemplateDefinitionFromCustomTemplate(customTemplate)
+                    : getCampaignTemplateMeta(resolvedTemplateKey ?? undefined);
+                const runtimeSummary = templateMeta
                     ? buildCampaignRuntimeSummary({
                           campaign,
-                          template: getOutreachCampaignTemplate(
-                              resolvedTemplateKey,
-                          ),
+                          template: templateMeta,
                       })
                     : null;
 
@@ -451,6 +574,12 @@ export const getCampaignsForPicker = query({
                     description: campaign.description ?? null,
                     status: campaign.status,
                     templateKey: resolvedTemplateKey,
+                    customTemplateId: campaign.custom_template_id ?? null,
+                    templateSelectionKey: campaign.custom_template_id
+                        ? `custom:${campaign.custom_template_id}`
+                        : resolvedTemplateKey
+                          ? `system:${resolvedTemplateKey}`
+                          : null,
                     templateVersion:
                         campaign.template_version ?? templateMeta?.version ?? null,
                     templateLabel: templateMeta?.label ?? null,
@@ -517,9 +646,14 @@ export const getCampaignCallAttempts = query({
             .take(take);
 
         const campaignTemplateKey = resolveCampaignTemplateKey(campaign);
-        const campaignTemplate = campaignTemplateKey
-            ? getOutreachCampaignTemplate(campaignTemplateKey)
+        const customTemplate = campaign.custom_template_id
+            ? await ctx.db.get(campaign.custom_template_id)
             : null;
+        const campaignTemplate = customTemplate
+            ? buildTemplateDefinitionFromCustomTemplate(customTemplate)
+            : campaignTemplateKey
+              ? getOutreachCampaignTemplate(campaignTemplateKey)
+              : null;
 
         // Build lead cache from state rows + recent calls.
         const leadsById = new Map<string, Doc<"leads"> | null>();
@@ -628,6 +762,12 @@ export const getCampaignCallAttempts = query({
                 status: campaign.status,
                 timezone: campaign.timezone,
                 templateKey: campaignTemplateKey,
+                customTemplateId: campaign.custom_template_id ?? null,
+                templateSelectionKey: campaign.custom_template_id
+                    ? `custom:${campaign.custom_template_id}`
+                    : campaignTemplateKey
+                      ? `system:${campaignTemplateKey}`
+                      : null,
                 templateLabel: campaignTemplate?.label ?? null,
                 templateVersion:
                     campaign.template_version ?? campaignTemplate?.version ?? null,
@@ -995,6 +1135,7 @@ export const getCampaignDispatchConfig = internalQuery({
             campaignId: campaign._id,
             campaignName: campaign.name,
             retellAgentId: campaign.retell_agent_id,
+            agentInstructions: campaign.agent_instructions ?? null,
             // Legacy field name kept in schema; value is used as outbound caller number.
             retellOutboundNumber: campaign.retell_phone_number_id ?? null,
         };

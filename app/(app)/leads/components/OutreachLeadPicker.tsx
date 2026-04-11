@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { CampaignCreateWizard } from "./outreach/CampaignCreateWizard";
 import { CampaignSettingsForm } from "./outreach/CampaignSettingsForm";
 import { CampaignsTable } from "./outreach/CampaignsTable";
 import { StartOutreachWizardModal } from "./outreach/StartOutreachWizardModal";
@@ -32,20 +31,15 @@ import type {
     CampaignRow,
     CampaignSettingsInput,
     CampaignTemplate,
-    CreateCampaignInput,
     StartOutreachResult,
 } from "./outreach/types";
 
 export function OutreachLeadPicker({
     startDialogOpen,
     onStartDialogOpenChange,
-    createDialogOpen,
-    onCreateDialogOpenChange,
 }: {
     startDialogOpen: boolean;
     onStartDialogOpenChange: (open: boolean) => void;
-    createDialogOpen: boolean;
-    onCreateDialogOpenChange: (open: boolean) => void;
 }) {
     const router = useRouter();
     const [editingCampaignId, setEditingCampaignId] = useState<
@@ -54,7 +48,6 @@ export function OutreachLeadPicker({
     const [deleteCampaignId, setDeleteCampaignId] = useState<
         Id<"outreachCampaigns"> | null
     >(null);
-    const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
     const [isSavingCampaign, setIsSavingCampaign] = useState(false);
     const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
     const [isUpdatingCampaignStatus, setIsUpdatingCampaignStatus] =
@@ -69,7 +62,6 @@ export function OutreachLeadPicker({
     const templatesRaw = useQuery(api.outreach.queries.getCampaignTemplates, {});
     const templates = templatesRaw as CampaignTemplate[] | undefined;
 
-    const createCampaign = useMutation(api.outreach.mutations.createCampaign);
     const updateCampaign = useMutation(
         api.outreach.mutations.updateCampaignSettings,
     );
@@ -80,21 +72,6 @@ export function OutreachLeadPicker({
         campaigns?.find((campaign) => campaign._id === editingCampaignId) ?? null;
     const campaignPendingDelete =
         campaigns?.find((campaign) => campaign._id === deleteCampaignId) ?? null;
-
-    const handleCreateCampaign = async (input: CreateCampaignInput) => {
-        setIsCreatingCampaign(true);
-        try {
-            const campaignId = await createCampaign(input);
-            toast.success("Campaign created.");
-            onCreateDialogOpenChange(false);
-            router.push(`/leads/outreach/${campaignId}`);
-        } catch (error) {
-            console.error("Failed to create campaign", error);
-            toast.error("Failed to create campaign.");
-        } finally {
-            setIsCreatingCampaign(false);
-        }
-    };
 
     const handleSaveCampaign = async (input: CampaignSettingsInput) => {
         if (!editingCampaign) {
@@ -166,6 +143,7 @@ export function OutreachLeadPicker({
 
     const handleSubmitOutreach = async (input: {
         templateKey?: CampaignTemplate["key"];
+        customTemplateId?: Id<"outreachCampaignTemplates">;
         campaignId?: Id<"outreachCampaigns">;
         campaignName?: string;
         leadIds: Id<"leads">[];
@@ -336,28 +314,6 @@ export function OutreachLeadPicker({
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-
-            <Dialog
-                open={createDialogOpen}
-                onOpenChange={onCreateDialogOpenChange}
-            >
-                <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-[960px]">
-                    <DialogHeader>
-                        <DialogTitle>Create Campaign</DialogTitle>
-                        <DialogDescription>
-                            Create a campaign from a predefined template, then
-                            adjust the safe settings after it exists.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="max-h-[calc(90vh-8rem)] overflow-y-auto pr-2">
-                        <CampaignCreateWizard
-                            templates={templates}
-                            isCreating={isCreatingCampaign}
-                            onCreate={handleCreateCampaign}
-                        />
-                    </div>
-                </DialogContent>
-            </Dialog>
 
             <Dialog
                 open={!!editingCampaign}
