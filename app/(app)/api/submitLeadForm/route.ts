@@ -8,6 +8,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
+    if (!body.agentUserId) {
+      return NextResponse.json(
+        { error: 'Missing agentUserId' },
+        { status: 400 }
+      );
+    }
+
     const result = await convex.action(api.leads.actions.submitLeadForm, {
       name: body.name,
       phone: body.phone,
@@ -16,6 +23,7 @@ export async function POST(request: Request) {
       timeline: body.timeline,
       notes: body.notes,
       source: body.source,
+      agentUserId: body.agentUserId,
     });
 
     return NextResponse.json(result);

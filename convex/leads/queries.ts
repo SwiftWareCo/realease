@@ -1,10 +1,16 @@
 import { query } from "../_generated/server";
 import { v } from "convex/values";
+import { getCurrentUserIdOrThrow } from "../auth";
 
 export const getAllLeads = query({
     args: {},
     handler: async (ctx) => {
-        const leads = await ctx.db.query("leads").order("desc").collect();
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        const leads = await ctx.db
+            .query("leads")
+            .withIndex("by_created_by_user_id", (q) => q.eq("created_by_user_id", userId))
+            .order("desc")
+            .collect();
         return leads;
     },
 });
@@ -18,9 +24,11 @@ export const getLeadsByStatus = query({
         ),
     },
     handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const leads = await ctx.db
             .query("leads")
-            .withIndex("by_status", (q) => q.eq("status", args.status))
+            .withIndex("by_created_by_user_id", (q) => q.eq("created_by_user_id", userId))
+            .filter((q) => q.eq(q.field("status"), args.status))
             .order("desc")
             .collect();
         return leads;
@@ -32,9 +40,11 @@ export const getLeadsBySource = query({
         source: v.string(),
     },
     handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const leads = await ctx.db
             .query("leads")
-            .withIndex("by_source", (q) => q.eq("source", args.source))
+            .withIndex("by_created_by_user_id", (q) => q.eq("created_by_user_id", userId))
+            .filter((q) => q.eq(q.field("source"), args.source))
             .order("desc")
             .collect();
         return leads;
@@ -46,7 +56,11 @@ export const getLeadById = query({
         id: v.id("leads"),
     },
     handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const lead = await ctx.db.get(args.id);
+        if (!lead || lead.created_by_user_id !== userId) {
+            return null;
+        }
         return lead;
     },
 });
@@ -54,9 +68,11 @@ export const getLeadById = query({
 export const getBuyerLeads = query({
     args: {},
     handler: async (ctx) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const leads = await ctx.db
             .query("leads")
-            .withIndex("by_lead_type", (q) => q.eq("lead_type", "buyer"))
+            .withIndex("by_created_by_user_id", (q) => q.eq("created_by_user_id", userId))
+            .filter((q) => q.eq(q.field("lead_type"), "buyer"))
             .order("desc")
             .collect();
         return leads;
@@ -66,20 +82,26 @@ export const getBuyerLeads = query({
 export const getSellerLeads = query({
     args: {},
     handler: async (ctx) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
         const leads = await ctx.db
             .query("leads")
-            .withIndex("by_lead_type", (q) => q.eq("lead_type", "seller"))
+            .withIndex("by_created_by_user_id", (q) => q.eq("created_by_user_id", userId))
+            .filter((q) => q.eq(q.field("lead_type"), "seller"))
             .order("desc")
             .collect();
         return leads;
     },
 });
 
-// Get all unique tags across all leads for filter dropdown
+// Get all unique tags across current user's leads for filter dropdown
 export const getAllTags = query({
     args: {},
     handler: async (ctx) => {
-        const leads = await ctx.db.query("leads").collect();
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        const leads = await ctx.db
+            .query("leads")
+            .withIndex("by_created_by_user_id", (q) => q.eq("created_by_user_id", userId))
+            .collect();
         const tagSet = new Set<string>();
         for (const lead of leads) {
             if (lead.tags) {
@@ -91,4 +113,3 @@ export const getAllTags = query({
         return Array.from(tagSet).sort();
     },
 });
-

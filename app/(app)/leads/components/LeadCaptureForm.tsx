@@ -44,6 +44,7 @@ export function LeadCaptureForm({ formId }: LeadCaptureFormProps) {
                 body: JSON.stringify({
                     ...formData,
                     source: `sms_link_${formId || "unknown"}`, // Track that this came from SMS (includes formId for intent detection)
+                    agentUserId: searchParams.get("agentUserId"), // Tie lead to the agent from the form URL
                 }),
             });
 

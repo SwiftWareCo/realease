@@ -1,31 +1,14 @@
 /**
- * Shared auth helpers for outreach mutations, queries, and actions.
+ * Outreach-specific auth helpers. Generic helpers re-exported from shared module.
  */
 
 import type { Doc, Id } from "../_generated/dataModel";
 import { internalQuery, type MutationCtx, type QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
 
-export async function getCurrentUserIdOrThrow(
-    ctx: MutationCtx | QueryCtx,
-): Promise<Id<"users">> {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-        throw new Error("Unauthorized");
-    }
-
-    const user = await ctx.db
-        .query("users")
-        .withIndex("by_external_id", (q) =>
-            q.eq("externalId", identity.subject),
-        )
-        .unique();
-    if (!user) {
-        throw new Error("User not found");
-    }
-
-    return user._id;
-}
+// Import for local use + re-export so existing imports don't break
+import { getCurrentUserIdOrThrow } from "../auth";
+export { getCurrentUserIdOrThrow };
 
 export async function requireCampaignOwner(
     ctx: MutationCtx | QueryCtx,

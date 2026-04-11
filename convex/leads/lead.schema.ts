@@ -65,6 +65,7 @@ export const leadsTable = defineTable({
     sms_opt_out: v.optional(v.boolean()),
     last_outreach_call_id: v.optional(v.id("outreachCalls")),
     last_call_outcome: v.optional(outreachCallOutcomeSchema),
+    created_by_user_id: v.id("users"),
     created_at: v.number(),
 })
     .index("by_phone", ["phone"])
@@ -73,4 +74,5 @@ export const leadsTable = defineTable({
     .index("by_lead_type", ["lead_type"])
     .index("by_do_not_call", ["do_not_call"])
     .index("by_sms_opt_out", ["sms_opt_out"])
-    .index("by_last_call_outcome", ["last_call_outcome"]);
+    .index("by_last_call_outcome", ["last_call_outcome"])
+    .index("by_created_by_user_id", ["created_by_user_id"]);

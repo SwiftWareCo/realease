@@ -46,20 +46,22 @@ interface Options {
   leads: number;
   events: number;
   yes: boolean;
+  userId: string;
 }
 
 function parseArgs(): { command: Command; options: Options } {
   const args = process.argv.slice(2);
   
   if (args.length === 0 || args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
-    return { command: "help", options: { leads: 20, events: 10, yes: false } };
+    return { command: "help", options: { leads: 20, events: 10, yes: false, userId: "" } };
   }
-  
+
   const command = args[0] as Command;
   const options: Options = {
     leads: 20,
     events: 10,
     yes: false,
+    userId: "",
   };
   
   for (let i = 1; i < args.length; i++) {
@@ -84,6 +86,13 @@ function parseArgs(): { command: Command; options: Options } {
       case "--yes":
       case "-y":
         options.yes = true;
+        break;
+      case "--user-id":
+      case "-u":
+        if (nextArg) {
+          options.userId = nextArg;
+          i++;
+        }
         break;
     }
   }
@@ -139,10 +148,16 @@ function runConvexAction(action: string, args: Record<string, unknown>): void {
 }
 
 function seed(options: Options): void {
+  if (!options.userId) {
+    console.error("❌ Error: --user-id is required for seed/reset commands");
+    console.error("   Pass the Convex user ID that should own the seeded leads");
+    process.exit(1);
+  }
   console.log(`\n🌱 Seeding database with ${options.leads} leads and ${options.events} events...\n`);
   runConvexAction("seedData", {
     leads: options.leads,
     events: options.events,
+    userId: options.userId,
   });
   console.log("\n✅ Seeding complete!");
 }
@@ -161,6 +176,11 @@ function clear(options: Options): void {
 }
 
 function reset(options: Options): void {
+  if (!options.userId) {
+    console.error("❌ Error: --user-id is required for seed/reset commands");
+    console.error("   Pass the Convex user ID that should own the seeded leads");
+    process.exit(1);
+  }
   if (!options.yes) {
     console.log("\n⚠️  Warning: This will delete ALL existing leads and events,");
     console.log("   then create new mock data.");
@@ -168,12 +188,13 @@ function reset(options: Options): void {
     console.log("   Run with --yes flag to skip this prompt.");
     process.exit(0);
   }
-  
+
   console.log(`\n🔄 Resetting database with ${options.leads} leads and ${options.events} events...\n`);
   runConvexAction("resetData", {
     leads: options.leads,
     events: options.events,
     confirm: true,
+    userId: options.userId,
   });
   console.log("\n✅ Reset complete!");
 }

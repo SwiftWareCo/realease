@@ -101,6 +101,7 @@ function generateEmail(name: string): string {
 export const seedMockLeads = internalMutation({
   args: {
     count: v.number(),
+    created_by_user_id: v.id("users"),
     overrides: v.optional(v.record(v.string(), v.any())),
   },
   handler: async (ctx, args) => {
@@ -190,6 +191,7 @@ export const seedMockLeads = internalMutation({
         ]) : undefined,
         message_count: randomInt(0, 15),
         tags: tags.length > 0 ? tags : undefined,
+        created_by_user_id: args.created_by_user_id,
         created_at: Date.now() - randomInt(0, 60 * 24 * 60 * 60 * 1000), // Up to 60 days ago
         ...args.overrides,
       });

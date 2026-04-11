@@ -1,5 +1,6 @@
 import { internalMutation, mutation } from "../_generated/server";
 import { v } from "convex/values";
+import { getCurrentUserIdOrThrow, requireLeadOwner } from "../auth";
 
 export const insertLead = internalMutation({
   args: {
@@ -17,6 +18,7 @@ export const insertLead = internalMutation({
     last_message_sentiment: v.optional(v.union(v.literal("positive"), v.literal("neutral"), v.literal("negative"))),
     last_message_content: v.optional(v.string()),
     message_count: v.optional(v.number()),
+    created_by_user_id: v.id("users"),
   },
   handler: async (ctx, args) => {
     const leadId = await ctx.db.insert("leads", {
@@ -35,6 +37,7 @@ export const insertLead = internalMutation({
       last_message_sentiment: args.last_message_sentiment,
       last_message_content: args.last_message_content,
       message_count: args.message_count ?? 0,
+      created_by_user_id: args.created_by_user_id,
       created_at: Date.now(),
     });
     return leadId;
@@ -47,6 +50,7 @@ export const updateLeadStatus = mutation({
     status: v.union(v.literal("new"), v.literal("contacted"), v.literal("qualified")),
   },
   handler: async (ctx, args) => {
+    await requireLeadOwner(ctx, args.id);
     await ctx.db.patch(args.id, {
       status: args.status,
     });
@@ -65,6 +69,7 @@ export const updateBuyerPipelineStage = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    await requireLeadOwner(ctx, args.id);
     await ctx.db.patch(args.id, {
       buyer_pipeline_stage: args.stage,
     });
@@ -83,6 +88,7 @@ export const updateSellerPipelineStage = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    await requireLeadOwner(ctx, args.id);
     await ctx.db.patch(args.id, {
       seller_pipeline_stage: args.stage,
     });
@@ -99,6 +105,7 @@ export const setLeadType = mutation({
     initialSellerStage: v.optional(v.literal("pre_listing")),
   },
   handler: async (ctx, args) => {
+    await requireLeadOwner(ctx, args.id);
     const updates: Record<string, unknown> = {
       lead_type: args.leadType,
     };
@@ -128,6 +135,7 @@ export const createLead = mutation({
     status: v.optional(v.union(v.literal("new"), v.literal("contacted"), v.literal("qualified"))),
   },
   handler: async (ctx, args) => {
+    const userId = await getCurrentUserIdOrThrow(ctx);
     const leadId = await ctx.db.insert("leads", {
       name: args.name,
       phone: args.phone,
@@ -140,6 +148,7 @@ export const createLead = mutation({
       status: args.status ?? "new",
       notes: args.notes,
       message_count: 0,
+      created_by_user_id: userId,
       created_at: Date.now(),
     });
     return leadId;
@@ -153,8 +162,7 @@ export const addTag = mutation({
     tag: v.string(),
   },
   handler: async (ctx, args) => {
-    const lead = await ctx.db.get(args.id);
-    if (!lead) throw new Error("Lead not found");
+    const { lead } = await requireLeadOwner(ctx, args.id);
 
     const currentTags = lead.tags ?? [];
     // Don't add duplicate tags
@@ -173,8 +181,7 @@ export const removeTag = mutation({
     tag: v.string(),
   },
   handler: async (ctx, args) => {
-    const lead = await ctx.db.get(args.id);
-    if (!lead) throw new Error("Lead not found");
+    const { lead } = await requireLeadOwner(ctx, args.id);
 
     const currentTags = lead.tags ?? [];
     await ctx.db.patch(args.id, {

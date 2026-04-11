@@ -12,6 +12,7 @@ export const submitLeadForm = action({
     timeline: v.optional(v.string()),
     notes: v.optional(v.string()),
     source: v.optional(v.string()), // Track SMS vs QR vs manual (e.g., "sms_link_seller_form", "qr_code_buyer")
+    agentUserId: v.id("users"), // The agent who owns this lead (from form URL)
   },
   handler: async (
     ctx,
@@ -73,6 +74,7 @@ export const submitLeadForm = action({
         last_message_sentiment: aiAnalysis.sentiment,
         last_message_content: undefined,
         message_count: 0,
+        created_by_user_id: args.agentUserId,
       }
     );
 
