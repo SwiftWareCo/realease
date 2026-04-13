@@ -2,6 +2,7 @@ import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
     outreachAgentInstructionsValidator,
+    outreachCampaignFocusValidator,
     outreachCampaignTemplateKeyValidator,
     outreachTemplateLeadTypeValidator,
 } from "./templates";
@@ -107,6 +108,7 @@ export const outreachCampaignsTable = defineTable({
     template_key: v.optional(outreachCampaignTemplateKeyValidator),
     custom_template_id: v.optional(v.id("outreachCampaignTemplates")),
     template_version: v.optional(v.number()),
+    campaign_focus: v.optional(outreachCampaignFocusValidator),
     agent_instructions: v.optional(outreachAgentInstructionsValidator),
     retell_agent_id: v.string(),
     retell_phone_number_id: v.optional(v.string()),
@@ -114,7 +116,9 @@ export const outreachCampaignsTable = defineTable({
     timezone: v.string(), // IANA timezone, e.g. "America/Los_Angeles"
     calling_window: v.object({
         start_hour_local: v.number(), // 0-23
+        start_minute_local: v.optional(v.number()), // 0-59
         end_hour_local: v.number(), // 0-23
+        end_minute_local: v.optional(v.number()), // 0-59
         allowed_weekdays: v.array(weekdaySchema), // 0=Sun ... 6=Sat
     }),
     retry_policy: v.object({
@@ -165,9 +169,12 @@ export const outreachCampaignTemplatesTable = defineTable({
     description: v.string(),
     recommended_lead_type: outreachTemplateLeadTypeValidator,
     default_name_prefix: v.string(),
+    campaign_focus: v.optional(outreachCampaignFocusValidator),
     calling_window: v.object({
         start_hour_local: v.number(),
+        start_minute_local: v.optional(v.number()),
         end_hour_local: v.number(),
+        end_minute_local: v.optional(v.number()),
         allowed_weekdays: v.array(weekdaySchema),
     }),
     retry_policy: v.object({

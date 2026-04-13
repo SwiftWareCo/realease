@@ -20,6 +20,26 @@ export function formatHourTo12Hour(hour24: number): string {
     return `${hour12}:00 ${suffix}`;
 }
 
+export function formatHourMinuteTo12Hour(
+    hour24: number,
+    minute = 0,
+): string {
+    const normalizedHour = ((Math.floor(hour24) % 24) + 24) % 24;
+    const normalizedMinute = Math.min(59, Math.max(0, Math.floor(minute)));
+    const suffix = normalizedHour >= 12 ? "PM" : "AM";
+    const hour12 = normalizedHour % 12 === 0 ? 12 : normalizedHour % 12;
+    return `${hour12}:${String(normalizedMinute).padStart(2, "0")} ${suffix}`;
+}
+
+export function formatMinutesFromMidnightTo12Hour(totalMinutes: number): string {
+    const normalized =
+        ((Math.floor(totalMinutes) % 1440) + 1440) % 1440;
+    return formatHourMinuteTo12Hour(
+        Math.floor(normalized / 60),
+        normalized % 60,
+    );
+}
+
 export function formatTimeTo12HourWithMinutes(
     value: Date | number | string,
 ): string {

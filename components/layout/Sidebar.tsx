@@ -42,7 +42,7 @@ const navigation: NavItem[] = [
         icon: Users,
     },
     {
-        name: "Outreach",
+        name: "Campaigns",
         href: "/leads/outreach",
         icon: PhoneCall,
     },
@@ -66,6 +66,13 @@ const navigation: NavItem[] = [
 function isRouteActive(pathname: string, href: string): boolean {
     if (href === "/") {
         return pathname === "/";
+    }
+    if (href === "/leads") {
+        return (
+            pathname === "/leads" ||
+            (pathname.startsWith("/leads/") &&
+                !pathname.startsWith("/leads/outreach"))
+        );
     }
     return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -111,6 +118,7 @@ export function Sidebar() {
                                             item.href,
                                         )}
                                         tooltip={item.name}
+                                        className="data-[active=true]:border-l-2 data-[active=true]:border-primary data-[active=true]:[&>svg]:text-primary"
                                     >
                                         <Link href={item.href}>
                                             <item.icon />

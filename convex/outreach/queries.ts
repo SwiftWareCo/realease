@@ -24,6 +24,10 @@ import {
     buildCampaignRuntimeSummary,
     buildCampaignRuntimeSummaryForTemplate,
 } from "./runtimeSummary";
+import {
+    outreachCallOutcomeCounts,
+    outreachStateCounts,
+} from "./counters";
 
 function resolveEffectiveTemplateKey(args: {
     campaign?: Doc<"outreachCampaigns"> | null;
@@ -105,6 +109,13 @@ function getCampaignTemplateMeta(templateKey: string | undefined) {
     return getOutreachCampaignTemplate(
         templateKey as (typeof OUTREACH_CAMPAIGN_TEMPLATE_KEYS)[number],
     );
+}
+
+function resolveCampaignFocus(args: {
+    campaign?: Doc<"outreachCampaigns"> | null;
+    template?: OutreachCampaignTemplateDefinition | null;
+}) {
+    return args.campaign?.campaign_focus ?? args.template?.focus ?? null;
 }
 
 function buildLeadStateExplainability(args: {
@@ -260,6 +271,7 @@ async function resolveOwnedCampaign(
 async function buildLeadEnrollmentReviewPayload(
     ctx: QueryCtx,
     args: {
+        userId: Id<"users">;
         template: OutreachCampaignTemplateDefinition;
         campaign?: Doc<"outreachCampaigns"> | null;
         leadIds?: Id<"leads">[];
@@ -275,9 +287,15 @@ async function buildLeadEnrollmentReviewPayload(
               await Promise.all(
                   args.leadIds.map((leadId) => ctx.db.get(leadId)),
               )
-          ).filter((lead): lead is Doc<"leads"> => Boolean(lead))
+          ).filter(
+              (lead): lead is Doc<"leads"> =>
+                  lead !== null && lead.created_by_user_id === args.userId,
+          )
         : await ctx.db
               .query("leads")
+              .withIndex("by_created_by_user_id", (q) =>
+                  q.eq("created_by_user_id", args.userId),
+              )
               .order("desc")
               .take(args.limit ?? 500);
 
@@ -347,25 +365,28 @@ export const getCampaignTemplates = query({
     args: {},
     handler: async (ctx) => {
         const userId = await getCurrentUserIdOrThrow(ctx);
-        const systemTemplates = OUTREACH_CAMPAIGN_TEMPLATE_KEYS.map((templateKey) => {
-            const template = getOutreachCampaignTemplate(templateKey);
-            return {
-                source: "system" as const,
-                selectionKey: `system:${template.key}`,
-                templateId: null as Id<"outreachCampaignTemplates"> | null,
-                key: template.key,
-                version: template.version,
-                label: template.label,
-                shortLabel: template.shortLabel,
-                description: template.description,
-                recommendedLeadType: template.recommendedLeadType,
-                defaultName: buildDefaultCampaignName(template.key),
-                runtimeSummary: buildCampaignRuntimeSummaryForTemplate(
-                    template.key,
-                ),
-                agentInstructions: template.agentInstructions,
-            };
-        });
+        const systemTemplates = OUTREACH_CAMPAIGN_TEMPLATE_KEYS.map(
+            (templateKey) => {
+                const template = getOutreachCampaignTemplate(templateKey);
+                return {
+                    source: "system" as const,
+                    selectionKey: `system:${template.key}`,
+                    templateId: null as Id<"outreachCampaignTemplates"> | null,
+                    key: template.key,
+                    version: template.version,
+                    label: template.label,
+                    shortLabel: template.shortLabel,
+                    description: template.description,
+                    recommendedLeadType: template.recommendedLeadType,
+                    defaultName: buildDefaultCampaignName(template.key),
+                    campaignFocus: template.focus,
+                    runtimeSummary: buildCampaignRuntimeSummaryForTemplate(
+                        template.key,
+                    ),
+                    agentInstructions: template.agentInstructions,
+                };
+            },
+        );
 
         const customTemplates = await ctx.db
             .query("outreachCampaignTemplates")
@@ -391,6 +412,7 @@ export const getCampaignTemplates = query({
                     description: template.description,
                     recommendedLeadType: template.recommendedLeadType,
                     defaultName: buildDefaultCampaignNameFromTemplate(template),
+                    campaignFocus: template.focus,
                     runtimeSummary: buildCampaignRuntimeSummary({
                         template,
                     }),
@@ -424,6 +446,7 @@ export const getOutreachLeadPicker = query({
                 ? Math.max(1, Math.floor(args.limit))
                 : 500;
         const review = await buildLeadEnrollmentReviewPayload(ctx, {
+            userId,
             template,
             campaign,
             limit,
@@ -465,6 +488,7 @@ export const getLeadEnrollmentReviewInternal = internalQuery({
             userId,
         });
         return await buildLeadEnrollmentReviewPayload(ctx, {
+            userId,
             template,
             campaign,
             leadIds: args.leadIds,
@@ -492,6 +516,7 @@ export const getLeadEnrollmentReview = query({
         });
 
         return await buildLeadEnrollmentReviewPayload(ctx, {
+            userId,
             template,
             campaign,
             leadIds: args.leadIds,
@@ -583,6 +608,14 @@ export const getCampaignsForPicker = query({
                     templateVersion:
                         campaign.template_version ?? templateMeta?.version ?? null,
                     templateLabel: templateMeta?.label ?? null,
+                    campaignFocus: resolveCampaignFocus({
+                        campaign,
+                        template: templateMeta,
+                    }),
+                    agentInstructions:
+                        campaign.agent_instructions ??
+                        templateMeta?.agentInstructions ??
+                        null,
                     timezone: campaign.timezone,
                     retellAgentId: campaign.retell_agent_id,
                     retellPhoneNumberId: campaign.retell_phone_number_id ?? null,
@@ -599,12 +632,271 @@ export const getCampaignsForPicker = query({
                     retryPolicy: campaign.retry_policy,
                     callingWindow: campaign.calling_window,
                     runtimeSummary,
+                    createdAt: campaign.created_at,
                     updatedAt: campaign.updated_at,
                     hasCallHistory:
                         hasCallHistoryByCampaignId.get(String(campaign._id)) ??
                         false,
                 };
             });
+    },
+});
+
+export const getCampaignDashboard = query({
+    args: {},
+    handler: async (ctx) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        const campaigns = await ctx.db
+            .query("outreachCampaigns")
+            .withIndex("by_created_by_user_id", (q) =>
+                q.eq("created_by_user_id", userId),
+            )
+            .take(200);
+
+        const customTemplatesById = new Map<
+            string,
+            Doc<"outreachCampaignTemplates"> | null
+        >();
+        for (const campaign of campaigns) {
+            if (!campaign.custom_template_id) {
+                continue;
+            }
+            const key = String(campaign.custom_template_id);
+            if (!customTemplatesById.has(key)) {
+                customTemplatesById.set(
+                    key,
+                    await ctx.db.get(campaign.custom_template_id),
+                );
+            }
+        }
+
+        const campaignCards = await Promise.all(
+            campaigns.map(async (campaign) => {
+                const resolvedTemplateKey = resolveCampaignTemplateKey(campaign);
+                const customTemplate = campaign.custom_template_id
+                    ? customTemplatesById.get(String(campaign.custom_template_id))
+                    : null;
+                const templateMeta = customTemplate
+                    ? buildTemplateDefinitionFromCustomTemplate(customTemplate)
+                    : getCampaignTemplateMeta(resolvedTemplateKey ?? undefined);
+                const runtimeSummary = templateMeta
+                    ? buildCampaignRuntimeSummary({
+                          campaign,
+                          template: templateMeta,
+                      })
+                    : null;
+                const namespace = campaign._id;
+
+                const [
+                    enrolledCount,
+                    eligibleCount,
+                    queuedCount,
+                    inProgressCount,
+                    cooldownCount,
+                    smsPendingCount,
+                    pausedForReviewCount,
+                    totalCallsCount,
+                    interestedCount,
+                    callbackCount,
+                    voicemailCount,
+                    noAnswerCount,
+                ] = await Promise.all([
+                    outreachStateCounts.count(ctx, { namespace }),
+                    outreachStateCounts.count(ctx, {
+                        namespace,
+                        bounds: { eq: "eligible" },
+                    }),
+                    outreachStateCounts.count(ctx, {
+                        namespace,
+                        bounds: { eq: "queued" },
+                    }),
+                    outreachStateCounts.count(ctx, {
+                        namespace,
+                        bounds: { eq: "in_progress" },
+                    }),
+                    outreachStateCounts.count(ctx, {
+                        namespace,
+                        bounds: { eq: "cooldown" },
+                    }),
+                    outreachStateCounts.count(ctx, {
+                        namespace,
+                        bounds: { eq: "sms_pending" },
+                    }),
+                    outreachStateCounts.count(ctx, {
+                        namespace,
+                        bounds: { eq: "paused_for_realtor" },
+                    }),
+                    outreachCallOutcomeCounts.count(ctx, { namespace }),
+                    outreachCallOutcomeCounts.count(ctx, {
+                        namespace,
+                        bounds: { eq: "connected_interested" },
+                    }),
+                    outreachCallOutcomeCounts.count(ctx, {
+                        namespace,
+                        bounds: { eq: "callback_requested" },
+                    }),
+                    outreachCallOutcomeCounts.count(ctx, {
+                        namespace,
+                        bounds: { eq: "voicemail_left" },
+                    }),
+                    outreachCallOutcomeCounts.count(ctx, {
+                        namespace,
+                        bounds: { eq: "no_answer" },
+                    }),
+                ]);
+                const activeLeadsCount =
+                    eligibleCount +
+                    queuedCount +
+                    inProgressCount +
+                    cooldownCount +
+                    smsPendingCount;
+                const missedCount = voicemailCount + noAnswerCount;
+
+                const previewStateRows = await ctx.db
+                    .query("outreachCampaignLeadStates")
+                    .withIndex("by_campaign_id", (q) =>
+                        q.eq("campaign_id", campaign._id),
+                    )
+                    .take(4);
+                const previewLeadDocs = await Promise.all(
+                    previewStateRows.map((row) => ctx.db.get(row.lead_id)),
+                );
+                const leadsById = new Map<string, Doc<"leads"> | null>();
+                previewLeadDocs.forEach((lead, index) => {
+                    if (lead) {
+                        leadsById.set(
+                            String(previewStateRows[index].lead_id),
+                            lead,
+                        );
+                    }
+                });
+
+                const lastCall = await ctx.db
+                    .query("outreachCalls")
+                    .withIndex("by_campaign_id_and_initiated_at", (q) =>
+                        q.eq("campaign_id", campaign._id),
+                    )
+                    .order("desc")
+                    .first();
+
+                return {
+                    _id: campaign._id,
+                    name: campaign.name,
+                    description: campaign.description ?? null,
+                    status: campaign.status,
+                    templateLabel: templateMeta?.label ?? null,
+                    templateKey: resolvedTemplateKey,
+                    templateSelectionKey: campaign.custom_template_id
+                        ? `custom:${campaign.custom_template_id}`
+                        : resolvedTemplateKey
+                          ? `system:${resolvedTemplateKey}`
+                          : null,
+                    campaignFocus: resolveCampaignFocus({
+                        campaign,
+                        template: templateMeta,
+                    }),
+                    runtimeSummary,
+                    counts: {
+                        enrolled: enrolledCount,
+                        activeLeads: activeLeadsCount,
+                        pausedForReview: pausedForReviewCount,
+                        interested: interestedCount,
+                        callbacks: callbackCount,
+                        missed: missedCount,
+                        calls: totalCallsCount,
+                    },
+                    leadPreview: previewStateRows.map((row) => {
+                        const lead = leadsById.get(String(row.lead_id)) ?? null;
+                        return {
+                            leadId: row.lead_id,
+                            name: lead?.name ?? "Lead",
+                            phone: lead?.phone ?? "Unknown",
+                            status: lead?.status ?? null,
+                        };
+                    }),
+                    lastActivityAt:
+                        lastCall?.initiated_at ?? campaign.updated_at,
+                    createdAt: campaign.created_at,
+                    updatedAt: campaign.updated_at,
+                };
+            }),
+        );
+
+        const playbooks = OUTREACH_CAMPAIGN_TEMPLATE_KEYS.map((templateKey) => {
+            const template = getOutreachCampaignTemplate(templateKey);
+            const launches = campaignCards.filter(
+                (campaign) => campaign.templateKey === templateKey,
+            );
+            return {
+                key: template.key,
+                selectionKey: `system:${template.key}`,
+                label: template.label,
+                shortLabel: template.shortLabel,
+                description: template.description,
+                campaignFocus: template.focus,
+                recommendedLeadType: template.recommendedLeadType,
+                runtimeSummary: buildCampaignRuntimeSummaryForTemplate(
+                    template.key,
+                ),
+                stats: {
+                    launchCount: launches.length,
+                    activeCount: launches.filter(
+                        (campaign) => campaign.status === "active",
+                    ).length,
+                    leadCount: launches.reduce(
+                        (sum, campaign) => sum + campaign.counts.enrolled,
+                        0,
+                    ),
+                },
+            };
+        });
+
+        const recentActivity = campaignCards
+            .flatMap((campaign) => {
+                return campaign.leadPreview.map((lead) => ({
+                    campaignId: campaign._id,
+                    campaignName: campaign.name,
+                    leadId: lead.leadId,
+                    leadName: lead.name,
+                    leadPhone: lead.phone,
+                    at: campaign.lastActivityAt,
+                    status: campaign.status,
+                }));
+            })
+            .sort((a, b) => b.at - a.at)
+            .slice(0, 8);
+
+        const metrics = {
+            totalCampaigns: campaignCards.length,
+            activeCampaigns: campaignCards.filter(
+                (campaign) => campaign.status === "active",
+            ).length,
+            totalAssignedLeads: campaignCards.reduce(
+                (sum, campaign) => sum + campaign.counts.enrolled,
+                0,
+            ),
+            liveLeads: campaignCards.reduce(
+                (sum, campaign) => sum + campaign.counts.activeLeads,
+                0,
+            ),
+            interestedLeads: campaignCards.reduce(
+                (sum, campaign) => sum + campaign.counts.interested,
+                0,
+            ),
+            callbacksRequired: campaignCards.reduce(
+                (sum, campaign) => sum + campaign.counts.callbacks,
+                0,
+            ),
+        };
+
+        return {
+            metrics,
+            playbooks,
+            campaigns: campaignCards.sort(
+                (a, b) => b.lastActivityAt - a.lastActivityAt,
+            ),
+            recentActivity,
+        };
     },
 });
 
@@ -759,6 +1051,7 @@ export const getCampaignCallAttempts = query({
             campaign: {
                 _id: campaign._id,
                 name: campaign.name,
+                description: campaign.description ?? null,
                 status: campaign.status,
                 timezone: campaign.timezone,
                 templateKey: campaignTemplateKey,
@@ -771,6 +1064,17 @@ export const getCampaignCallAttempts = query({
                 templateLabel: campaignTemplate?.label ?? null,
                 templateVersion:
                     campaign.template_version ?? campaignTemplate?.version ?? null,
+                campaignFocus: resolveCampaignFocus({
+                    campaign,
+                    template: campaignTemplate,
+                }),
+                agentInstructions:
+                    campaign.agent_instructions ??
+                    campaignTemplate?.agentInstructions ??
+                    null,
+                followUpSms: campaign.follow_up_sms ?? null,
+                createdAt: campaign.created_at,
+                updatedAt: campaign.updated_at,
                 runtimeSummary: campaignTemplate
                     ? buildCampaignRuntimeSummary({
                           campaign,
@@ -792,7 +1096,9 @@ export const getCampaignCallAttempts = query({
                     initiatedAt: call.initiated_at,
                     startedAt: call.started_at ?? null,
                     endedAt: call.ended_at ?? null,
+                    durationSeconds: call.duration_seconds ?? null,
                     outcome: call.outcome ?? null,
+                    summary: call.summary ?? null,
                     errorMessage: call.error_message ?? null,
                 };
             }),
@@ -983,8 +1289,10 @@ export const getCampaignCallAttemptDetails = query({
             campaign: {
                 _id: campaign._id,
                 name: campaign.name,
+                description: campaign.description ?? null,
                 status: campaign.status,
                 timezone: campaign.timezone,
+                campaignFocus: campaign.campaign_focus ?? null,
             },
             call: {
                 callId: call._id,
@@ -1124,20 +1432,39 @@ export const getPendingFollowUpSmsCallIdsForAutomation = internalQuery({
 export const getCampaignDispatchConfig = internalQuery({
     args: {
         campaignId: v.id("outreachCampaigns"),
+        leadId: v.id("leads"),
     },
     handler: async (ctx, args) => {
         const campaign = await ctx.db.get(args.campaignId);
         if (!campaign) {
             throw new Error("Campaign not found");
         }
+        const lead = await ctx.db.get(args.leadId);
+        if (!lead || lead.created_by_user_id !== campaign.created_by_user_id) {
+            throw new Error("Lead does not belong to this campaign owner");
+        }
 
         return {
             campaignId: campaign._id,
             campaignName: campaign.name,
+            campaignDescription: campaign.description ?? null,
             retellAgentId: campaign.retell_agent_id,
             agentInstructions: campaign.agent_instructions ?? null,
             // Legacy field name kept in schema; value is used as outbound caller number.
             retellOutboundNumber: campaign.retell_phone_number_id ?? null,
+            lead: {
+                name: lead.name,
+                phone: lead.phone,
+                email: lead.email ?? null,
+                intent: lead.intent,
+                status: lead.status,
+                leadType: lead.lead_type ?? null,
+                propertyAddress: lead.property_address ?? null,
+                timeline: lead.timeline ?? null,
+                budget: lead.budget ?? null,
+                preferredLocation: lead.preferred_location ?? null,
+                notes: lead.notes ?? null,
+            },
         };
     },
 });

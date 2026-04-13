@@ -5,9 +5,9 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { EventFormDialog } from "./EventFormDialog";
-import { EventReminderDialog } from "./EventReminderDialog";
 import { CalendarPanel } from "./CalendarPanel";
 import { UpcomingEventsPanel } from "./UpcomingEventsPanel";
+import { SelectedDatePanel } from "./SelectedDatePanel";
 import type { EnrichedEvent } from "./event-types";
 
 export function EventsCalendar() {
@@ -18,14 +18,10 @@ export function EventsCalendar() {
     const [selectedEventDate, setSelectedEventDate] = useState<Date | null>(
         null,
     );
-    const [reminderDialogEvent, setReminderDialogEvent] =
-        useState<EnrichedEvent | null>(null);
-    const [isReminderDialogOpen, setIsReminderDialogOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<EnrichedEvent | null>(
         null,
     );
 
-    // Get first and last day of current viewed month for range query
     const startOfMonth = new Date(currentYear, currentMonth, 1);
     const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
 
@@ -34,7 +30,6 @@ export function EventsCalendar() {
         endTime: endOfMonth.getTime(),
     }) as EnrichedEvent[] | undefined;
 
-    // Get all upcoming events for the summary view
     const upcomingEvents = useQuery(api.events.queries.getUpcomingEvents, {
         limit: 10,
         daysAhead: 30,
@@ -42,7 +37,6 @@ export function EventsCalendar() {
 
     const markCompleted = useMutation(api.events.mutations.markEventCompleted);
 
-    // Group events by date
     const eventsByDate = useMemo(() => {
         return (
             events?.reduce(
@@ -61,7 +55,6 @@ export function EventsCalendar() {
         ? (eventsByDate[selectedDate.toDateString()] ?? [])
         : [];
 
-    // Generate calendar days for the current month
     const calendarDays = useMemo(() => {
         const firstDay = new Date(currentYear, currentMonth, 1);
         const lastDay = new Date(currentYear, currentMonth + 1, 0);
@@ -69,21 +62,20 @@ export function EventsCalendar() {
         const totalDays = lastDay.getDate();
 
         const days: (Date | null)[] = [];
-
-        // Add padding for days before the first of the month
-        for (let i = 0; i < startPadding; i++) {
-            days.push(null);
-        }
-
-        // Add all days of the month
+        for (let i = 0; i < startPadding; i++) days.push(null);
         for (let i = 1; i <= totalDays; i++) {
             days.push(new Date(currentYear, currentMonth, i));
         }
-
         return days;
     }, [currentMonth, currentYear]);
 
     const handleDateClick = (date: Date) => {
+        const key = date.toDateString();
+        const dayEvents = eventsByDate[key] ?? [];
+        if (dayEvents.length === 0) {
+            setSelectedDate(null);
+            return;
+        }
         setSelectedDate(date);
     };
 
@@ -101,6 +93,7 @@ export function EventsCalendar() {
     };
 
     const handlePrevMonth = () => {
+        setSelectedDate(null);
         if (currentMonth === 0) {
             setCurrentMonth(11);
             setCurrentYear(currentYear - 1);
@@ -110,6 +103,7 @@ export function EventsCalendar() {
     };
 
     const handleNextMonth = () => {
+        setSelectedDate(null);
         if (currentMonth === 11) {
             setCurrentMonth(0);
             setCurrentYear(currentYear + 1);
@@ -119,23 +113,37 @@ export function EventsCalendar() {
     };
 
     const handleMonthChange = (value: string) => {
+        setSelectedDate(null);
         setCurrentMonth(parseInt(value));
     };
 
     const handleYearChange = (value: string) => {
+        setSelectedDate(null);
         setCurrentYear(parseInt(value));
+    };
+
+    const handleJumpToToday = () => {
+        const now = new Date();
+        setCurrentMonth(now.getMonth());
+        setCurrentYear(now.getFullYear());
+        setSelectedDate(null);
     };
 
     const handleBackToOverview = () => {
         setSelectedDate(null);
     };
 
-    const handleOpenReminder = (event: EnrichedEvent) => {
-        setReminderDialogEvent(event);
-        setIsReminderDialogOpen(true);
+    const handleSelectDateFromUpcoming = (date: Date) => {
+        setCurrentMonth(date.getMonth());
+        setCurrentYear(date.getFullYear());
+        setSelectedDate(date);
     };
 
-    // Generate year options (5 years back, 5 years forward)
+    const handleEditEvent = (event: EnrichedEvent) => {
+        setEditingEvent(event);
+        setIsEventFormOpen(true);
+    };
+
     const yearOptions = useMemo(() => {
         const years: number[] = [];
         const thisYear = new Date().getFullYear();
@@ -153,28 +161,32 @@ export function EventsCalendar() {
                 calendarDays={calendarDays}
                 eventsByDate={eventsByDate}
                 selectedDate={selectedDate}
-                onAddEvent={handleAddEvent}
                 onDateSelect={handleDateClick}
                 onPrevMonth={handlePrevMonth}
                 onNextMonth={handleNextMonth}
                 onMonthChange={handleMonthChange}
                 onYearChange={handleYearChange}
+                onJumpToToday={handleJumpToToday}
                 yearOptions={yearOptions}
             />
 
-            <UpcomingEventsPanel
-                selectedDate={selectedDate}
-                selectedDateEvents={selectedDateEvents}
-                upcomingEvents={upcomingEvents}
-                onBackToOverview={handleBackToOverview}
-                onMarkComplete={handleMarkComplete}
-                onSetReminder={handleOpenReminder}
-                onEdit={(event) => {
-                    setEditingEvent(event);
-                    setIsEventFormOpen(true);
-                }}
-                onSelectDate={setSelectedDate}
-            />
+            {selectedDate ? (
+                <SelectedDatePanel
+                    selectedDate={selectedDate}
+                    events={selectedDateEvents}
+                    onBack={handleBackToOverview}
+                    onAddEvent={handleAddEvent}
+                    onEdit={handleEditEvent}
+                />
+            ) : (
+                <UpcomingEventsPanel
+                    upcomingEvents={upcomingEvents}
+                    onMarkComplete={handleMarkComplete}
+                    onEdit={handleEditEvent}
+                    onSelectDate={handleSelectDateFromUpcoming}
+                    onAddEvent={handleAddEvent}
+                />
+            )}
 
             <EventFormDialog
                 open={isEventFormOpen}
@@ -182,14 +194,6 @@ export function EventsCalendar() {
                 defaultDate={selectedEventDate ?? undefined}
                 editEvent={editingEvent ?? undefined}
             />
-
-            {reminderDialogEvent && (
-                <EventReminderDialog
-                    open={isReminderDialogOpen}
-                    onOpenChange={setIsReminderDialogOpen}
-                    event={reminderDialogEvent}
-                />
-            )}
         </div>
     );
 }

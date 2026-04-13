@@ -138,38 +138,53 @@
 }
 
 .dark {
-    --background: #0f172a;
-    --foreground: #f8fafc;
-    --card: #1d293d;
-    --card-foreground: #f8fafc;
-    --popover: #1d293d;
-    --popover-foreground: #f8fafc;
+    /* surfaces — deeper, less gray */
+    --background: #0a1122;
+    --foreground: #f5f7fb;
+    --card: #111a2e;
+    --card-foreground: #f5f7fb;
+    --popover: #111a2e;
+    --popover-foreground: #f5f7fb;
+
+    /* primary stays amber */
     --primary: #f59e0b;
-    --primary-foreground: #0f172a;
-    --secondary: #1e293b;
-    --secondary-foreground: #e2e8f0;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --accent: #334155;
-    --accent-foreground: #f8fafc;
-    --destructive: #ef4444;
-    --border: #334155;
-    --input: #334155;
-    --ring: #f59e0b;
-    --chart-1: #f59e0b;
-    --chart-2: #10b981;
-    --chart-3: #7c3aed;
-    --chart-4: #3b82f6;
-    --chart-5: #ef4444;
-    --sidebar: #1d293d;
-    --sidebar-foreground: #e2e8f0;
-    --sidebar-primary: #f59e0b;
-    --sidebar-primary-foreground: #0f172a;
-    --sidebar-accent: #334155;
-    --sidebar-accent-foreground: #e2e8f0;
-    --sidebar-border: #334155;
-    --sidebar-ring: #f59e0b;
+    --primary-foreground: #0a0f1a;
+
+    /* secondary = chip/panel surface */
+    --secondary: #182338;
+    --secondary-foreground: #e5e9f2;
+
+    --muted: #101a2c;
+    --muted-foreground: #8791a7;
+
+    /* accents are now amber-tinted */
+    --accent: rgba(245, 158, 11, 0.12);
+    --accent-foreground: #fbbf24;
+
+    --destructive: #f87171;
     --destructive-foreground: #ffffff;
+
+    /* borders kept subtle so amber glow dominates */
+    --border: rgba(255, 255, 255, 0.06);
+    --input: #1a2438;
+    --ring: #f59e0b;
+
+    --chart-1: #f59e0b;
+    --chart-2: #34d399;
+    --chart-3: #60a5fa;
+    --chart-4: #a78bfa;
+    --chart-5: #fb7185;
+
+    /* sidebar — amber active state */
+    --sidebar: #0b1323;
+    --sidebar-foreground: #c7cfe0;
+    --sidebar-primary: #f59e0b;
+    --sidebar-primary-foreground: #0a0f1a;
+    --sidebar-accent: rgba(245, 158, 11, 0.14);
+    --sidebar-accent-foreground: #fbbf24;
+    --sidebar-border: rgba(255, 255, 255, 0.06);
+    --sidebar-ring: #f59e0b;
+
     --radius: 1rem;
     --font-sans: var(--font-sans);
     --font-serif: var(--font-serif, "Source Serif 4", serif);
@@ -262,3 +277,12 @@ body {
     height: 0;
     display: none;
 }
+
+::view-transition-old(root) {
+    animation: vt-fade-out 200ms ease-out;
+}
+::view-transition-new(root) {
+    animation: vt-fade-in 200ms ease-in;
+}
+@keyframes vt-fade-out { from { opacity: 1 } to { opacity: 0 } }
+@keyframes vt-fade-in { from { opacity: 0 } to { opacity: 1 } }

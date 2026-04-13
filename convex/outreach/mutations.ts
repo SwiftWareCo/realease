@@ -1,10 +1,10 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
+import { type MutationCtx } from "../_generated/server";
 import {
-    internalMutation,
-    mutation,
-    type MutationCtx,
-} from "../_generated/server";
+    internalMutationWithCounters as internalMutation,
+    mutationWithCounters as mutation,
+} from "./counterTriggers";
 import { v } from "convex/values";
 import { normalizePhoneNumber } from "./phone";
 import { getCurrentUserIdOrThrow } from "./auth";
@@ -91,6 +91,14 @@ const FOLLOW_UP_SMS_VALIDATOR = v.object({
     send_only_on_outcomes: v.optional(v.array(OUTCOME_VALIDATOR)),
 });
 
+const CALLING_WINDOW_VALIDATOR = v.object({
+    start_hour_local: v.number(),
+    start_minute_local: v.optional(v.number()),
+    end_hour_local: v.number(),
+    end_minute_local: v.optional(v.number()),
+    allowed_weekdays: v.array(WEEKDAY_VALIDATOR),
+});
+
 type OutcomeRoutingRule = NonNullable<
     Doc<"outreachCampaigns">["outcome_routing"]
 >[number];
@@ -111,6 +119,49 @@ function getDefaultCampaignLeadAction(
             return "pause_for_realtor";
         default:
             return "continue";
+    }
+}
+
+function validateCallingWindow(
+    window: {
+        start_hour_local: number;
+        start_minute_local?: number;
+        end_hour_local: number;
+        end_minute_local?: number;
+        allowed_weekdays: Array<0 | 1 | 2 | 3 | 4 | 5 | 6>;
+    } | undefined,
+): void {
+    if (!window) {
+        return;
+    }
+
+    const values = [
+        window.start_hour_local,
+        window.end_hour_local,
+        window.start_minute_local ?? 0,
+        window.end_minute_local ?? 0,
+    ];
+    if (values.some((value) => !Number.isFinite(value))) {
+        throw new Error("Calling window is invalid.");
+    }
+    if (
+        window.start_hour_local < 0 ||
+        window.start_hour_local > 23 ||
+        window.end_hour_local < 0 ||
+        window.end_hour_local > 23
+    ) {
+        throw new Error("Calling window hours must be between 0 and 23.");
+    }
+    if (
+        (window.start_minute_local ?? 0) < 0 ||
+        (window.start_minute_local ?? 0) > 59 ||
+        (window.end_minute_local ?? 0) < 0 ||
+        (window.end_minute_local ?? 0) > 59
+    ) {
+        throw new Error("Calling window minutes must be between 0 and 59.");
+    }
+    if (window.allowed_weekdays.length === 0) {
+        throw new Error("Choose at least one calling day.");
     }
 }
 
@@ -344,80 +395,6 @@ async function resolveLeadId(
     }
 }
 
-export const createCampaignTemplate = mutation({
-    args: {
-        base_template_key: outreachCampaignTemplateKeyValidator,
-        label: v.string(),
-        description: v.string(),
-        agent_instructions: outreachAgentInstructionsValidator,
-        calling_window: v.optional(
-            v.object({
-                start_hour_local: v.number(),
-                end_hour_local: v.number(),
-                allowed_weekdays: v.array(WEEKDAY_VALIDATOR),
-            }),
-        ),
-        retry_policy: v.optional(
-            v.object({
-                max_attempts: v.number(),
-                min_minutes_between_attempts: v.number(),
-            }),
-        ),
-        follow_up_sms: v.optional(FOLLOW_UP_SMS_VALIDATOR),
-        outcome_routing: v.optional(OUTCOME_ROUTING_VALIDATOR),
-    },
-    handler: async (ctx, args) => {
-        const userId = await getCurrentUserIdOrThrow(ctx);
-        const baseTemplate = getOutreachCampaignTemplate(args.base_template_key);
-        const label = args.label.trim();
-        if (!label) {
-            throw new Error("Template name is required.");
-        }
-        if (args.calling_window?.allowed_weekdays.length === 0) {
-            throw new Error("Choose at least one calling day.");
-        }
-        if (
-            args.retry_policy &&
-            (args.retry_policy.max_attempts < 1 ||
-                args.retry_policy.min_minutes_between_attempts < 0)
-        ) {
-            throw new Error("Template retry policy is invalid.");
-        }
-        const now = Date.now();
-        const sanitizedFollowUpSms = args.follow_up_sms
-            ? {
-                  ...args.follow_up_sms,
-                  default_template:
-                      normalizeOptionalString(
-                          args.follow_up_sms.default_template,
-                      ) ?? undefined,
-                  delay_minutes: FIXED_FOLLOW_UP_SMS_DELAY_MINUTES,
-              }
-            : baseTemplate.followUpSms;
-
-        return await ctx.db.insert("outreachCampaignTemplates", {
-            owner_user_id: userId,
-            base_template_key: args.base_template_key,
-            label,
-            short_label: label,
-            description: args.description.trim() || baseTemplate.description,
-            recommended_lead_type: baseTemplate.recommendedLeadType,
-            default_name_prefix: label,
-            calling_window: args.calling_window ?? baseTemplate.callingWindow,
-            retry_policy: args.retry_policy ?? baseTemplate.retryPolicy,
-            follow_up_sms: sanitizedFollowUpSms,
-            outcome_routing: args.outcome_routing
-                ? sanitizeOutcomeRouting(args.outcome_routing)
-                : baseTemplate.outcomeRouting,
-            agent_instructions: normalizeAgentInstructions(
-                args.agent_instructions,
-            ),
-            created_at: now,
-            updated_at: now,
-        });
-    },
-});
-
 export const createCampaign = mutation({
     args: {
         name: v.string(),
@@ -425,6 +402,7 @@ export const createCampaign = mutation({
         template_key: v.optional(outreachCampaignTemplateKeyValidator),
         custom_template_id: v.optional(v.id("outreachCampaignTemplates")),
         template_version: v.optional(v.number()),
+        agent_instructions: v.optional(outreachAgentInstructionsValidator),
         status: v.optional(
             v.union(
                 v.literal("draft"),
@@ -438,13 +416,7 @@ export const createCampaign = mutation({
         retell_phone_number_id: v.optional(v.string()),
         twilio_messaging_service_sid: v.optional(v.string()),
         timezone: v.optional(v.string()),
-        calling_window: v.optional(
-            v.object({
-                start_hour_local: v.number(),
-                end_hour_local: v.number(),
-                allowed_weekdays: v.array(WEEKDAY_VALIDATOR),
-            }),
-        ),
+        calling_window: v.optional(CALLING_WINDOW_VALIDATOR),
         retry_policy: v.optional(
             v.object({
                 max_attempts: v.number(),
@@ -456,6 +428,7 @@ export const createCampaign = mutation({
     },
     handler: async (ctx, args) => {
         const userId = await getCurrentUserIdOrThrow(ctx);
+        validateCallingWindow(args.calling_window);
         const now = Date.now();
         const envRetellAgentId = process.env.RETELL_DEFAULT_AGENT_ID?.trim();
         const envRetellPhoneNumberId =
@@ -515,8 +488,11 @@ export const createCampaign = mutation({
             template_key: template?.key,
             custom_template_id: customTemplate?._id,
             template_version: templateVersion,
-            agent_instructions: template?.agentInstructions
-                ? normalizeAgentInstructions(template.agentInstructions)
+            campaign_focus: template?.focus,
+            agent_instructions: args.agent_instructions
+                ? normalizeAgentInstructions(args.agent_instructions)
+                : template?.agentInstructions
+                  ? normalizeAgentInstructions(template.agentInstructions)
                 : undefined,
             retell_agent_id: resolvedRetellAgentId,
             retell_phone_number_id: resolvedRetellPhoneNumberId || undefined,
@@ -525,7 +501,9 @@ export const createCampaign = mutation({
             timezone: resolvedTimezone,
             calling_window: args.calling_window ?? template?.callingWindow ?? {
                 start_hour_local: 9,
+                start_minute_local: 0,
                 end_hour_local: 18,
+                end_minute_local: 0,
                 allowed_weekdays: [1, 2, 3, 4, 5],
             },
             retry_policy: args.retry_policy ?? template?.retryPolicy ?? {
@@ -572,16 +550,13 @@ export const updateCampaignSettings = mutation({
             ),
         ),
         timezone: v.optional(v.string()),
+        agent_instructions: v.optional(
+            v.union(outreachAgentInstructionsValidator, v.null()),
+        ),
         retell_agent_id: v.optional(v.union(v.string(), v.null())),
         retell_phone_number_id: v.optional(v.union(v.string(), v.null())),
         twilio_messaging_service_sid: v.optional(v.union(v.string(), v.null())),
-        calling_window: v.optional(
-            v.object({
-                start_hour_local: v.number(),
-                end_hour_local: v.number(),
-                allowed_weekdays: v.array(WEEKDAY_VALIDATOR),
-            }),
-        ),
+        calling_window: v.optional(CALLING_WINDOW_VALIDATOR),
         retry_policy: v.optional(
             v.object({
                 max_attempts: v.number(),
@@ -595,6 +570,7 @@ export const updateCampaignSettings = mutation({
     },
     handler: async (ctx, args) => {
         const userId = await getCurrentUserIdOrThrow(ctx);
+        validateCallingWindow(args.calling_window);
         const campaign = await ctx.db.get(args.campaignId);
         if (!campaign) {
             throw new Error("Campaign not found");
@@ -606,6 +582,7 @@ export const updateCampaignSettings = mutation({
             args.name === undefined &&
             args.description === undefined &&
             args.timezone === undefined &&
+            args.agent_instructions === undefined &&
             args.retell_agent_id === undefined &&
             args.retell_phone_number_id === undefined &&
             args.twilio_messaging_service_sid === undefined &&
@@ -634,6 +611,11 @@ export const updateCampaignSettings = mutation({
         }
         if (args.timezone !== undefined) {
             updates.timezone = args.timezone.trim();
+        }
+        if (args.agent_instructions !== undefined) {
+            updates.agent_instructions = args.agent_instructions
+                ? normalizeAgentInstructions(args.agent_instructions)
+                : undefined;
         }
         if (args.retell_agent_id !== undefined) {
             updates.retell_agent_id = args.retell_agent_id?.trim() || undefined;

@@ -1,35 +1,33 @@
-'use client';
+"use client";
 
-import { useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { useMemo } from "react";
+import { Button } from "@/components/ui/button";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-    CalendarDays,
-    ChevronLeft,
-    ChevronRight,
-    Plus,
-} from 'lucide-react';
-import { eventTypeConfig, type EnrichedEvent } from './event-types';
+} from "@/components/ui/select";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { eventTypeConfig, type EnrichedEvent } from "./event-types";
 
 const MONTHS = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 ];
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
 interface CalendarPanelProps {
     currentMonth: number;
@@ -37,14 +35,21 @@ interface CalendarPanelProps {
     calendarDays: (Date | null)[];
     eventsByDate: Record<string, EnrichedEvent[]>;
     selectedDate: Date | null;
-    onAddEvent: () => void;
     onDateSelect: (date: Date) => void;
     onPrevMonth: () => void;
     onNextMonth: () => void;
     onMonthChange: (value: string) => void;
     onYearChange: (value: string) => void;
+    onJumpToToday: () => void;
     yearOptions: number[];
 }
+
+const formatTime = (timestamp: number) =>
+    new Date(timestamp).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+    });
 
 export function CalendarPanel({
     currentMonth,
@@ -52,184 +57,184 @@ export function CalendarPanel({
     calendarDays,
     eventsByDate,
     selectedDate,
-    onAddEvent,
     onDateSelect,
     onPrevMonth,
     onNextMonth,
     onMonthChange,
     onYearChange,
+    onJumpToToday,
     yearOptions,
 }: CalendarPanelProps) {
-    const formatTime = (timestamp: number) => {
-        return new Date(timestamp).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-        });
-    };
-
     const todayKey = useMemo(() => new Date().toDateString(), []);
-
     const isToday = (date: Date) => date.toDateString() === todayKey;
-    const isSelected = (date: Date) => selectedDate?.toDateString() === date.toDateString();
+    const isSelected = (date: Date) =>
+        selectedDate?.toDateString() === date.toDateString();
+
+    const monthEventCount = useMemo(
+        () =>
+            Object.values(eventsByDate).reduce((sum, ev) => sum + ev.length, 0),
+        [eventsByDate],
+    );
 
     return (
-        <TooltipProvider>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-1">
-                    <CardTitle className="flex items-center gap-2">
-                        <CalendarDays className="h-5 w-5" />
-                        Calendar
-                    </CardTitle>
-                    <Button onClick={onAddEvent} size="sm">
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Event
+        <div className="rounded-2xl border border-border/60 bg-card/40 p-5">
+            {/* Header */}
+            <div className="mb-5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={onPrevMonth}
+                    >
+                        <ChevronLeft className="h-4 w-4" />
                     </Button>
-                </CardHeader>
-
-                <div className="border-t border-border/50 mx-4" />
-
-                <CardContent className="pt-2">
-                    <div className="flex items-center justify-between mb-2">
-                        <Button variant="ghost" size="icon" onClick={onPrevMonth}>
-                            <ChevronLeft className="h-4 w-4" />
-                        </Button>
+                    <div>
                         <div className="flex items-center gap-2">
-                            <Select value={currentMonth.toString()} onValueChange={onMonthChange}>
-                                <SelectTrigger className="w-[130px]">
-                                    <SelectValue />
+                            <Select
+                                value={currentMonth.toString()}
+                                onValueChange={onMonthChange}
+                            >
+                                <SelectTrigger className="h-9 border-none bg-transparent px-0 text-2xl font-bold text-foreground hover:bg-transparent focus:ring-0 [&>svg]:opacity-50">
+                                    <SelectValue>
+                                        {MONTHS[currentMonth]}
+                                    </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {MONTHS.map((month, index) => (
-                                        <SelectItem key={month} value={index.toString()}>
+                                    {MONTHS.map((month, idx) => (
+                                        <SelectItem
+                                            key={month}
+                                            value={idx.toString()}
+                                        >
                                             {month}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <Select value={currentYear.toString()} onValueChange={onYearChange}>
-                                <SelectTrigger className="w-[90px]">
-                                    <SelectValue />
+                            <Select
+                                value={currentYear.toString()}
+                                onValueChange={onYearChange}
+                            >
+                                <SelectTrigger className="h-9 border-none bg-transparent px-0 text-2xl font-bold text-foreground hover:bg-transparent focus:ring-0 [&>svg]:opacity-50">
+                                    <SelectValue>{currentYear}</SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {yearOptions.map((year) => (
-                                        <SelectItem key={year} value={year.toString()}>
-                                            {year}
+                                    {yearOptions.map((y) => (
+                                        <SelectItem
+                                            key={y}
+                                            value={y.toString()}
+                                        >
+                                            {y}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={onNextMonth}>
-                            <ChevronRight className="h-4 w-4" />
-                        </Button>
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-px mb-2 border-b border-border/30 pb-2">
-                        {WEEKDAYS.map((day) => (
-                            <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
-                                {day}
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-px bg-border/20 border border-border/30 rounded-lg overflow-hidden">
-                        {calendarDays.map((date, index) => {
-                            if (!date) {
-                                return <div key={`empty-${index}`} className="aspect-square bg-background" />;
-                            }
-
-                            const dayEvents = eventsByDate[date.toDateString()] || [];
-                            const hasEvents = dayEvents.length > 0;
-                            const isTodayDate = isToday(date);
-                            const isSelectedDate = isSelected(date);
-
-                            return (
-                                <div
-                                    key={date.toISOString()}
-                                    onClick={() => onDateSelect(date)}
-                                    className={`
-                                        aspect-square p-1 cursor-pointer transition-all bg-background
-                                        hover:bg-accent
-                                        ${isTodayDate && !isSelectedDate ? 'ring-1 ring-inset ring-primary' : ''}
-                                        ${isSelectedDate ? 'bg-primary text-primary-foreground' : ''}
-                                    `}
-                                >
-                                    <div className="h-full flex flex-col">
-                                        <span className={`text-sm font-medium ${isSelectedDate ? 'text-primary-foreground' : ''}`}>
-                                            {date.getDate()}
-                                        </span>
-                                        {hasEvents && (
-                                            <div className="flex-1 flex flex-col gap-1 mt-1 overflow-hidden">
-                                                {dayEvents.slice(0, 2).map((event) => {
-                                                    const config = eventTypeConfig[event.event_type];
-                                                    return (
-                                                        <Tooltip key={event._id}>
-                                                            <TooltipTrigger asChild>
-                                                                <div
-                                                                    className={`relative flex items-start gap-0 rounded-sm overflow-hidden ${isSelectedDate ? 'opacity-80' : ''}`}
-                                                                    style={{
-                                                                        backgroundColor: `color-mix(in srgb, ${config.color === 'bg-blue-500' ? '#3b82f6' : config.color === 'bg-purple-500' ? '#a855f7' : config.color === 'bg-yellow-500' ? '#eab308' : config.color === 'bg-green-500' ? '#22c55e' : config.color === 'bg-orange-500' ? '#f97316' : '#6b7280'} 20%, transparent)`
-                                                                    }}
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                >
-                                                                    {/* Left accent bar */}
-                                                                    <div
-                                                                        className="w-1 self-stretch flex-shrink-0"
-                                                                        style={{
-                                                                            backgroundColor: config.color === 'bg-blue-500' ? '#3b82f6' : config.color === 'bg-purple-500' ? '#a855f7' : config.color === 'bg-yellow-500' ? '#eab308' : config.color === 'bg-green-500' ? '#22c55e' : config.color === 'bg-orange-500' ? '#f97316' : '#6b7280'
-                                                                        }}
-                                                                    />
-                                                                    {/* Event content */}
-                                                                    <div className="flex-1 px-1.5 py-0.5 min-w-0">
-                                                                        <div className={`text-[10px] font-medium leading-tight truncate ${isSelectedDate ? 'text-primary-foreground' : config.textColor}`}>
-                                                                            {event.title}
-                                                                        </div>
-                                                                        <div className={`text-[9px] leading-tight ${isSelectedDate ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                                                                            {formatTime(event.start_time)}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent side="top" className="max-w-[200px]">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className={`w-2 h-2 rounded-full ${config.dotColor}`} />
-                                                                    <span className="font-medium text-xs">{event.title}</span>
-                                                                </div>
-                                                                <div className="text-xs text-muted-foreground mt-1">
-                                                                    {config.label} • {formatTime(event.start_time)}
-                                                                </div>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    );
-                                                })}
-                                                {dayEvents.length > 2 && (
-                                                    <span
-                                                        className={`text-[9px] ${isSelectedDate ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}
-                                                    >
-                                                        +{dayEvents.length - 2} more
-                                                    </span>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t">
-                        <div className="flex flex-wrap gap-3 text-xs">
-                            {Object.entries(eventTypeConfig).map(([type, config]) => (
-                                <div key={type} className="flex items-center gap-1.5">
-                                    <div className={`w-2.5 h-2.5 rounded-full ${config.dotColor}`} />
-                                    <span className="text-muted-foreground">{config.label}</span>
-                                </div>
-                            ))}
+                        <div className="text-xs text-muted-foreground">
+                            {monthEventCount} active interactions this month
                         </div>
                     </div>
-                </CardContent>
-            </Card>
-        </TooltipProvider>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={onNextMonth}
+                    >
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
+                <Button
+                    size="sm"
+                    onClick={onJumpToToday}
+                    className="h-8 bg-emerald-500 text-xs font-semibold uppercase tracking-wider text-white hover:bg-emerald-600"
+                >
+                    Today
+                </Button>
+            </div>
+
+            {/* Weekday header */}
+            <div className="mb-2 grid grid-cols-7 gap-2">
+                {WEEKDAYS.map((d) => (
+                    <div
+                        key={d}
+                        className="text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                    >
+                        {d}
+                    </div>
+                ))}
+            </div>
+
+            {/* Day grid */}
+            <div className="grid grid-cols-7 gap-2">
+                {calendarDays.map((date, index) => {
+                    if (!date) {
+                        return (
+                            <div
+                                key={`empty-${index}`}
+                                className="min-h-[88px] rounded-lg border border-border/30 bg-background/20"
+                            />
+                        );
+                    }
+
+                    const dayEvents =
+                        eventsByDate[date.toDateString()] ?? [];
+                    const today = isToday(date);
+                    const selected = isSelected(date);
+
+                    return (
+                        <button
+                            type="button"
+                            key={date.toISOString()}
+                            onClick={() => onDateSelect(date)}
+                            className={`relative flex min-h-[88px] flex-col rounded-lg border p-1.5 text-left transition-colors ${
+                                selected
+                                    ? "border-orange-500/60 bg-orange-500/10"
+                                    : today
+                                      ? "border-emerald-500/40 bg-emerald-500/5"
+                                      : "border-border/40 bg-background/40 hover:bg-background/70"
+                            }`}
+                        >
+                            <span
+                                className={`text-xs font-semibold ${
+                                    today
+                                        ? "text-emerald-300"
+                                        : "text-foreground"
+                                }`}
+                            >
+                                {date.getDate()}
+                            </span>
+                            <div className="mt-1 flex flex-1 flex-col gap-1 overflow-hidden">
+                                {dayEvents.slice(0, 2).map((event) => {
+                                    const config =
+                                        eventTypeConfig[event.event_type];
+                                    return (
+                                        <div
+                                            key={event._id}
+                                            className={`overflow-hidden rounded-sm px-1 py-0.5 ${config.bgColor}`}
+                                        >
+                                            <div
+                                                className={`truncate text-[9px] font-semibold ${config.textColor}`}
+                                            >
+                                                {event.title}
+                                            </div>
+                                            <div
+                                                className={`truncate text-[8px] ${config.textColor} opacity-80`}
+                                            >
+                                                {formatTime(event.start_time)}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {dayEvents.length > 2 && (
+                                    <span className="text-[9px] text-muted-foreground">
+                                        +{dayEvents.length - 2} more
+                                    </span>
+                                )}
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
     );
 }

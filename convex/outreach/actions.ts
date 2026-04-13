@@ -11,6 +11,7 @@ import {
     getOutreachCampaignTemplate,
     outreachCampaignTemplateKeyValidator,
     type OutreachAgentInstructions,
+    type OutreachCampaignTemplateKey,
 } from "./templates";
 
 type CallStatus =
@@ -44,7 +45,72 @@ function toErrorMessage(error: unknown): string {
     return "Unexpected provider error";
 }
 
+function dynamicVariableValue(value: string | number | null | undefined): string {
+    return value === null || value === undefined ? "" : String(value);
+}
 
+function buildRetellDynamicVariables(dispatchConfig: {
+    campaignName: string;
+    campaignDescription: string | null;
+    agentInstructions: OutreachAgentInstructions | null;
+    lead: {
+        name: string;
+        phone: string;
+        email: string | null;
+        intent: string;
+        status: string;
+        leadType: string | null;
+        propertyAddress: string | null;
+        timeline: string | null;
+        budget: string | null;
+        preferredLocation: string | null;
+        notes: string | null;
+    } | null;
+}): Record<string, string> {
+    const agentInstructions = dispatchConfig.agentInstructions;
+    const lead = dispatchConfig.lead;
+    const variables: Record<string, string> = {
+        campaign_name: dispatchConfig.campaignName,
+        campaign_description: dynamicVariableValue(
+            dispatchConfig.campaignDescription,
+        ),
+        campaign_instructions: agentInstructions
+            ? buildRetellCampaignInstructions(agentInstructions)
+            : "",
+        campaign_call_objective: dynamicVariableValue(
+            agentInstructions?.call_objective,
+        ),
+        campaign_opening_line: dynamicVariableValue(
+            agentInstructions?.opening_line,
+        ),
+        campaign_tone: dynamicVariableValue(agentInstructions?.tone),
+        campaign_qualification_questions: dynamicVariableValue(
+            agentInstructions?.qualification_questions.join("\n"),
+        ),
+        campaign_objection_handling_notes: dynamicVariableValue(
+            agentInstructions?.objection_handling_notes,
+        ),
+        campaign_voicemail_guidance: dynamicVariableValue(
+            agentInstructions?.voicemail_guidance,
+        ),
+        campaign_compliance_disclosure: dynamicVariableValue(
+            agentInstructions?.compliance_disclosure,
+        ),
+        lead_name: dynamicVariableValue(lead?.name),
+        lead_phone: dynamicVariableValue(lead?.phone),
+        lead_email: dynamicVariableValue(lead?.email),
+        lead_intent: dynamicVariableValue(lead?.intent),
+        lead_status: dynamicVariableValue(lead?.status),
+        lead_type: dynamicVariableValue(lead?.leadType),
+        lead_property_address: dynamicVariableValue(lead?.propertyAddress),
+        lead_timeline: dynamicVariableValue(lead?.timeline),
+        lead_budget: dynamicVariableValue(lead?.budget),
+        lead_preferred_location: dynamicVariableValue(lead?.preferredLocation),
+        lead_notes: dynamicVariableValue(lead?.notes),
+    };
+
+    return variables;
+}
 
 type FollowUpSmsDispatchContext = {
     call: {
@@ -238,7 +304,7 @@ type EnrollBatchResult = {
 type LeadEnrollmentReview = {
     target: {
         campaignId: Id<"outreachCampaigns"> | null;
-        templateKey: "buyer_outreach" | "seller_outreach";
+        templateKey: OutreachCampaignTemplateKey;
         customTemplateId: Id<"outreachCampaignTemplates"> | null;
         dispatchMode: string;
         nextCallableAt: number | null;
@@ -378,13 +444,27 @@ export const dispatchQueuedCampaignCall = internalAction({
 
         const dispatchConfig = await ctx.runQuery(
             internal.outreach.queries.getCampaignDispatchConfig,
-            { campaignId: args.campaignId },
+            { campaignId: args.campaignId, leadId: args.leadId },
         ) as {
             campaignId: Id<"outreachCampaigns">;
             campaignName: string;
+            campaignDescription: string | null;
             retellAgentId: string;
             agentInstructions: OutreachAgentInstructions | null;
             retellOutboundNumber: string | null;
+            lead: {
+                name: string;
+                phone: string;
+                email: string | null;
+                intent: string;
+                status: string;
+                leadType: string | null;
+                propertyAddress: string | null;
+                timeline: string | null;
+                budget: string | null;
+                preferredLocation: string | null;
+                notes: string | null;
+            } | null;
         };
         const retellApiKey = process.env.RETELL_API_KEY?.trim();
         const configuredFromNumber =
@@ -457,14 +537,7 @@ export const dispatchQueuedCampaignCall = internalAction({
                             outreach_call_id: String(args.callId),
                         },
                         retell_llm_dynamic_variables:
-                            dispatchConfig.agentInstructions
-                                ? {
-                                      campaign_instructions:
-                                          buildRetellCampaignInstructions(
-                                              dispatchConfig.agentInstructions,
-                                          ),
-                                  }
-                                : undefined,
+                            buildRetellDynamicVariables(dispatchConfig),
                     }),
                 },
             );

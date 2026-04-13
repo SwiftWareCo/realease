@@ -17,28 +17,53 @@ export const WEEKDAY_MAP: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
 
 export type CallingWindow = {
     start_hour_local: number;
+    start_minute_local?: number;
     end_hour_local: number;
+    end_minute_local?: number;
     allowed_weekdays: Array<0 | 1 | 2 | 3 | 4 | 5 | 6>;
 };
 
 export function getLocalWeekdayHour(
     timestamp: number,
     timeZone: string,
-): { weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6; hour: number } {
+): { weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6; hour: number; minute: number } {
     const formatter = new Intl.DateTimeFormat("en-US", {
         timeZone,
         weekday: "short",
         hour: "2-digit",
+        minute: "2-digit",
         hour12: false,
     });
     const parts = formatter.formatToParts(new Date(timestamp));
     const weekdayPart = parts.find((part) => part.type === "weekday")?.value;
     const hourPart = parts.find((part) => part.type === "hour")?.value;
+    const minutePart = parts.find((part) => part.type === "minute")?.value;
 
     const weekdayKey = weekdayPart?.toLowerCase().slice(0, 3) ?? "sun";
     const weekday = WEEKDAY_MAP[weekdayKey];
     const hour = hourPart ? Number(hourPart) : 0;
-    return { weekday, hour };
+    const minute = minutePart ? Number(minutePart) : 0;
+    return { weekday, hour, minute };
+}
+
+export function getCallingWindowStartMinutes(window: CallingWindow): number {
+    return (
+        window.start_hour_local * 60 + normalizeMinute(window.start_minute_local)
+    );
+}
+
+export function getCallingWindowEndMinutes(window: CallingWindow): number {
+    return window.end_hour_local * 60 + normalizeMinute(window.end_minute_local);
+}
+
+function normalizeMinute(value: number | undefined): number {
+    if (value === undefined) {
+        return 0;
+    }
+    if (!Number.isFinite(value)) {
+        return 0;
+    }
+    return Math.min(59, Math.max(0, Math.floor(value)));
 }
 
 export function isInsideCallingWindow(
@@ -46,21 +71,22 @@ export function isInsideCallingWindow(
     timeZone: string,
     window: CallingWindow,
 ): boolean {
-    const { weekday, hour } = getLocalWeekdayHour(timestamp, timeZone);
+    const { weekday, hour, minute } = getLocalWeekdayHour(timestamp, timeZone);
     if (!window.allowed_weekdays.includes(weekday)) {
         return false;
     }
 
-    const start = window.start_hour_local;
-    const end = window.end_hour_local;
+    const current = hour * 60 + minute;
+    const start = getCallingWindowStartMinutes(window);
+    const end = getCallingWindowEndMinutes(window);
     if (start === end) {
         return true;
     }
     if (start < end) {
-        return hour >= start && hour < end;
+        return current >= start && current < end;
     }
     // Overnight windows (example 21 -> 6)
-    return hour >= start || hour < end;
+    return current >= start || current < end;
 }
 
 /**
@@ -69,10 +95,10 @@ export function isInsideCallingWindow(
  *
  * Algorithm:
  * 1. Convert `now` to campaign timezone.
- * 2. If today is a valid weekday and the current hour < start_hour, return
- *    today at start_hour.
+ * 2. If today is a valid weekday and the current local time is before the
+ *    configured start time, return today at the start time.
  * 3. Otherwise walk forward through weekdays (up to 7 days) until we find the
- *    next allowed day and return that day at start_hour.
+ *    next allowed day and return that day at the start time.
  * 4. Convert back to UTC ms.
  *
  * Uses a heuristic approach with Intl.DateTimeFormat to avoid a full timezone
@@ -88,23 +114,32 @@ export function getNextWindowOpenMs(
         return now;
     }
 
-    const { weekday, hour } = getLocalWeekdayHour(now, timeZone);
+    const { weekday, hour, minute } = getLocalWeekdayHour(now, timeZone);
+    const current = hour * 60 + minute;
+    const start = getCallingWindowStartMinutes(window);
 
-    // Check if today is a valid day and we haven't passed the start hour yet.
-    if (window.allowed_weekdays.includes(weekday) && hour < window.start_hour_local) {
-        // Return today at start_hour in the campaign timezone.
-        return computeTimestampAtLocalHour(now, timeZone, 0, window.start_hour_local);
+    // Check if today is valid and we haven't passed the configured start time.
+    if (window.allowed_weekdays.includes(weekday) && current < start) {
+        // Return today at the configured local start time.
+        return computeTimestampAtLocalTime(
+            now,
+            timeZone,
+            0,
+            window.start_hour_local,
+            normalizeMinute(window.start_minute_local),
+        );
     }
 
     // Walk forward through the next 7 days to find the next allowed weekday.
     for (let daysAhead = 1; daysAhead <= 7; daysAhead++) {
         const futureDay = ((weekday + daysAhead) % 7) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
         if (window.allowed_weekdays.includes(futureDay)) {
-            return computeTimestampAtLocalHour(
+            return computeTimestampAtLocalTime(
                 now,
                 timeZone,
                 daysAhead,
                 window.start_hour_local,
+                normalizeMinute(window.start_minute_local),
             );
         }
     }
@@ -115,25 +150,32 @@ export function getNextWindowOpenMs(
 }
 
 /**
- * Compute a UTC timestamp for "local time = `targetHour`:00" on
+ * Compute a UTC timestamp for the requested local hour/minute on
  * `now + daysOffset` days in the given timezone.
  *
  * Uses binary-search-style correction to avoid full tz library.
  */
-function computeTimestampAtLocalHour(
+function computeTimestampAtLocalTime(
     now: number,
     timeZone: string,
     daysOffset: number,
     targetHour: number,
+    targetMinute: number,
 ): number {
     // Start with a rough estimate: shift now by daysOffset days,
-    // then adjust to the target hour.
-    const { hour: currentHour } = getLocalWeekdayHour(now, timeZone);
-    const hourDiff = targetHour - currentHour + daysOffset * 24;
-    let estimate = now + hourDiff * 60 * 60 * 1000;
+    // then adjust to the target local time.
+    const { hour: currentHour, minute: currentMinute } = getLocalWeekdayHour(
+        now,
+        timeZone,
+    );
+    const minuteDiff =
+        targetHour * 60 +
+        targetMinute -
+        (currentHour * 60 + currentMinute) +
+        daysOffset * 24 * 60;
+    let estimate = now + minuteDiff * 60 * 1000;
 
-    // Zero out minutes/seconds by flooring to the hour.
-    // Get local minute/second at estimate, then subtract.
+    // Refine the estimate using the actual localized hour/minute/second.
     const minuteSecondFormatter = new Intl.DateTimeFormat("en-US", {
         timeZone,
         hour: "2-digit",
@@ -150,8 +192,7 @@ function computeTimestampAtLocalHour(
         const s = Number(parts.find((p) => p.type === "second")?.value ?? 0);
 
         const correction =
-            (targetHour - h) * 60 * 60 * 1000 -
-            m * 60 * 1000 -
+            (targetHour * 60 + targetMinute - (h * 60 + m)) * 60 * 1000 -
             s * 1000;
 
         if (correction === 0) break;

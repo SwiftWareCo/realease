@@ -7,7 +7,11 @@
 
 import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
-import { internalMutation, internalQuery, mutation, type MutationCtx } from "../_generated/server";
+import { internalQuery, type MutationCtx } from "../_generated/server";
+import {
+    internalMutationWithCounters as internalMutation,
+    mutationWithCounters as mutation,
+} from "./counterTriggers";
 import { v } from "convex/values";
 import { normalizePhoneNumber } from "./phone";
 import {
@@ -192,6 +196,13 @@ export const enrollLeadsInCampaignBatch = internalMutation({
         for (const leadId of args.lead_ids) {
             const lead = await ctx.db.get(leadId);
             if (!lead) {
+                skipped.push({
+                    lead_id: leadId,
+                    reasons: ["lead_not_found"],
+                });
+                continue;
+            }
+            if (lead.created_by_user_id !== campaign.created_by_user_id) {
                 skipped.push({
                     lead_id: leadId,
                     reasons: ["lead_not_found"],
