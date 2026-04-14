@@ -578,9 +578,7 @@ export const updateCampaignSettings = mutation({
         if (campaign.created_by_user_id !== userId) {
             throw new Error("Campaign not found");
         }
-        const updatesOnlyStatus =
-            args.name === undefined &&
-            args.description === undefined &&
+        const updatesAllowedWhileActive =
             args.timezone === undefined &&
             args.agent_instructions === undefined &&
             args.retell_agent_id === undefined &&
@@ -590,12 +588,11 @@ export const updateCampaignSettings = mutation({
             args.retry_policy === undefined &&
             args.outcome_routing === undefined &&
             args.follow_up_sms === undefined;
-        if (campaign.status === "active" && !updatesOnlyStatus) {
+        if (campaign.status === "active" && !updatesAllowedWhileActive) {
             throw new Error(
                 "Pause this campaign before editing its runtime settings.",
             );
         }
-
         const updates: Record<string, unknown> = {
             updated_at: Date.now(),
         };

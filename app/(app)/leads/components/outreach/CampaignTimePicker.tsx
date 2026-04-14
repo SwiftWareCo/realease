@@ -242,7 +242,6 @@ export function CampaignTimePicker({
                                                       setDraftHour24(
                                                           toHour24(hourValue, meridiem),
                                                       );
-                                                      setStage("minute");
                                                   }}
                                                   className={cn(
                                                       "absolute flex size-11 cursor-pointer items-center justify-center rounded-full text-sm font-medium transition",
