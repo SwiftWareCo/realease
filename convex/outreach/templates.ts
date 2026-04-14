@@ -534,14 +534,10 @@ export function buildRetellCampaignInstructions(
 
 export function buildDefaultCampaignName(
     key: OutreachCampaignTemplateKey,
-    timestampMs = Date.now(),
+    _timestampMs = Date.now(),
 ): string {
     const template = getOutreachCampaignTemplate(key);
-    const date = new Date(timestampMs);
-    const yyyy = String(date.getFullYear());
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const dd = String(date.getDate()).padStart(2, "0");
-    return `${template.defaultNamePrefix} ${yyyy}-${mm}-${dd}`;
+    return template.defaultNamePrefix || "New Campaign";
 }
 
 export function resolveCampaignTemplateKey(
