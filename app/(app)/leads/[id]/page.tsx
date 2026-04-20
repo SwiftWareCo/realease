@@ -11,7 +11,7 @@ export default async function LeadPage({ params }: LeadPageProps) {
     const { id } = await params;
 
     return (
-        <div className="p-8">
+        <div className="min-h-full bg-[#050c1d] px-4 py-5 md:px-6 md:py-6">
             <LeadProfile leadId={id as Id<'leads'>} />
         </div>
     );

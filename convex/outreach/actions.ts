@@ -1154,3 +1154,158 @@ export const sendCampaignConversationSms = action({
         }
     },
 });
+
+export const sendLeadDirectSms = action({
+    args: {
+        leadId: v.id("leads"),
+        body: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const normalizedBody = args.body.trim();
+        if (!normalizedBody) {
+            throw new Error("Message body is required.");
+        }
+        if (normalizedBody.length > 1200) {
+            throw new Error("Message body exceeds 1200 character limit.");
+        }
+
+        const lead = (await ctx.runQuery(api.leads.queries.getLeadById, {
+            id: args.leadId,
+        })) as
+            | {
+                  _id: Id<"leads">;
+                  name: string;
+                  phone: string;
+                  do_not_call?: boolean;
+                  sms_opt_out?: boolean;
+              }
+            | null;
+
+        if (!lead) {
+            throw new Error("Lead not found.");
+        }
+        if (lead.do_not_call || lead.sms_opt_out) {
+            throw new Error("Lead has a compliance block and cannot receive SMS.");
+        }
+
+        const toNumber = normalizePhoneNumber(lead.phone);
+        if (!toNumber) {
+            throw new Error("Lead phone number is invalid for SMS sending.");
+        }
+
+        const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+        const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+        const messagingServiceSid = normalizeOptionalString(
+            process.env.TWILIO_DEFAULT_MESSAGING_SERVICE_SID,
+        );
+        const configuredFromNumber = normalizeOptionalString(
+            process.env.TWILIO_PHONE_NUMBER,
+        );
+        const fromNumber = configuredFromNumber
+            ? normalizePhoneNumber(configuredFromNumber)
+            : null;
+
+        if (!accountSid || !authToken) {
+            throw new Error("Twilio credentials are not configured.");
+        }
+        if (!messagingServiceSid && !fromNumber) {
+            throw new Error(
+                "Missing Twilio sender configuration (messaging service SID or from number).",
+            );
+        }
+
+        const params = new URLSearchParams({
+            To: toNumber,
+            Body: normalizedBody,
+        });
+        if (messagingServiceSid) {
+            params.set("MessagingServiceSid", messagingServiceSid);
+        } else if (fromNumber) {
+            params.set("From", fromNumber);
+        }
+
+        const sentAt = Date.now();
+        try {
+            const authHeader = Buffer.from(
+                `${accountSid}:${authToken}`,
+                "utf8",
+            ).toString("base64");
+            const response = await fetch(
+                `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        Authorization: `Basic ${authHeader}`,
+                    },
+                    body: params,
+                },
+            );
+
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(
+                    `Twilio send failed (${response.status}): ${errorBody}`,
+                );
+            }
+
+            const data = (await response.json()) as {
+                sid?: string;
+                from?: string;
+                to?: string;
+                status?: string;
+            };
+            await ctx.runMutation(
+                internal.outreach.mutations.upsertOutreachSmsMessage,
+                {
+                    call_id: null,
+                    campaign_id: null,
+                    lead_id: lead._id,
+                    provider: "twilio",
+                    provider_message_sid: data.sid ?? null,
+                    provider_messaging_service_sid: messagingServiceSid ?? null,
+                    direction: "outbound",
+                    body: normalizedBody,
+                    from_number:
+                        normalizeOptionalString(data.from) ??
+                        fromNumber ??
+                        (messagingServiceSid
+                            ? `messaging_service:${messagingServiceSid}`
+                            : "unknown"),
+                    to_number: normalizeOptionalString(data.to) ?? toNumber,
+                    status: normalizeTwilioMessageStatus(data.status),
+                    sent_at: sentAt,
+                },
+            );
+
+            return {
+                status: "sent" as const,
+                sid: data.sid ?? null,
+            };
+        } catch (error) {
+            const errorMessage = toErrorMessage(error);
+            await ctx.runMutation(
+                internal.outreach.mutations.upsertOutreachSmsMessage,
+                {
+                    call_id: null,
+                    campaign_id: null,
+                    lead_id: lead._id,
+                    provider: "twilio",
+                    provider_messaging_service_sid: messagingServiceSid ?? null,
+                    direction: "outbound",
+                    body: normalizedBody,
+                    from_number:
+                        fromNumber ??
+                        (messagingServiceSid
+                            ? `messaging_service:${messagingServiceSid}`
+                            : "unknown"),
+                    to_number: toNumber,
+                    status: "failed",
+                    error_message: errorMessage,
+                    sent_at: sentAt,
+                },
+            );
+            throw new Error(errorMessage);
+        }
+    },
+});

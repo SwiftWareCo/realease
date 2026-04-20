@@ -159,6 +159,69 @@ export function CampaignBottomBar({
     );
 }
 
+export function VerticalTimeline({
+    children,
+    className,
+}: {
+    children: ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={cn("relative", className)}>
+            <div
+                aria-hidden="true"
+                className="absolute left-2 top-0 bottom-0 w-px -translate-x-1/2 bg-slate-700/80"
+            />
+            <div className="space-y-3">{children}</div>
+        </div>
+    );
+}
+
+export function VerticalTimelineItem({
+    children,
+    className,
+    contentClassName,
+    markerClassName,
+    markerInnerClassName,
+    markerInner,
+    markerTopClassName,
+    wrapperClassName,
+}: {
+    children: ReactNode;
+    className?: string;
+    contentClassName?: string;
+    markerClassName?: string;
+    markerInnerClassName?: string;
+    markerInner?: ReactNode;
+    markerTopClassName?: string;
+    wrapperClassName?: string;
+}) {
+    return (
+        <div className={cn("relative", wrapperClassName)}>
+            <span
+                aria-hidden="true"
+                className={cn(
+                    "absolute left-0 top-3 flex h-4 w-4 items-center justify-center rounded-full border border-slate-700 bg-[#091121]",
+                    markerClassName,
+                    markerTopClassName,
+                )}
+            >
+                {markerInner ?? (
+                    <span
+                        className={cn(
+                            "h-1.5 w-1.5 rounded-full bg-slate-500",
+                            markerInnerClassName,
+                        )}
+                    />
+                )}
+            </span>
+            <div className={cn("pl-8", className)}>
+                <div className={contentClassName}>{children}</div>
+            </div>
+        </div>
+    );
+}
+
 const WIZARD_STEPS = [
     { key: 1, label: "Identity" },
     { key: 2, label: "Scheduling" },

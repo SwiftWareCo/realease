@@ -23,7 +23,11 @@ import { getOutreachOutcomeLabel } from "@/lib/outreach/outcomes";
 import { formatDateTimeHumanReadable } from "@/utils/dateandtimes";
 import { RecordingPlayer } from "./RecordingPlayer";
 import type { CampaignCallAttemptDetails } from "./types";
-import { CampaignStatusBadge } from "./campaign-ui";
+import {
+    CampaignStatusBadge,
+    VerticalTimeline,
+    VerticalTimelineItem,
+} from "./campaign-ui";
 import { cn } from "@/lib/utils";
 
 function ReportSkeleton() {
@@ -168,25 +172,31 @@ function Timeline({ data }: { data: CampaignCallAttemptDetails }) {
     ];
 
     return (
-        <div className="relative ml-2 border-l border-slate-700 pl-6">
+        <VerticalTimeline className="ml-2">
             {events.map((event, index) => (
-                <div key={`${event.label}-${index}`} className="relative pb-8 last:pb-0">
-                    <span
-                        className={cn(
-                            "absolute -left-[31px] top-0 flex h-4 w-4 items-center justify-center rounded-full border",
-                            event.active ? "border-emerald-300 bg-[#091121]" : "border-slate-700 bg-slate-700",
-                        )}
-                    >
-                        {event.active ? <Circle className="h-2 w-2 fill-emerald-300 text-emerald-300" /> : null}
-                    </span>
+                <VerticalTimelineItem
+                    key={`${event.label}-${index}`}
+                    className="pb-5 last:pb-0"
+                    markerClassName={cn(
+                        event.active
+                            ? "border-emerald-300 bg-[#091121]"
+                            : "border-slate-700 bg-[#111a2e]",
+                    )}
+                    markerInner={
+                        event.active ? (
+                            <Circle className="h-2 w-2 fill-emerald-300 text-emerald-300" />
+                        ) : undefined
+                    }
+                    markerInnerClassName={event.active ? undefined : "bg-slate-500"}
+                >
                     {event.active ? (
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300">Current Action</p>
                     ) : null}
                     <p className="mt-0.5 text-sm font-semibold text-slate-100">{event.label}</p>
                     <p className="mt-1 text-xs text-slate-500">{formatDateTimeHumanReadable(event.time)}</p>
-                </div>
+                </VerticalTimelineItem>
             ))}
-        </div>
+        </VerticalTimeline>
     );
 }
 
