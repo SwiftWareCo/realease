@@ -21,6 +21,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -175,6 +180,14 @@ function buildFollowUpOutcomes(enabled: boolean) {
               "no_answer" | "voicemail_left"
           >)
         : ([] as Array<"no_answer" | "voicemail_left">);
+}
+
+function buildContextualFollowUpSmsTemplate(callObjective: string): string {
+    const objective = callObjective.trim();
+    if (!objective) {
+        return "Hi {{lead_name}}, this is {{agent_name}} with {{campaign_name}}. Sorry we missed you—what’s the best time for a quick call back?";
+    }
+    return `Hi {{lead_name}}, this is {{agent_name}} with {{campaign_name}}. I’m following up about ${objective}. Sorry we missed you—what’s the best time for a quick callback?`;
 }
 
 function mapTemplateChannelToCampaignType(
@@ -365,11 +378,21 @@ export function CampaignStudioPage({
         index: null,
         value: "",
     });
+    const [lockedFieldDialogOpen, setLockedFieldDialogOpen] = useState(false);
+    const [isPausingCampaign, setIsPausingCampaign] = useState(false);
+    const [hasAcknowledgedHighRetryCadence, setHasAcknowledgedHighRetryCadence] =
+        useState(false);
+    const [isFollowUpSmsTemplateCustomized, setIsFollowUpSmsTemplateCustomized] =
+        useState(false);
 
     const updateForm = (patch: Partial<WizardFormState>) =>
         setForm((prev) => ({ ...prev, ...patch }));
 
     const removeQuestion = (index: number) => {
+        if (!canEditLockedFields) {
+            promptPauseForLockedFields();
+            return;
+        }
         updateForm({
             questions:
                 form.questions.length > 1
@@ -379,6 +402,10 @@ export function CampaignStudioPage({
     };
 
     const removeObjection = (index: number) => {
+        if (!canEditLockedFields) {
+            promptPauseForLockedFields();
+            return;
+        }
         updateForm({
             objectionHandling:
                 form.objectionHandling.length > 1
@@ -422,7 +449,13 @@ export function CampaignStudioPage({
             return;
         }
 
-        const applyTemplate = (template: CampaignTemplate): Partial<WizardFormState> => ({
+        const applyTemplate = (template: CampaignTemplate): Partial<WizardFormState> => {
+            const defaultSmsTemplate =
+                template.runtimeSummary.followUpSms.defaultTemplate ??
+                buildContextualFollowUpSmsTemplate(
+                    template.agentInstructions.call_objective,
+                );
+            return {
             selectedTemplateSelectionKey: template.selectionKey,
             campaignType: mapTemplateChannelToCampaignType(
                 template.campaignFocus.channel,
@@ -435,7 +468,7 @@ export function CampaignStudioPage({
             maxAttempts: template.runtimeSummary.maxAttempts,
             cooldownMinutes: template.runtimeSummary.cooldownMinutes,
             followUpSmsEnabled: template.runtimeSummary.followUpSms.enabled,
-            followUpSmsTemplate: template.runtimeSummary.followUpSms.defaultTemplate ?? "",
+            followUpSmsTemplate: defaultSmsTemplate,
             callObjective: template.agentInstructions.call_objective,
             openingLine: template.agentInstructions.opening_line,
             tone: resolveTonePresetValue(template.agentInstructions.tone),
@@ -448,9 +481,11 @@ export function CampaignStudioPage({
                 ),
             ),
             voicemailGuidance: template.agentInstructions.voicemail_guidance,
-        });
+            };
+        };
 
         if (mode === "edit" && existingCampaign) {
+            setIsFollowUpSmsTemplateCustomized(true);
             updateForm({
                 selectedTemplateSelectionKey: existingCampaign.templateSelectionKey,
                 campaignType:
@@ -490,6 +525,7 @@ export function CampaignStudioPage({
                 (template) => template.selectionKey === initialTemplateSelectionKey,
             ) ?? templates[0];
         if (templateFromQuery) {
+            setIsFollowUpSmsTemplateCustomized(false);
             updateForm(applyTemplate(templateFromQuery));
         }
         setDidInitialize(true);
@@ -577,7 +613,12 @@ export function CampaignStudioPage({
 
     const selectedLeadCount = form.selectedLeadIds.length;
     const estimatedTouches = selectedLeadCount * Math.max(form.maxAttempts, 1);
-    const canEditRuntime = mode === "create" || existingCampaign?.status !== "active";
+    const canEditLockedFields =
+        mode === "create" || existingCampaign?.status !== "active";
+    const shouldShowFollowUpSms =
+        (activeTemplate?.campaignFocus.channel ??
+            existingCampaign?.campaignFocus?.channel) !== "sms_ai";
+    const isHighRetryCadence = form.maxAttempts > 3;
     const activeDayLabels = WEEKDAYS.filter((weekday) =>
         form.allowedWeekdays.includes(weekday.value),
     ).map((weekday) => weekday.label);
@@ -591,6 +632,7 @@ export function CampaignStudioPage({
 
     const handleTemplateSelection = (template: CampaignTemplate) => {
         if (mode === "edit") return;
+        setIsFollowUpSmsTemplateCustomized(false);
         updateForm({
             selectedLeadIds: [],
             search: "",
@@ -606,7 +648,11 @@ export function CampaignStudioPage({
             maxAttempts: template.runtimeSummary.maxAttempts,
             cooldownMinutes: template.runtimeSummary.cooldownMinutes,
             followUpSmsEnabled: template.runtimeSummary.followUpSms.enabled,
-            followUpSmsTemplate: template.runtimeSummary.followUpSms.defaultTemplate ?? "",
+            followUpSmsTemplate:
+                template.runtimeSummary.followUpSms.defaultTemplate ??
+                buildContextualFollowUpSmsTemplate(
+                    template.agentInstructions.call_objective,
+                ),
             callObjective: template.agentInstructions.call_objective,
             openingLine: template.agentInstructions.opening_line,
             tone: resolveTonePresetValue(template.agentInstructions.tone),
@@ -620,10 +666,25 @@ export function CampaignStudioPage({
         });
     };
 
+    useEffect(() => {
+        if (isFollowUpSmsTemplateCustomized) {
+            return;
+        }
+        updateForm({
+            followUpSmsTemplate: buildContextualFollowUpSmsTemplate(
+                form.callObjective,
+            ),
+        });
+    }, [form.callObjective, isFollowUpSmsTemplateCustomized]);
+
     const openStrategyEditor = (
         type: StrategyEditorType,
         index: number | null = null,
     ) => {
+        if (!canEditLockedFields) {
+            promptPauseForLockedFields();
+            return;
+        }
         const source = type === "question" ? form.questions : form.objectionHandling;
         setStrategyEditor({
             open: true,
@@ -674,8 +735,25 @@ export function CampaignStudioPage({
         closeStrategyEditor();
     };
 
+    const promptPauseForLockedFields = () => {
+        if (mode === "edit" && existingCampaign?.status === "active") {
+            setLockedFieldDialogOpen(true);
+        }
+    };
+
+    const updateLockedField = (patch: Partial<WizardFormState>) => {
+        if (!canEditLockedFields) {
+            promptPauseForLockedFields();
+            return;
+        }
+        updateForm(patch);
+    };
+
     const toggleWeekday = (weekday: number) => {
-        if (!canEditRuntime) return;
+        if (!canEditLockedFields) {
+            promptPauseForLockedFields();
+            return;
+        }
         updateForm({
             allowedWeekdays: form.allowedWeekdays.includes(weekday)
                 ? form.allowedWeekdays.filter((v) => v !== weekday)
@@ -785,19 +863,24 @@ export function CampaignStudioPage({
             const payload = buildCampaignPayload();
             setIsSavingDraft(true);
             if (mode === "edit" && existingCampaign) {
-                if (!canEditRuntime) {
-                    throw new Error("Pause this campaign before editing runtime settings.");
+                if (canEditLockedFields) {
+                    await updateCampaign({
+                        campaignId: existingCampaign._id,
+                        name: payload.name,
+                        description: payload.description ?? null,
+                        calling_window: payload.calling_window,
+                        retry_policy: payload.retry_policy,
+                        follow_up_sms: payload.follow_up_sms,
+                        campaign_configuration: payload.campaign_configuration,
+                        agent_instructions: payload.agent_instructions,
+                    });
+                } else {
+                    await updateCampaign({
+                        campaignId: existingCampaign._id,
+                        name: payload.name,
+                        description: payload.description ?? null,
+                    });
                 }
-                await updateCampaign({
-                    campaignId: existingCampaign._id,
-                    name: payload.name,
-                    description: payload.description ?? null,
-                    calling_window: payload.calling_window,
-                    retry_policy: payload.retry_policy,
-                    follow_up_sms: payload.follow_up_sms,
-                    campaign_configuration: payload.campaign_configuration,
-                    agent_instructions: payload.agent_instructions,
-                });
                 toast.success("Campaign strategy updated.");
                 startTransition(() => {
                     router.push(`/leads/outreach/${existingCampaign._id}`);
@@ -875,6 +958,26 @@ export function CampaignStudioPage({
                 "animate-in fade-in-0 slide-in-from-left-4 duration-300",
             );
             updateForm({ currentStep: (form.currentStep - 1) as WizardStep });
+        }
+    };
+
+    const handlePauseCampaignForEditing = async () => {
+        if (!existingCampaign) return;
+        try {
+            setIsPausingCampaign(true);
+            await updateCampaign({
+                campaignId: existingCampaign._id,
+                status: "paused",
+            });
+            setLockedFieldDialogOpen(false);
+            toast.success("Campaign paused. Locked fields are now editable.");
+        } catch (error) {
+            console.error(error);
+            toast.error(
+                error instanceof Error ? error.message : "Unable to pause campaign.",
+            );
+        } finally {
+            setIsPausingCampaign(false);
         }
     };
 
@@ -1108,9 +1211,9 @@ export function CampaignStudioPage({
                         </div>
                     </div>
 
-                    {!canEditRuntime && (
+                    {!canEditLockedFields && (
                         <div className="rounded-[1.25rem] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-                            Pause this campaign before saving runtime or strategy edits.
+                            Runtime and AI script fields are locked while this campaign is active.
                         </div>
                     )}
 
@@ -1119,17 +1222,17 @@ export function CampaignStudioPage({
                             label="Calling window start"
                             value={form.startTimeMinutes}
                             onChange={(nextValue) =>
-                                updateForm({ startTimeMinutes: nextValue })
+                                updateLockedField({ startTimeMinutes: nextValue })
                             }
-                            disabled={!canEditRuntime}
+                            disabled={false}
                         />
                         <CampaignTimePicker
                             label="Calling window end"
                             value={form.endTimeMinutes}
                             onChange={(nextValue) =>
-                                updateForm({ endTimeMinutes: nextValue })
+                                updateLockedField({ endTimeMinutes: nextValue })
                             }
-                            disabled={!canEditRuntime}
+                            disabled={false}
                         />
                     </div>
 
@@ -1157,14 +1260,14 @@ export function CampaignStudioPage({
                                         key={weekday.value}
                                         type="button"
                                         onClick={() => toggleWeekday(weekday.value)}
-                                        disabled={!canEditRuntime}
+                                        disabled={false}
                                         className={cn(
                                             "rounded-full border px-4 py-2 text-sm transition",
                                             active
                                                 ? "border-primary/40 bg-primary/15 text-primary"
                                                 : "border-border/70 bg-muted/30 text-muted-foreground hover:border-border hover:bg-muted/50",
-                                            !canEditRuntime &&
-                                                "cursor-not-allowed opacity-60",
+                                            !canEditLockedFields &&
+                                                "opacity-80",
                                         )}
                                     >
                                         {weekday.label}
@@ -1191,21 +1294,65 @@ export function CampaignStudioPage({
                             </div>
                             <div className="mt-5 grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label htmlFor="max-attempts">Max attempts</Label>
-                                    <Input
-                                        id="max-attempts"
-                                        type="number"
-                                        min={1}
-                                        max={10}
-                                        value={form.maxAttempts}
-                                        onChange={(e) =>
-                                            updateForm({
-                                                maxAttempts: Number(e.target.value) || 1,
-                                            })
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="max-attempts">Max attempts</Label>
+                                        <Badge
+                                            variant="outline"
+                                            className="rounded-full border-amber-500/30 bg-amber-500/10 text-[10px] uppercase tracking-[0.16em] text-amber-700 dark:text-amber-200"
+                                        >
+                                            Smart max: 3
+                                        </Badge>
+                                    </div>
+                                    <Tooltip
+                                        open={
+                                            isHighRetryCadence &&
+                                            !hasAcknowledgedHighRetryCadence
                                         }
-                                        disabled={!canEditRuntime}
-                                        className="border-border/70 bg-background"
-                                    />
+                                    >
+                                        <TooltipTrigger asChild>
+                                            <Input
+                                                id="max-attempts"
+                                                type="number"
+                                                min={1}
+                                                max={10}
+                                                value={form.maxAttempts}
+                                                onChange={(e) => {
+                                                    const nextValue =
+                                                        Number(e.target.value) || 1;
+                                                    updateLockedField({
+                                                        maxAttempts: nextValue,
+                                                    });
+                                                    if (nextValue <= 3) {
+                                                        setHasAcknowledgedHighRetryCadence(
+                                                            false,
+                                                        );
+                                                    }
+                                                }}
+                                                className="border-border/70 bg-background"
+                                            />
+                                        </TooltipTrigger>
+                                        <TooltipContent
+                                            side="top"
+                                            className="max-w-[280px] space-y-2"
+                                        >
+                                            <p>
+                                                Setting a high retry cadence may lead to
+                                                client annoyance and increased credit usage.
+                                            </p>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                className="h-7 rounded-full"
+                                                onClick={() =>
+                                                    setHasAcknowledgedHighRetryCadence(
+                                                        true,
+                                                    )
+                                                }
+                                            >
+                                                Acknowledge and allow
+                                            </Button>
+                                        </TooltipContent>
+                                    </Tooltip>
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="cooldown-minutes">
@@ -1217,19 +1364,19 @@ export function CampaignStudioPage({
                                         min={0}
                                         value={form.cooldownMinutes}
                                         onChange={(e) =>
-                                            updateForm({
+                                            updateLockedField({
                                                 cooldownMinutes:
                                                     Number(e.target.value) || 0,
                                             })
                                         }
-                                        disabled={!canEditRuntime}
                                         className="border-border/70 bg-background"
                                     />
                                 </div>
                             </div>
                         </div>
 
-                        <div className="rounded-[1.45rem] border border-border/60 bg-muted/30 p-4">
+                        {shouldShowFollowUpSms ? (
+                            <div className="rounded-[1.45rem] border border-border/60 bg-muted/30 p-4">
                             <div className="flex items-start justify-between gap-4">
                                 <div>
                                     <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
@@ -1243,11 +1390,14 @@ export function CampaignStudioPage({
                                 <Checkbox
                                     checked={form.followUpSmsEnabled}
                                     onCheckedChange={(checked) =>
-                                        updateForm({
+                                        updateLockedField({
                                             followUpSmsEnabled: Boolean(checked),
                                         })
                                     }
-                                    disabled={!canEditRuntime || form.campaignType === "voice"}
+                                    disabled={
+                                        !canEditLockedFields ||
+                                        form.campaignType === "voice"
+                                    }
                                 />
                             </div>
                             {form.campaignType === "voice" ? (
@@ -1262,16 +1412,24 @@ export function CampaignStudioPage({
                                     rows={4}
                                     value={form.followUpSmsTemplate}
                                     onChange={(e) =>
-                                        updateForm({
-                                            followUpSmsTemplate: e.target.value,
-                                        })
-                                    }
+                                        {
+                                            setIsFollowUpSmsTemplateCustomized(true);
+                                            updateLockedField({
+                                                followUpSmsTemplate: e.target.value,
+                                            });
+                                        }}
                                     placeholder="Hi {{lead_name}}, this is {{campaign_name}}..."
-                                    disabled={!canEditRuntime || !form.followUpSmsEnabled}
+                                    disabled={!form.followUpSmsEnabled}
                                     className="border-border/70 bg-background"
                                 />
                             </div>
-                        </div>
+                            </div>
+                        ) : (
+                            <div className="rounded-[1.45rem] border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+                                Follow-up SMS is available only for campaign types that include
+                                Voice.
+                            </div>
+                        )}
                     </div>
             </div>
         </section>
@@ -1306,9 +1464,8 @@ export function CampaignStudioPage({
                                 rows={4}
                                 value={form.callObjective}
                                 onChange={(e) =>
-                                    updateForm({ callObjective: e.target.value })
+                                    updateLockedField({ callObjective: e.target.value })
                                 }
-                                disabled={!canEditRuntime}
                                 className="mt-3 border-border/70 bg-background"
                             />
                         </div>
@@ -1321,9 +1478,8 @@ export function CampaignStudioPage({
                                 rows={4}
                                 value={form.openingLine}
                                 onChange={(e) =>
-                                    updateForm({ openingLine: e.target.value })
+                                    updateLockedField({ openingLine: e.target.value })
                                 }
-                                disabled={!canEditRuntime}
                                 className="mt-3 border-border/70 bg-background"
                             />
                         </div>
@@ -1336,8 +1492,9 @@ export function CampaignStudioPage({
                             </p>
                             <Select
                                 value={form.tone}
-                                onValueChange={(value) => updateForm({ tone: value })}
-                                disabled={!canEditRuntime}
+                                onValueChange={(value) =>
+                                    updateLockedField({ tone: value })
+                                }
                             >
                                 <SelectTrigger
                                     id="tone"
@@ -1367,11 +1524,10 @@ export function CampaignStudioPage({
                                 rows={3}
                                 value={form.voicemailGuidance}
                                 onChange={(e) =>
-                                    updateForm({
+                                    updateLockedField({
                                         voicemailGuidance: e.target.value,
                                     })
                                 }
-                                disabled={!canEditRuntime}
                                 className="mt-3 border-border/70 bg-background"
                             />
                         </div>
@@ -1393,7 +1549,6 @@ export function CampaignStudioPage({
                                 variant="outline"
                                 className="rounded-full border-border/70 bg-transparent"
                                 onClick={() => openStrategyEditor("question")}
-                                disabled={!canEditRuntime}
                             >
                                 Add question
                             </Button>
@@ -1415,7 +1570,6 @@ export function CampaignStudioPage({
                                             onClick={() =>
                                                 openStrategyEditor("question", index)
                                             }
-                                            disabled={!canEditRuntime}
                                             className="min-w-0 flex-1 cursor-pointer text-left disabled:cursor-not-allowed"
                                         >
                                             <p className="truncate text-sm text-foreground">
@@ -1430,7 +1584,6 @@ export function CampaignStudioPage({
                                             variant="ghost"
                                             className="text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                                             onClick={() => openStrategyEditor("question", index)}
-                                            disabled={!canEditRuntime}
                                         >
                                             <Edit3 className="size-4" />
                                         </Button>
@@ -1439,7 +1592,6 @@ export function CampaignStudioPage({
                                             variant="ghost"
                                             className="text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                                             onClick={() => removeQuestion(index)}
-                                            disabled={!canEditRuntime}
                                         >
                                             <Trash2 className="size-4" />
                                         </Button>
@@ -1464,7 +1616,6 @@ export function CampaignStudioPage({
                                 variant="outline"
                                 className="rounded-full border-border/70 bg-transparent"
                                 onClick={() => openStrategyEditor("objection")}
-                                disabled={!canEditRuntime}
                             >
                                 Add objection path
                             </Button>
@@ -1486,7 +1637,6 @@ export function CampaignStudioPage({
                                             onClick={() =>
                                                 openStrategyEditor("objection", index)
                                             }
-                                            disabled={!canEditRuntime}
                                             className="min-w-0 flex-1 cursor-pointer text-left disabled:cursor-not-allowed"
                                         >
                                             <p className="truncate text-sm text-foreground">
@@ -1503,7 +1653,6 @@ export function CampaignStudioPage({
                                             onClick={() =>
                                                 openStrategyEditor("objection", index)
                                             }
-                                            disabled={!canEditRuntime}
                                         >
                                             <Edit3 className="size-4" />
                                         </Button>
@@ -1512,7 +1661,6 @@ export function CampaignStudioPage({
                                             variant="ghost"
                                             className="text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                                             onClick={() => removeObjection(index)}
-                                            disabled={!canEditRuntime}
                                         >
                                             <Trash2 className="size-4" />
                                         </Button>
@@ -2056,6 +2204,20 @@ export function CampaignStudioPage({
                                     </Link>
                                 </Button>
                             )}
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-full border-border/70 bg-transparent"
+                                onClick={handleSaveDraft}
+                                disabled={isSavingDraft}
+                            >
+                                {isSavingDraft ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Save className="h-4 w-4" />
+                                )}
+                                Save
+                            </Button>
                             {visibleStep < 3 ? (
                                 <Button
                                     type="button"
@@ -2065,21 +2227,7 @@ export function CampaignStudioPage({
                                     Next
                                     <ArrowRight className="h-4 w-4" />
                                 </Button>
-                            ) : (
-                                <Button
-                                    type="button"
-                                    className="rounded-full"
-                                    onClick={handleSaveDraft}
-                                    disabled={isSavingDraft}
-                                >
-                                    {isSavingDraft ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Save className="h-4 w-4" />
-                                    )}
-                                    Save Changes
-                                </Button>
-                            )}
+                            ) : null}
                         </>
                     }
                 />
@@ -2132,6 +2280,41 @@ export function CampaignStudioPage({
                         </Button>
                         <Button type="button" className="rounded-full" onClick={saveStrategyEditor}>
                             Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={lockedFieldDialogOpen}
+                onOpenChange={setLockedFieldDialogOpen}
+            >
+                <DialogContent className="border-border/70 bg-card text-foreground sm:max-w-[560px]">
+                    <DialogHeader>
+                        <DialogTitle>Pause required</DialogTitle>
+                        <DialogDescription className="text-muted-foreground">
+                            This campaign must be paused before these specific fields can be edited. Would you like to pause it now?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:justify-end">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            className="text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                            onClick={() => setLockedFieldDialogOpen(false)}
+                        >
+                            Keep campaign active
+                        </Button>
+                        <Button
+                            type="button"
+                            className="rounded-full"
+                            onClick={handlePauseCampaignForEditing}
+                            disabled={isPausingCampaign}
+                        >
+                            {isPausingCampaign ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : null}
+                            Pause campaign now
                         </Button>
                     </DialogFooter>
                 </DialogContent>

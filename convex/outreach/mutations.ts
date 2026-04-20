@@ -645,7 +645,6 @@ export const updateCampaignSettings = mutation({
                 "Pause this campaign before editing its runtime settings.",
             );
         }
-
         const updates: Record<string, unknown> = {
             updated_at: Date.now(),
         };
