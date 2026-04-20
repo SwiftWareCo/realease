@@ -70,6 +70,7 @@ import { fromMinutes, getEndMinutes, getStartMinutes, toMinutes } from "./time-u
 
 type WizardStep = 1 | 2 | 3 | 4;
 type StrategyEditorType = "question" | "objection";
+type CampaignType = "voice" | "sms" | "both";
 type AudienceClassificationFilter = "all" | PickerLead["classification"];
 type AudienceStatusFilter = "all" | PickerLead["status"];
 type AudienceTypeFilter = "all" | "buyer" | "seller" | "investor" | "unknown";
@@ -104,6 +105,7 @@ const TONE_PRESETS = [
 
 interface WizardFormState {
     selectedTemplateSelectionKey: string | null;
+    campaignType: CampaignType;
     name: string;
     description: string;
     startTimeMinutes: number;
@@ -136,6 +138,7 @@ interface StrategyEditorState {
 
 const INITIAL_FORM_STATE: WizardFormState = {
     selectedTemplateSelectionKey: null,
+    campaignType: "both",
     name: "",
     description: "",
     startTimeMinutes: toMinutes(9, 0),
@@ -185,6 +188,35 @@ function buildContextualFollowUpSmsTemplate(callObjective: string): string {
         return "Hi {{lead_name}}, this is {{agent_name}} with {{campaign_name}}. Sorry we missed you—what’s the best time for a quick call back?";
     }
     return `Hi {{lead_name}}, this is {{agent_name}} with {{campaign_name}}. I’m following up about ${objective}. Sorry we missed you—what’s the best time for a quick callback?`;
+}
+
+function mapTemplateChannelToCampaignType(
+    channel: CampaignTemplate["campaignFocus"]["channel"] | undefined,
+): CampaignType {
+    if (channel === "voice_ai") {
+        return "voice";
+    }
+    if (channel === "sms_ai") {
+        return "sms";
+    }
+    return "both";
+}
+
+function doesTemplateMatchCampaignType(
+    template: CampaignTemplate,
+    campaignType: CampaignType,
+) {
+    const templateChannel = template.campaignFocus.channel;
+    if (campaignType === "both") {
+        return templateChannel === "voice_and_sms";
+    }
+    if (campaignType === "voice") {
+        return (
+            templateChannel === "voice_ai" ||
+            templateChannel === "voice_and_sms"
+        );
+    }
+    return templateChannel === "sms_ai" || templateChannel === "voice_and_sms";
 }
 
 function resolveTonePresetValue(value: string | undefined): string {
@@ -392,6 +424,13 @@ export function CampaignStudioPage({
             ) ?? null,
         [form.selectedTemplateSelectionKey, templates],
     );
+    const filteredTemplates = useMemo(
+        () =>
+            (templates ?? []).filter((template) =>
+                doesTemplateMatchCampaignType(template, form.campaignType),
+            ),
+        [form.campaignType, templates],
+    );
 
     const pickerDataRaw = useQuery(
         api.outreach.queries.getOutreachLeadPicker,
@@ -418,6 +457,9 @@ export function CampaignStudioPage({
                 );
             return {
             selectedTemplateSelectionKey: template.selectionKey,
+            campaignType: mapTemplateChannelToCampaignType(
+                template.campaignFocus.channel,
+            ),
             name: template.defaultName,
             description: template.description,
             startTimeMinutes: getStartMinutes(template.runtimeSummary.callingWindow),
@@ -446,6 +488,11 @@ export function CampaignStudioPage({
             setIsFollowUpSmsTemplateCustomized(true);
             updateForm({
                 selectedTemplateSelectionKey: existingCampaign.templateSelectionKey,
+                campaignType:
+                    existingCampaign.campaignConfiguration?.campaign_type ??
+                    mapTemplateChannelToCampaignType(
+                        existingCampaign.campaignFocus?.channel,
+                    ),
                 name: existingCampaign.name,
                 description: existingCampaign.description ?? "",
                 startTimeMinutes: getStartMinutes(existingCampaign.callingWindow),
@@ -489,6 +536,25 @@ export function CampaignStudioPage({
         initialTemplateSelectionKey,
         mode,
         templates,
+    ]);
+
+    useEffect(() => {
+        if (!didInitialize || filteredTemplates.length === 0) {
+            return;
+        }
+        const selectedTemplateStillVisible = filteredTemplates.some(
+            (template) => template.selectionKey === form.selectedTemplateSelectionKey,
+        );
+        if (selectedTemplateStillVisible) {
+            return;
+        }
+        updateForm({
+            selectedTemplateSelectionKey: filteredTemplates[0].selectionKey,
+        });
+    }, [
+        didInitialize,
+        filteredTemplates,
+        form.selectedTemplateSelectionKey,
     ]);
 
     const filteredLeads = useMemo(() => {
@@ -695,6 +761,14 @@ export function CampaignStudioPage({
         });
     };
 
+    const updateCampaignType = (campaignType: CampaignType) => {
+        updateForm({
+            campaignType,
+            followUpSmsEnabled:
+                campaignType === "voice" ? false : form.followUpSmsEnabled,
+        });
+    };
+
     const toggleLead = (leadId: string) => {
         updateForm({
             selectedLeadIds: form.selectedLeadIds.includes(leadId)
@@ -750,10 +824,25 @@ export function CampaignStudioPage({
                 min_minutes_between_attempts: form.cooldownMinutes,
             },
             follow_up_sms: {
-                enabled: form.followUpSmsEnabled,
+                enabled:
+                    form.campaignType === "voice"
+                        ? false
+                        : form.followUpSmsEnabled,
                 delay_minutes: 3,
                 default_template: form.followUpSmsTemplate.trim() || undefined,
-                send_only_on_outcomes: buildFollowUpOutcomes(form.followUpSmsEnabled),
+                send_only_on_outcomes: buildFollowUpOutcomes(
+                    form.campaignType === "voice"
+                        ? false
+                        : form.followUpSmsEnabled,
+                ),
+            },
+            campaign_configuration: {
+                campaign_type: form.campaignType,
+                voice_enabled:
+                    form.campaignType === "voice" ||
+                    form.campaignType === "both",
+                sms_enabled:
+                    form.campaignType === "sms" || form.campaignType === "both",
             },
             agent_instructions: {
                 call_objective: form.callObjective.trim(),
@@ -782,6 +871,7 @@ export function CampaignStudioPage({
                         calling_window: payload.calling_window,
                         retry_policy: payload.retry_policy,
                         follow_up_sms: payload.follow_up_sms,
+                        campaign_configuration: payload.campaign_configuration,
                         agent_instructions: payload.agent_instructions,
                     });
                 } else {
@@ -942,7 +1032,7 @@ export function CampaignStudioPage({
                     </div>
                 </CardHeader>
                 <CardContent className="grid gap-3 sm:grid-cols-2">
-                    {templates.map((template) => {
+                    {filteredTemplates.map((template) => {
                         const selected =
                             template.selectionKey === form.selectedTemplateSelectionKey;
                         return (
@@ -998,6 +1088,12 @@ export function CampaignStudioPage({
                             </button>
                         );
                     })}
+                    {filteredTemplates.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-6 text-sm text-muted-foreground sm:col-span-2">
+                            No presets currently match this campaign type. Try a
+                            different type or add a custom preset for this channel.
+                        </div>
+                    ) : null}
                 </CardContent>
             </Card>
 
@@ -1020,6 +1116,34 @@ export function CampaignStudioPage({
                         </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Campaign type</Label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {(
+                                    [
+                                        { value: "voice", label: "Voice" },
+                                        { value: "sms", label: "SMS" },
+                                        { value: "both", label: "Both" },
+                                    ] as const
+                                ).map((option) => {
+                                    const selected =
+                                        form.campaignType === option.value;
+                                    return (
+                                        <Button
+                                            key={option.value}
+                                            type="button"
+                                            variant={selected ? "default" : "outline"}
+                                            className="rounded-full"
+                                            onClick={() =>
+                                                updateCampaignType(option.value)
+                                            }
+                                        >
+                                            {option.label}
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                         <div className="space-y-2">
                             <Label htmlFor="campaign-name">Campaign name</Label>
                             <Input
@@ -1270,8 +1394,17 @@ export function CampaignStudioPage({
                                             followUpSmsEnabled: Boolean(checked),
                                         })
                                     }
+                                    disabled={
+                                        !canEditLockedFields ||
+                                        form.campaignType === "voice"
+                                    }
                                 />
                             </div>
+                            {form.campaignType === "voice" ? (
+                                <p className="mt-3 text-xs text-muted-foreground">
+                                    SMS follow-up is disabled for voice-only campaigns.
+                                </p>
+                            ) : null}
                             <div className="mt-4 space-y-2">
                                 <Label htmlFor="sms-template">Default SMS copy</Label>
                                 <Textarea

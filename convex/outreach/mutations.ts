@@ -99,6 +99,16 @@ const CALLING_WINDOW_VALIDATOR = v.object({
     allowed_weekdays: v.array(WEEKDAY_VALIDATOR),
 });
 
+const CAMPAIGN_CONFIGURATION_VALIDATOR = v.object({
+    campaign_type: v.union(
+        v.literal("voice"),
+        v.literal("sms"),
+        v.literal("both"),
+    ),
+    voice_enabled: v.boolean(),
+    sms_enabled: v.boolean(),
+});
+
 type OutcomeRoutingRule = NonNullable<
     Doc<"outreachCampaigns">["outcome_routing"]
 >[number];
@@ -207,6 +217,34 @@ function sanitizeOutcomeRouting(
         }
         return sanitized;
     });
+}
+
+function normalizeCampaignConfiguration(
+    campaignConfiguration: {
+        campaign_type: "voice" | "sms" | "both";
+        voice_enabled: boolean;
+        sms_enabled: boolean;
+    },
+) {
+    if (campaignConfiguration.campaign_type === "voice") {
+        return {
+            campaign_type: "voice" as const,
+            voice_enabled: true,
+            sms_enabled: false,
+        };
+    }
+    if (campaignConfiguration.campaign_type === "sms") {
+        return {
+            campaign_type: "sms" as const,
+            voice_enabled: false,
+            sms_enabled: true,
+        };
+    }
+    return {
+        campaign_type: "both" as const,
+        voice_enabled: true,
+        sms_enabled: true,
+    };
 }
 
 const OUTREACH_SMS_DIRECTION_VALIDATOR = v.union(
@@ -425,6 +463,7 @@ export const createCampaign = mutation({
         ),
         outcome_routing: v.optional(OUTCOME_ROUTING_VALIDATOR),
         follow_up_sms: v.optional(FOLLOW_UP_SMS_VALIDATOR),
+        campaign_configuration: v.optional(CAMPAIGN_CONFIGURATION_VALIDATOR),
     },
     handler: async (ctx, args) => {
         const userId = await getCurrentUserIdOrThrow(ctx);
@@ -525,6 +564,13 @@ export const createCampaign = mutation({
                     template?.followUpSms.send_only_on_outcomes ??
                     ["no_answer", "voicemail_left"],
             },
+            campaign_configuration: args.campaign_configuration
+                ? normalizeCampaignConfiguration(args.campaign_configuration)
+                : {
+                      campaign_type: "both",
+                      voice_enabled: true,
+                      sms_enabled: true,
+                  },
             outcome_routing: args.outcome_routing
                 ? sanitizeOutcomeRouting(args.outcome_routing)
                 : template?.outcomeRouting,
@@ -567,6 +613,9 @@ export const updateCampaignSettings = mutation({
             v.union(OUTCOME_ROUTING_VALIDATOR, v.null()),
         ),
         follow_up_sms: v.optional(v.union(FOLLOW_UP_SMS_VALIDATOR, v.null())),
+        campaign_configuration: v.optional(
+            v.union(CAMPAIGN_CONFIGURATION_VALIDATOR, v.null()),
+        ),
     },
     handler: async (ctx, args) => {
         const userId = await getCurrentUserIdOrThrow(ctx);
@@ -578,7 +627,9 @@ export const updateCampaignSettings = mutation({
         if (campaign.created_by_user_id !== userId) {
             throw new Error("Campaign not found");
         }
-        const updatesAllowedWhileActive =
+        const updatesOnlyStatus =
+            args.name === undefined &&
+            args.description === undefined &&
             args.timezone === undefined &&
             args.agent_instructions === undefined &&
             args.retell_agent_id === undefined &&
@@ -587,8 +638,9 @@ export const updateCampaignSettings = mutation({
             args.calling_window === undefined &&
             args.retry_policy === undefined &&
             args.outcome_routing === undefined &&
-            args.follow_up_sms === undefined;
-        if (campaign.status === "active" && !updatesAllowedWhileActive) {
+            args.follow_up_sms === undefined &&
+            args.campaign_configuration === undefined;
+        if (campaign.status === "active" && !updatesOnlyStatus) {
             throw new Error(
                 "Pause this campaign before editing its runtime settings.",
             );
@@ -642,6 +694,11 @@ export const updateCampaignSettings = mutation({
                       ...args.follow_up_sms,
                       delay_minutes: FIXED_FOLLOW_UP_SMS_DELAY_MINUTES,
                   }
+                : undefined;
+        }
+        if (args.campaign_configuration !== undefined) {
+            updates.campaign_configuration = args.campaign_configuration
+                ? normalizeCampaignConfiguration(args.campaign_configuration)
                 : undefined;
         }
 

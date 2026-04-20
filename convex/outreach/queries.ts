@@ -625,6 +625,11 @@ export const getCampaignsForPicker = query({
                         send_only_on_outcomes:
                             campaign.follow_up_sms?.send_only_on_outcomes ?? [],
                     },
+                    campaignConfiguration: campaign.campaign_configuration ?? {
+                        campaign_type: "both",
+                        voice_enabled: true,
+                        sms_enabled: true,
+                    },
                     retryPolicy: campaign.retry_policy,
                     callingWindow: campaign.calling_window,
                     runtimeSummary,
@@ -1069,6 +1074,11 @@ export const getCampaignCallAttempts = query({
                     campaignTemplate?.agentInstructions ??
                     null,
                 followUpSms: campaign.follow_up_sms ?? null,
+                campaignConfiguration: campaign.campaign_configuration ?? {
+                    campaign_type: "both",
+                    voice_enabled: true,
+                    sms_enabled: true,
+                },
                 createdAt: campaign.created_at,
                 updatedAt: campaign.updated_at,
                 runtimeSummary: campaignTemplate
