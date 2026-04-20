@@ -49,7 +49,7 @@ export const leadsTable = defineTable({
     list_price: v.optional(v.number()), // Listing price in cents
     listed_date: v.optional(v.number()), // Timestamp for days-on-market calculation
     ai_suggestion: v.optional(v.string()),
-    notes: v.optional(v.string()), // Free-form context from lead capture form
+    notes: v.optional(v.string()), // Compatibility snapshot (latest note text)
     conversion_prediction: v.optional(v.string()), // AI prediction: "Within 7 days", "Within 30 days", etc.
     last_message_sentiment: v.optional(
         v.union(
@@ -75,4 +75,14 @@ export const leadsTable = defineTable({
     .index("by_do_not_call", ["do_not_call"])
     .index("by_sms_opt_out", ["sms_opt_out"])
     .index("by_last_call_outcome", ["last_call_outcome"])
+    .index("by_created_by_user_id", ["created_by_user_id"]);
+
+export const leadNotesTable = defineTable({
+    lead_id: v.id("leads"),
+    body: v.string(),
+    created_by_user_id: v.id("users"),
+    created_at: v.number(),
+})
+    .index("by_lead_id", ["lead_id"])
+    .index("by_lead_id_and_created_at", ["lead_id", "created_at"])
     .index("by_created_by_user_id", ["created_by_user_id"]);

@@ -115,6 +115,29 @@ export const getAllTags = query({
     },
 });
 
+export const getLeadNotes = query({
+    args: {
+        leadId: v.id("leads"),
+    },
+    handler: async (ctx, args) => {
+        const userId = await getCurrentUserIdOrThrow(ctx);
+        const lead = await ctx.db.get(args.leadId);
+        if (!lead || lead.created_by_user_id !== userId) {
+            return [];
+        }
+
+        const notes = await ctx.db
+            .query("leadNotes")
+            .withIndex("by_lead_id_and_created_at", (q) =>
+                q.eq("lead_id", args.leadId),
+            )
+            .order("desc")
+            .take(200);
+
+        return notes;
+    },
+});
+
 export const getLeadCommunicationHistory = query({
     args: {
         leadId: v.id("leads"),

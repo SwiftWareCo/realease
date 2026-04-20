@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import {
@@ -23,7 +23,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { User, Phone, Mail, MapPin, Clock, FileText, Loader2 } from "lucide-react";
+import { User, Phone, Mail, MapPin, Clock, FileText, Loader2, Plus, Trash2 } from "lucide-react";
 
 interface AddLeadModalProps {
     open: boolean;
@@ -35,6 +35,16 @@ interface AddLeadModalProps {
 type Intent = "buyer" | "seller" | "investor";
 type Status = "new" | "contacted" | "qualified";
 
+function formatNoteTimestamp(timestamp: number) {
+    return new Date(timestamp).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+    });
+}
+
 export function AddLeadModal({
     open,
     onOpenChange,
@@ -44,6 +54,33 @@ export function AddLeadModal({
     const createLead = useMutation(api.leads.mutations.createLead);
     const updateLead = useMutation(api.leads.mutations.updateLead);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const existingNotes =
+        useQuery(
+            api.leads.queries.getLeadNotes,
+            open && mode === "edit" && lead
+                ? { leadId: lead._id }
+                : "skip",
+        ) ?? [];
+    const displayedExistingNotes: Array<{
+        _id: string;
+        body: string;
+        created_at: number;
+    }> =
+        existingNotes.length > 0
+            ? existingNotes.map((note) => ({
+                  _id: String(note._id),
+                  body: note.body,
+                  created_at: note.created_at,
+              }))
+            : lead?.notes
+              ? [
+                    {
+                        _id: `legacy-${String(lead._id)}`,
+                        body: lead.notes,
+                        created_at: lead.created_at,
+                    },
+                ]
+              : [];
 
     // Form state
     const [name, setName] = useState("");
@@ -54,7 +91,8 @@ export function AddLeadModal({
     const [intent, setIntent] = useState<Intent>("buyer");
     const [status, setStatus] = useState<Status>("new");
     const [source, setSource] = useState("manual");
-    const [notes, setNotes] = useState("");
+    const [newNote, setNewNote] = useState("");
+    const [pendingNotes, setPendingNotes] = useState<string[]>([]);
     const [urgencyScore, setUrgencyScore] = useState("50");
 
     const resetForm = () => {
@@ -66,7 +104,8 @@ export function AddLeadModal({
         setIntent("buyer");
         setStatus("new");
         setSource("manual");
-        setNotes("");
+        setNewNote("");
+        setPendingNotes([]);
         setUrgencyScore("50");
     };
 
@@ -81,12 +120,26 @@ export function AddLeadModal({
             setIntent(lead.intent);
             setStatus(lead.status);
             setSource(lead.source ?? "manual");
-            setNotes(lead.notes ?? "");
+            setNewNote("");
+            setPendingNotes([]);
             setUrgencyScore(String(lead.urgency_score ?? 50));
             return;
         }
         resetForm();
     }, [open, mode, lead]);
+
+    const handleAddPendingNote = () => {
+        const value = newNote.trim();
+        if (!value) return;
+        setPendingNotes((current) => [...current, value]);
+        setNewNote("");
+    };
+
+    const handleRemovePendingNote = (index: number) => {
+        setPendingNotes((current) =>
+            current.filter((_, itemIndex) => itemIndex !== index),
+        );
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -106,7 +159,7 @@ export function AddLeadModal({
                 intent,
                 status,
                 source: source.trim() || "manual",
-                notes: notes.trim() || undefined,
+                notes_items: pendingNotes.length > 0 ? pendingNotes : undefined,
                 urgency_score: Number.isFinite(Number(urgencyScore))
                     ? Math.max(0, Math.min(100, Number(urgencyScore)))
                     : undefined,
@@ -303,18 +356,91 @@ export function AddLeadModal({
                     </div>
 
                     {/* Notes */}
-                    <div className="space-y-2">
-                        <Label htmlFor="notes" className="flex items-center gap-2">
-                            <FileText className="h-3.5 w-3.5" />
-                            Notes
-                        </Label>
-                        <Textarea
-                            id="notes"
-                            placeholder="Any additional notes about this lead..."
-                            value={notes}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)}
-                            rows={3}
-                        />
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="new-note" className="flex items-center gap-2">
+                                <FileText className="h-3.5 w-3.5" />
+                                Notes
+                            </Label>
+                            <span className="text-xs text-muted-foreground">
+                                {pendingNotes.length} to add
+                            </span>
+                        </div>
+
+                        {mode === "edit" ? (
+                            <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-border/70 bg-muted/20 p-3">
+                                {displayedExistingNotes.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground">
+                                        No notes yet.
+                                    </p>
+                                ) : (
+                                    displayedExistingNotes.map((note) => (
+                                        <div
+                                            key={note._id}
+                                            className="rounded-md border border-border/70 bg-background p-2.5"
+                                        >
+                                            <p className="whitespace-pre-wrap break-words text-sm">
+                                                {note.body}
+                                            </p>
+                                            <p className="mt-1 text-[11px] text-muted-foreground">
+                                                Added {formatNoteTimestamp(note.created_at)}
+                                            </p>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        ) : null}
+
+                        <div className="flex items-start gap-2">
+                            <Textarea
+                                id="new-note"
+                                placeholder="Add a note..."
+                                value={newNote}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                                    setNewNote(e.target.value)
+                                }
+                                rows={3}
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="shrink-0"
+                                onClick={handleAddPendingNote}
+                            >
+                                <Plus className="mr-1 h-4 w-4" />
+                                Add
+                            </Button>
+                        </div>
+
+                        {pendingNotes.length > 0 ? (
+                            <div className="space-y-2">
+                                {pendingNotes.map((note, index) => (
+                                    <div
+                                        key={`${note}-${index}`}
+                                        className="flex items-start justify-between gap-3 rounded-md border border-border/70 bg-background p-2.5"
+                                    >
+                                        <p className="whitespace-pre-wrap break-words text-sm">
+                                            {note}
+                                        </p>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() =>
+                                                handleRemovePendingNote(index)
+                                            }
+                                            className="h-7 w-7 shrink-0"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : null}
+
+                        <p className="text-xs text-muted-foreground">
+                            Added notes are timestamped when you save.
+                        </p>
                     </div>
 
                     {/* Actions */}

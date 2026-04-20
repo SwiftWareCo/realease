@@ -2,6 +2,22 @@ import { internalMutation, mutation } from "../_generated/server";
 import { v } from "convex/values";
 import { getCurrentUserIdOrThrow, requireLeadOwner } from "../auth";
 
+function normalizeNoteEntries(notes: Array<string | undefined>): string[] {
+  const uniqueNotes = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const note of notes) {
+    const value = note?.trim();
+    if (!value || uniqueNotes.has(value)) {
+      continue;
+    }
+    uniqueNotes.add(value);
+    normalized.push(value);
+  }
+
+  return normalized;
+}
+
 export const insertLead = internalMutation({
   args: {
     name: v.string(),
@@ -14,6 +30,7 @@ export const insertLead = internalMutation({
     urgency_score: v.number(),
     ai_suggestion: v.optional(v.string()),
     notes: v.optional(v.string()),
+    notes_items: v.optional(v.array(v.string())),
     conversion_prediction: v.optional(v.string()),
     last_message_sentiment: v.optional(v.union(v.literal("positive"), v.literal("neutral"), v.literal("negative"))),
     last_message_content: v.optional(v.string()),
@@ -21,6 +38,12 @@ export const insertLead = internalMutation({
     created_by_user_id: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const notesToInsert = normalizeNoteEntries([
+      args.notes,
+      ...(args.notes_items ?? []),
+    ]);
+    const now = Date.now();
+
     const leadId = await ctx.db.insert("leads", {
       name: args.name,
       phone: args.phone,
@@ -32,14 +55,24 @@ export const insertLead = internalMutation({
       urgency_score: args.urgency_score,
       status: "new",
       ai_suggestion: args.ai_suggestion,
-      notes: args.notes,
+      notes: notesToInsert.at(-1),
       conversion_prediction: args.conversion_prediction,
       last_message_sentiment: args.last_message_sentiment,
       last_message_content: args.last_message_content,
       message_count: args.message_count ?? 0,
       created_by_user_id: args.created_by_user_id,
-      created_at: Date.now(),
+      created_at: now,
     });
+
+    for (const [index, note] of notesToInsert.entries()) {
+      await ctx.db.insert("leadNotes", {
+        lead_id: leadId,
+        body: note,
+        created_by_user_id: args.created_by_user_id,
+        created_at: now + index,
+      });
+    }
+
     return leadId;
   },
 });
@@ -132,10 +165,17 @@ export const createLead = mutation({
     source: v.string(),
     urgency_score: v.optional(v.number()),
     notes: v.optional(v.string()),
+    notes_items: v.optional(v.array(v.string())),
     status: v.optional(v.union(v.literal("new"), v.literal("contacted"), v.literal("qualified"))),
   },
   handler: async (ctx, args) => {
     const userId = await getCurrentUserIdOrThrow(ctx);
+    const notesToInsert = normalizeNoteEntries([
+      args.notes,
+      ...(args.notes_items ?? []),
+    ]);
+    const now = Date.now();
+
     const leadId = await ctx.db.insert("leads", {
       name: args.name,
       phone: args.phone,
@@ -146,11 +186,21 @@ export const createLead = mutation({
       source: args.source,
       urgency_score: args.urgency_score ?? 50, // Default urgency
       status: args.status ?? "new",
-      notes: args.notes,
+      notes: notesToInsert.at(-1),
       message_count: 0,
       created_by_user_id: userId,
-      created_at: Date.now(),
+      created_at: now,
     });
+
+    for (const [index, note] of notesToInsert.entries()) {
+      await ctx.db.insert("leadNotes", {
+        lead_id: leadId,
+        body: note,
+        created_by_user_id: userId,
+        created_at: now + index,
+      });
+    }
+
     return leadId;
   },
 });
@@ -167,11 +217,17 @@ export const updateLead = mutation({
     source: v.string(),
     urgency_score: v.optional(v.number()),
     notes: v.optional(v.string()),
+    notes_items: v.optional(v.array(v.string())),
     status: v.union(v.literal("new"), v.literal("contacted"), v.literal("qualified")),
   },
   handler: async (ctx, args) => {
-    await requireLeadOwner(ctx, args.id);
-    await ctx.db.patch(args.id, {
+    const { userId } = await requireLeadOwner(ctx, args.id);
+    const notesToInsert = normalizeNoteEntries([
+      args.notes,
+      ...(args.notes_items ?? []),
+    ]);
+    const now = Date.now();
+    const updates: Record<string, unknown> = {
       name: args.name,
       phone: args.phone,
       email: args.email,
@@ -180,9 +236,53 @@ export const updateLead = mutation({
       intent: args.intent,
       source: args.source,
       urgency_score: args.urgency_score,
-      notes: args.notes,
       status: args.status,
+    };
+
+    if (notesToInsert.length > 0) {
+      updates.notes = notesToInsert[notesToInsert.length - 1];
+    } else if (args.notes !== undefined) {
+      updates.notes = args.notes;
+    }
+
+    await ctx.db.patch(args.id, updates);
+
+    for (const [index, note] of notesToInsert.entries()) {
+      await ctx.db.insert("leadNotes", {
+        lead_id: args.id,
+        body: note,
+        created_by_user_id: userId,
+        created_at: now + index,
+      });
+    }
+  },
+});
+
+export const addLeadNote = mutation({
+  args: {
+    leadId: v.id("leads"),
+    body: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { userId } = await requireLeadOwner(ctx, args.leadId);
+    const body = args.body.trim();
+    if (!body) {
+      throw new Error("Note cannot be empty.");
+    }
+
+    const now = Date.now();
+    const noteId = await ctx.db.insert("leadNotes", {
+      lead_id: args.leadId,
+      body,
+      created_by_user_id: userId,
+      created_at: now,
     });
+
+    await ctx.db.patch(args.leadId, {
+      notes: body,
+    });
+
+    return noteId;
   },
 });
 

@@ -1,6 +1,6 @@
 import { defineSchema } from "convex/server";
 import { eventsTable } from "./events/event.schema";
-import { leadsTable } from "./leads/lead.schema";
+import { leadNotesTable, leadsTable } from "./leads/lead.schema";
 import { usersTable } from "./users/user.schema";
 import {
     marketMetricsTable,
@@ -20,6 +20,7 @@ import {
 export default defineSchema({
     events: eventsTable,
     leads: leadsTable,
+    leadNotes: leadNotesTable,
     users: usersTable,
     marketMetrics: marketMetricsTable,
     marketSummaries: marketSummariesTable,
