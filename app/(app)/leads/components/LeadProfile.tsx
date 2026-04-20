@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Doc, Id } from '@/convex/_generated/dataModel';
@@ -16,15 +17,18 @@ import {
     TrendingUp,
     MessageSquare,
     Clock,
+    Pencil,
 } from 'lucide-react';
 import Link from 'next/link';
 import { LeadEventsSection } from './LeadEventsSection';
+import { AddLeadModal } from './AddLeadModal';
 
 interface LeadProfileProps {
     leadId: Id<'leads'>;
 }
 
 export function LeadProfile({ leadId }: LeadProfileProps) {
+    const [isEditOpen, setIsEditOpen] = useState(false);
     const lead = useQuery(api.leads.queries.getLeadById, { id: leadId }) as Doc<'leads'> | null | undefined;
 
     if (lead === undefined) {
@@ -116,6 +120,10 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                         </div>
                     </div>
                 </div>
+                <Button variant="outline" className="gap-2" onClick={() => setIsEditOpen(true)}>
+                    <Pencil className="h-4 w-4" />
+                    Edit Lead
+                </Button>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2">
@@ -218,6 +226,13 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                 {/* Events Section */}
                 <LeadEventsSection leadId={leadId} leadName={lead.name} />
             </div>
+
+            <AddLeadModal
+                open={isEditOpen}
+                onOpenChange={setIsEditOpen}
+                mode="edit"
+                lead={lead}
+            />
         </div>
     );
 }

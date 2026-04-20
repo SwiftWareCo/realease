@@ -1,12 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { Id } from "@/convex/_generated/dataModel";
 import { ArrowLeft, CalendarDays, Clock, Plus } from "lucide-react";
-import { LeadProfileModal } from "@/app/(app)/leads/components/LeadProfileModal";
 import { EventCard } from "./event-card";
 import type { EnrichedEvent } from "./event-types";
+import { useRouter } from "next/navigation";
 
 interface SelectedDatePanelProps {
     selectedDate: Date;
@@ -29,9 +27,7 @@ export function SelectedDatePanel({
     onAddEvent,
     onEdit,
 }: SelectedDatePanelProps) {
-    const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(
-        null,
-    );
+    const router = useRouter();
 
     const isToday = selectedDate.toDateString() === new Date().toDateString();
     const pendingContacts = events.filter((e) => e.lead).length;
@@ -99,7 +95,7 @@ export function SelectedDatePanel({
                                 onEdit={() => onEdit(event)}
                                 onOpenDossier={() => {
                                     if (event.lead) {
-                                        setSelectedLeadId(event.lead._id);
+                                        router.push(`/leads/${event.lead._id}`);
                                     }
                                 }}
                             />
@@ -107,16 +103,6 @@ export function SelectedDatePanel({
                     )}
                 </div>
             </div>
-
-            {selectedLeadId && (
-                <LeadProfileModal
-                    open={selectedLeadId !== null}
-                    onOpenChange={(open) => {
-                        if (!open) setSelectedLeadId(null);
-                    }}
-                    leadId={selectedLeadId}
-                />
-            )}
         </>
     );
 }

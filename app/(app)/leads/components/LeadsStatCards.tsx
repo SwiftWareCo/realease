@@ -1,19 +1,28 @@
 "use client";
 
-import { CheckCircle2, MessageCircle, Sparkles } from "lucide-react";
+import { CheckCircle2, MessageCircle, Sparkles, Users } from "lucide-react";
 
 interface LeadsStatCardsProps {
+    totalCount: number;
     newCount: number;
     contactedCount: number;
     qualifiedCount: number;
 }
 
 export function LeadsStatCards({
+    totalCount,
     newCount,
     contactedCount,
     qualifiedCount,
 }: LeadsStatCardsProps) {
     const cards = [
+        {
+            label: "Total Leads",
+            value: totalCount,
+            icon: Users,
+            accent: "text-orange-300",
+            ring: "ring-orange-500/30",
+        },
         {
             label: "New Inquiries",
             value: newCount,
@@ -38,7 +47,7 @@ export function LeadsStatCards({
     ];
 
     return (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {cards.map((c) => {
                 const Icon = c.icon;
                 return (

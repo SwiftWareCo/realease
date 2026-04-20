@@ -155,6 +155,37 @@ export const createLead = mutation({
   },
 });
 
+export const updateLead = mutation({
+  args: {
+    id: v.id("leads"),
+    name: v.string(),
+    phone: v.string(),
+    email: v.optional(v.string()),
+    property_address: v.optional(v.string()),
+    timeline: v.optional(v.string()),
+    intent: v.union(v.literal("buyer"), v.literal("seller"), v.literal("investor")),
+    source: v.string(),
+    urgency_score: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    status: v.union(v.literal("new"), v.literal("contacted"), v.literal("qualified")),
+  },
+  handler: async (ctx, args) => {
+    await requireLeadOwner(ctx, args.id);
+    await ctx.db.patch(args.id, {
+      name: args.name,
+      phone: args.phone,
+      email: args.email,
+      property_address: args.property_address,
+      timeline: args.timeline,
+      intent: args.intent,
+      source: args.source,
+      urgency_score: args.urgency_score,
+      notes: args.notes,
+      status: args.status,
+    });
+  },
+});
+
 // Add a tag to a lead
 export const addTag = mutation({
   args: {

@@ -31,7 +31,7 @@ import {
     Clock,
 } from "lucide-react";
 import { useState } from "react";
-import { LeadProfileModal } from "./LeadProfileModal";
+import { useRouter } from "next/navigation";
 
 const sellerStages = [
     { id: "pre_listing", label: "Pre-Listing", color: "bg-slate-500" },
@@ -213,11 +213,10 @@ function StageColumn({
 }
 
 export function SellerKanbanBoard() {
+    const router = useRouter();
     const sellerLeads = useQuery(api.leads.queries.getSellerLeads);
     const updateStage = useMutation(api.leads.mutations.updateSellerPipelineStage);
     const [activeId, setActiveId] = useState<string | null>(null);
-    const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(null);
-    const [isProfileOpen, setIsProfileOpen] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -258,8 +257,7 @@ export function SellerKanbanBoard() {
     };
 
     const handleOpenProfile = (leadId: Id<"leads">) => {
-        setSelectedLeadId(leadId);
-        setIsProfileOpen(true);
+        router.push(`/leads/${leadId}`);
     };
 
     const activeLead = sellerLeads?.find((l) => l._id === activeId);
@@ -335,14 +333,6 @@ export function SellerKanbanBoard() {
                 </DragOverlay>
             </DndContext>
 
-            {/* Lead Profile Modal */}
-            {selectedLeadId && (
-                <LeadProfileModal
-                    open={isProfileOpen}
-                    onOpenChange={setIsProfileOpen}
-                    leadId={selectedLeadId}
-                />
-            )}
         </>
     );
 }

@@ -34,7 +34,7 @@ import {
     Tag,
 } from "lucide-react";
 import { useState } from "react";
-import { LeadProfileModal } from "./LeadProfileModal";
+import { useRouter } from "next/navigation";
 
 // Helper function for relative time
 function getTimeAgo(timestamp: number): string {
@@ -325,13 +325,10 @@ export function LeadsKanbanBoard({
     intentFilter = "all",
     tagFilters = []
 }: LeadsKanbanBoardProps) {
+    const router = useRouter();
     const allLeads = useQuery(api.leads.queries.getAllLeads);
     const updateStatus = useMutation(api.leads.mutations.updateLeadStatus);
     const [activeId, setActiveId] = useState<string | null>(null);
-    const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(
-        null,
-    );
-    const [isProfileOpen, setIsProfileOpen] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -379,8 +376,7 @@ export function LeadsKanbanBoard({
     };
 
     const handleOpenProfile = (leadId: Id<"leads">) => {
-        setSelectedLeadId(leadId);
-        setIsProfileOpen(true);
+        router.push(`/leads/${leadId}`);
     };
 
     const activeLead = allLeads?.find((l) => l._id === activeId);
@@ -453,14 +449,6 @@ export function LeadsKanbanBoard({
                 </DragOverlay>
             </DndContext>
 
-            {/* Lead Profile Modal */}
-            {selectedLeadId && (
-                <LeadProfileModal
-                    open={isProfileOpen}
-                    onOpenChange={setIsProfileOpen}
-                    leadId={selectedLeadId}
-                />
-            )}
         </>
     );
 }

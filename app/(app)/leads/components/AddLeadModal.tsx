@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Doc } from "@/convex/_generated/dataModel";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,13 +28,21 @@ import { User, Phone, Mail, MapPin, Clock, FileText, Loader2 } from "lucide-reac
 interface AddLeadModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    mode?: "create" | "edit";
+    lead?: Doc<"leads"> | null;
 }
 
 type Intent = "buyer" | "seller" | "investor";
 type Status = "new" | "contacted" | "qualified";
 
-export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
+export function AddLeadModal({
+    open,
+    onOpenChange,
+    mode = "create",
+    lead,
+}: AddLeadModalProps) {
     const createLead = useMutation(api.leads.mutations.createLead);
+    const updateLead = useMutation(api.leads.mutations.updateLead);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Form state
@@ -46,6 +55,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
     const [status, setStatus] = useState<Status>("new");
     const [source, setSource] = useState("manual");
     const [notes, setNotes] = useState("");
+    const [urgencyScore, setUrgencyScore] = useState("50");
 
     const resetForm = () => {
         setName("");
@@ -57,7 +67,26 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
         setStatus("new");
         setSource("manual");
         setNotes("");
+        setUrgencyScore("50");
     };
+
+    useEffect(() => {
+        if (!open) return;
+        if (mode === "edit" && lead) {
+            setName(lead.name ?? "");
+            setPhone(lead.phone ?? "");
+            setEmail(lead.email ?? "");
+            setPropertyAddress(lead.property_address ?? "");
+            setTimeline(lead.timeline ?? "");
+            setIntent(lead.intent);
+            setStatus(lead.status);
+            setSource(lead.source ?? "manual");
+            setNotes(lead.notes ?? "");
+            setUrgencyScore(String(lead.urgency_score ?? 50));
+            return;
+        }
+        resetForm();
+    }, [open, mode, lead]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -68,7 +97,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
         setIsSubmitting(true);
         try {
-            await createLead({
+            const payload = {
                 name: name.trim(),
                 phone: phone.trim(),
                 email: email.trim() || undefined,
@@ -78,33 +107,47 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                 status,
                 source: source.trim() || "manual",
                 notes: notes.trim() || undefined,
-            });
+                urgency_score: Number.isFinite(Number(urgencyScore))
+                    ? Math.max(0, Math.min(100, Number(urgencyScore)))
+                    : undefined,
+            };
+
+            if (mode === "edit" && lead) {
+                await updateLead({
+                    id: lead._id,
+                    ...payload,
+                });
+            } else {
+                await createLead(payload);
+            }
 
             resetForm();
             onOpenChange(false);
         } catch (error) {
-            console.error("Failed to create lead:", error);
+            console.error("Failed to save lead:", error);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetContent className="w-full max-w-[560px] overflow-y-auto p-0 sm:max-w-[560px]">
+                <SheetHeader className="border-b p-6">
+                    <SheetTitle className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
                             <User className="h-4 w-4 text-white" />
                         </div>
-                        Add New Lead
-                    </DialogTitle>
-                    <DialogDescription>
-                        Manually add a new lead to your network.
-                    </DialogDescription>
-                </DialogHeader>
+                        {mode === "edit" ? "Edit Lead" : "Add New Lead"}
+                    </SheetTitle>
+                    <SheetDescription>
+                        {mode === "edit"
+                            ? "Update the lead record and pipeline details."
+                            : "Manually add a new lead to your network."}
+                    </SheetDescription>
+                </SheetHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                <form onSubmit={handleSubmit} className="space-y-4 p-6">
                     {/* Name - Required */}
                     <div className="space-y-2">
                         <Label htmlFor="name" className="flex items-center gap-2">
@@ -227,6 +270,19 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         </div>
                     </div>
 
+                    <div className="space-y-2">
+                        <Label htmlFor="urgencyScore">AI Score</Label>
+                        <Input
+                            id="urgencyScore"
+                            type="number"
+                            min="0"
+                            max="100"
+                            placeholder="50"
+                            value={urgencyScore}
+                            onChange={(e) => setUrgencyScore(e.target.value)}
+                        />
+                    </div>
+
                     {/* Source */}
                     <div className="space-y-2">
                         <Label htmlFor="source">Source</Label>
@@ -279,15 +335,17 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                             {isSubmitting ? (
                                 <>
                                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    Creating...
+                                    {mode === "edit"
+                                        ? "Saving..."
+                                        : "Creating..."}
                                 </>
                             ) : (
-                                "Add Lead"
+                                mode === "edit" ? "Save Changes" : "Add Lead"
                             )}
                         </Button>
                     </div>
                 </form>
-            </DialogContent>
-        </Dialog>
+            </SheetContent>
+        </Sheet>
     );
 }

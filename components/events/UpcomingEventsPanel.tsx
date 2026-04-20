@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
@@ -11,8 +10,8 @@ import {
     Sparkles,
     User,
 } from "lucide-react";
-import { LeadProfileModal } from "@/app/(app)/leads/components/LeadProfileModal";
 import { eventTypeConfig, type EnrichedEvent } from "./event-types";
+import { useRouter } from "next/navigation";
 
 interface UpcomingEventsPanelProps {
     upcomingEvents: EnrichedEvent[] | undefined;
@@ -50,9 +49,7 @@ export function UpcomingEventsPanel({
     onSelectDate,
     onAddEvent,
 }: UpcomingEventsPanelProps) {
-    const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(
-        null,
-    );
+    const router = useRouter();
 
     const pending = (upcomingEvents ?? []).filter((e) => !e.is_completed);
     const priority = pending.slice(0, 2);
@@ -79,21 +76,11 @@ export function UpcomingEventsPanel({
                     events={upcoming}
                     onSelectDate={onSelectDate}
                     onEdit={onEdit}
-                    onLeadClick={(id) => setSelectedLeadId(id)}
+                    onLeadClick={(id) => router.push(`/leads/${id}`)}
                 />
 
                 <AIAdvisorCard event={advisorEvent} />
             </div>
-
-            {selectedLeadId && (
-                <LeadProfileModal
-                    open={selectedLeadId !== null}
-                    onOpenChange={(open) => {
-                        if (!open) setSelectedLeadId(null);
-                    }}
-                    leadId={selectedLeadId}
-                />
-            )}
         </>
     );
 }
