@@ -13,7 +13,6 @@ import { MarketChartsTabs } from "./components/MarketChartsTabs";
 import {
     Settings,
     MapPin,
-    AlertTriangle,
     CheckCircle2,
     Loader2,
 } from "lucide-react";
@@ -54,7 +53,6 @@ export default function InsightsPage() {
     const [pendingRegionKeys, setPendingRegionKeys] = useState<string[] | null>(
         null,
     );
-    const [currentTimeMs, setCurrentTimeMs] = useState(0);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSavingRegions, setIsSavingRegions] = useState(false);
     const [regionSaveError, setRegionSaveError] = useState<string | null>(null);
@@ -187,23 +185,6 @@ export default function InsightsPage() {
     const lastUpdatedForStaleCheck =
         metricLastUpdated ?? marketSummary?.generatedAt;
 
-    useEffect(() => {
-        const updateTime = () => setCurrentTimeMs(Date.now());
-        const initialTimeout = window.setTimeout(updateTime, 0);
-        const interval = window.setInterval(updateTime, 60_000);
-        return () => {
-            window.clearTimeout(initialTimeout);
-            window.clearInterval(interval);
-        };
-    }, [lastUpdatedForStaleCheck]);
-
-    // Check for stale data (> 24 hours)
-    const isStale =
-        lastUpdatedForStaleCheck !== null &&
-        lastUpdatedForStaleCheck !== undefined &&
-        currentTimeMs > 0 &&
-        currentTimeMs - lastUpdatedForStaleCheck > 24 * 60 * 60 * 1000;
-
     // Loading state
     if (preferences === undefined || supportedRegions === undefined) {
         return <InsightsPageSkeleton />;
@@ -334,22 +315,6 @@ export default function InsightsPage() {
                     {regionSaveError}
                 </div>
             ) : null}
-
-            {/* Stale data warning */}
-            {isStale && (
-                <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-4 py-2.5">
-                    <AlertTriangle className="size-4 shrink-0" />
-                    <span>
-                        Market data may be outdated. Last updated{" "}
-                        {lastUpdatedForStaleCheck
-                            ? formatDistanceToNow(lastUpdatedForStaleCheck, {
-                                  addSuffix: true,
-                              })
-                            : "unknown"}
-                        .
-                    </span>
-                </div>
-            )}
 
             {!hasSelectedRegions ? (
                 <Card className="border-dashed">

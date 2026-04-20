@@ -384,9 +384,23 @@ export function CampaignStudioPage({
         useState(false);
     const [isFollowUpSmsTemplateCustomized, setIsFollowUpSmsTemplateCustomized] =
         useState(false);
+    const [maxAttemptsInput, setMaxAttemptsInput] = useState(
+        String(INITIAL_FORM_STATE.maxAttempts),
+    );
+    const [cooldownMinutesInput, setCooldownMinutesInput] = useState(
+        String(INITIAL_FORM_STATE.cooldownMinutes),
+    );
 
     const updateForm = (patch: Partial<WizardFormState>) =>
         setForm((prev) => ({ ...prev, ...patch }));
+
+    useEffect(() => {
+        setMaxAttemptsInput(String(form.maxAttempts));
+    }, [form.maxAttempts]);
+
+    useEffect(() => {
+        setCooldownMinutesInput(String(form.cooldownMinutes));
+    }, [form.cooldownMinutes]);
 
     const removeQuestion = (index: number) => {
         if (!canEditLockedFields) {
@@ -1309,16 +1323,64 @@ export function CampaignStudioPage({
                                             !hasAcknowledgedHighRetryCadence
                                         }
                                     >
-                                        <TooltipTrigger asChild>
+                                    <TooltipTrigger asChild>
                                             <Input
                                                 id="max-attempts"
-                                                type="number"
-                                                min={1}
-                                                max={10}
-                                                value={form.maxAttempts}
+                                                type="text"
+                                                inputMode="numeric"
+                                                pattern="[0-9]*"
+                                                value={maxAttemptsInput}
                                                 onChange={(e) => {
-                                                    const nextValue =
-                                                        Number(e.target.value) || 1;
+                                                    if (!canEditLockedFields) {
+                                                        promptPauseForLockedFields();
+                                                        setMaxAttemptsInput(
+                                                            String(form.maxAttempts),
+                                                        );
+                                                        return;
+                                                    }
+                                                    const rawValue = e.target.value;
+                                                    if (!/^\d*$/.test(rawValue)) {
+                                                        return;
+                                                    }
+                                                    setMaxAttemptsInput(rawValue);
+                                                    if (!rawValue) {
+                                                        return;
+                                                    }
+                                                    const nextValue = Math.min(
+                                                        10,
+                                                        Math.max(1, Number(rawValue)),
+                                                    );
+                                                    updateLockedField({
+                                                        maxAttempts: nextValue,
+                                                    });
+                                                    if (nextValue <= 3) {
+                                                        setHasAcknowledgedHighRetryCadence(
+                                                            false,
+                                                        );
+                                                    }
+                                                }}
+                                                onBlur={() => {
+                                                    if (!canEditLockedFields) {
+                                                        setMaxAttemptsInput(
+                                                            String(form.maxAttempts),
+                                                        );
+                                                        return;
+                                                    }
+                                                    const parsed = Number(
+                                                        maxAttemptsInput,
+                                                    );
+                                                    const nextValue = Number.isFinite(parsed)
+                                                        ? Math.min(
+                                                              10,
+                                                              Math.max(1, parsed),
+                                                          )
+                                                        : Math.max(
+                                                              1,
+                                                              form.maxAttempts,
+                                                          );
+                                                    setMaxAttemptsInput(
+                                                        String(nextValue),
+                                                    );
                                                     updateLockedField({
                                                         maxAttempts: nextValue,
                                                     });
@@ -1333,7 +1395,9 @@ export function CampaignStudioPage({
                                         </TooltipTrigger>
                                         <TooltipContent
                                             side="top"
-                                            className="max-w-[280px] space-y-2"
+                                            align="center"
+                                            sideOffset={8}
+                                            className="max-w-[280px] space-y-2 text-center"
                                         >
                                             <p>
                                                 Setting a high retry cadence may lead to
@@ -1342,7 +1406,7 @@ export function CampaignStudioPage({
                                             <Button
                                                 type="button"
                                                 size="sm"
-                                                className="h-7 rounded-full"
+                                                className="mx-auto h-7 rounded-full"
                                                 onClick={() =>
                                                     setHasAcknowledgedHighRetryCadence(
                                                         true,
@@ -1360,15 +1424,53 @@ export function CampaignStudioPage({
                                     </Label>
                                     <Input
                                         id="cooldown-minutes"
-                                        type="number"
-                                        min={0}
-                                        value={form.cooldownMinutes}
-                                        onChange={(e) =>
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        value={cooldownMinutesInput}
+                                        onChange={(e) => {
+                                            if (!canEditLockedFields) {
+                                                promptPauseForLockedFields();
+                                                setCooldownMinutesInput(
+                                                    String(form.cooldownMinutes),
+                                                );
+                                                return;
+                                            }
+                                            const rawValue = e.target.value;
+                                            if (!/^\d*$/.test(rawValue)) {
+                                                return;
+                                            }
+                                            setCooldownMinutesInput(rawValue);
+                                            if (!rawValue) {
+                                                return;
+                                            }
                                             updateLockedField({
-                                                cooldownMinutes:
-                                                    Number(e.target.value) || 0,
-                                            })
-                                        }
+                                                cooldownMinutes: Math.max(
+                                                    0,
+                                                    Number(rawValue),
+                                                ),
+                                            });
+                                        }}
+                                        onBlur={() => {
+                                            if (!canEditLockedFields) {
+                                                setCooldownMinutesInput(
+                                                    String(form.cooldownMinutes),
+                                                );
+                                                return;
+                                            }
+                                            const parsed = Number(
+                                                cooldownMinutesInput,
+                                            );
+                                            const nextValue = Number.isFinite(parsed)
+                                                ? Math.max(0, parsed)
+                                                : Math.max(0, form.cooldownMinutes);
+                                            setCooldownMinutesInput(
+                                                String(nextValue),
+                                            );
+                                            updateLockedField({
+                                                cooldownMinutes: nextValue,
+                                            });
+                                        }}
                                         className="border-border/70 bg-background"
                                     />
                                 </div>
