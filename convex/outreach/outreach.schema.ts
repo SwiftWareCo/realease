@@ -135,6 +135,17 @@ export const outreachCampaignsTable = defineTable({
             ),
         }),
     ),
+    campaign_configuration: v.optional(
+        v.object({
+            campaign_type: v.union(
+                v.literal("voice"),
+                v.literal("sms"),
+                v.literal("both"),
+            ),
+            voice_enabled: v.boolean(),
+            sms_enabled: v.boolean(),
+        }),
+    ),
     outcome_routing: v.optional(
         v.array(
             v.object({
