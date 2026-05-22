@@ -32,7 +32,7 @@ type NavItem = {
 
 const navigation: NavItem[] = [
     {
-        name: "Homepage",
+        name: "Dashboard",
         href: "/",
         icon: Home,
     },

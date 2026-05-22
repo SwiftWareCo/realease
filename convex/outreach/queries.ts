@@ -47,10 +47,9 @@ function resolveEffectiveTemplateKey(args: {
 
 function buildDefaultCampaignNameFromTemplate(
     template: OutreachCampaignTemplateDefinition,
-    timestampMs = Date.now(),
 ): string {
     if (!template.customTemplateId) {
-        return buildDefaultCampaignName(template.key, timestampMs);
+        return buildDefaultCampaignName(template.key);
     }
     return template.defaultNamePrefix || "New Campaign";
 }

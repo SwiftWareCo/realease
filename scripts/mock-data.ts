@@ -9,20 +9,29 @@
  * 
  * Commands:
  *   seed     - Add mock data to the database
- *   clear    - Remove all leads and events from the database
- *   reset    - Clear and re-seed the database
+ *   seed-all - Add mock data for every Clerk-synced Convex user
+ *   clear    - Remove seeded app data for one Clerk-synced user
+ *   clear-all - Remove seeded app data for every Clerk-synced Convex user
+ *   reset    - Clear and re-seed app data for one Clerk-synced user
+ *   reset-all - Clear and re-seed app data for every Clerk-synced Convex user
  *   help     - Show this help message
  * 
  * Options:
  *   --leads, -l    Number of leads to create (default: 20)
  *   --events, -e   Number of events to create (default: 10)
+ *   --email        Email of the Clerk-synced user to seed for
+ *   --user-id, -u  Convex users table id to seed for
+ *   --prod         Run against the production Convex deployment
+ *   --deployment   Run against a specific Convex deployment reference
  *   --yes, -y      Skip confirmation prompts
  * 
  * Examples:
- *   npx tsx scripts/mock-data.ts seed
- *   npx tsx scripts/mock-data.ts seed --leads 50 --events 25
- *   npx tsx scripts/mock-data.ts clear --yes
- *   npx tsx scripts/mock-data.ts reset -l 30 -e 15 -y
+ *   npx tsx scripts/mock-data.ts seed --email swiftwareco@gmail.com
+ *   npx tsx scripts/mock-data.ts seed --email swiftwareco@gmail.com --leads 50 --events 25
+ *   npx tsx scripts/mock-data.ts seed-all --leads 20 --events 10 --yes
+ *   npx tsx scripts/mock-data.ts clear --email swiftwareco@gmail.com --yes
+ *   npx tsx scripts/mock-data.ts reset --email swiftwareco@gmail.com -l 30 -e 15 -y
+ *   npx tsx scripts/mock-data.ts reset-all -l 30 -e 15 -y
  */
 
 import { config } from "dotenv";
@@ -40,20 +49,35 @@ if (!CONVEX_DEPLOYMENT) {
   process.exit(1);
 }
 
-type Command = "seed" | "clear" | "reset" | "help";
+type Command = "seed" | "seed-all" | "clear" | "clear-all" | "reset" | "reset-all" | "help";
 
 interface Options {
   leads: number;
   events: number;
   yes: boolean;
-  userId: string;
+  prod: boolean;
+  deployment?: string;
+  userId?: string;
+  userEmail?: string;
 }
+
+const DEFAULT_SEED_EMAIL =
+  process.env.MOCK_USER_EMAIL ?? process.env.SEED_USER_EMAIL;
 
 function parseArgs(): { command: Command; options: Options } {
   const args = process.argv.slice(2);
   
   if (args.length === 0 || args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
-    return { command: "help", options: { leads: 20, events: 10, yes: false, userId: "" } };
+    return {
+      command: "help",
+      options: {
+        leads: 20,
+        events: 10,
+        yes: false,
+        prod: false,
+        userEmail: DEFAULT_SEED_EMAIL,
+      },
+    };
   }
 
   const command = args[0] as Command;
@@ -61,7 +85,8 @@ function parseArgs(): { command: Command; options: Options } {
     leads: 20,
     events: 10,
     yes: false,
-    userId: "",
+    prod: false,
+    userEmail: DEFAULT_SEED_EMAIL,
   };
   
   for (let i = 1; i < args.length; i++) {
@@ -87,10 +112,26 @@ function parseArgs(): { command: Command; options: Options } {
       case "-y":
         options.yes = true;
         break;
+      case "--prod":
+        options.prod = true;
+        break;
+      case "--deployment":
+        if (nextArg) {
+          options.deployment = nextArg;
+          i++;
+        }
+        break;
       case "--user-id":
       case "-u":
         if (nextArg) {
           options.userId = nextArg;
+          i++;
+        }
+        break;
+      case "--email":
+      case "--user-email":
+        if (nextArg) {
+          options.userEmail = nextArg;
           i++;
         }
         break;
@@ -108,27 +149,50 @@ Usage:
   npx tsx scripts/mock-data.ts <command> [options]
 
 Commands:
-  seed     Add mock data to the database
-  clear    Remove all leads and events from the database
-  reset    Clear and re-seed the database
-  help     Show this help message
+  seed       Add mock data to the database
+  seed-all   Add mock data for every Clerk-synced Convex user
+  clear      Remove seeded app data for one Clerk-synced user
+  clear-all  Remove seeded app data for every Clerk-synced Convex user
+  reset      Clear and re-seed app data for one Clerk-synced user
+  reset-all  Clear and re-seed app data for every Clerk-synced Convex user
+  help       Show this help message
 
 Options:
   --leads, -l    Number of leads to create (default: 20)
   --events, -e   Number of events to create (default: 10)
+  --email        Email of an existing Clerk-synced user
+  --user-id, -u  Convex users table id
+  --prod         Run against the production Convex deployment
+  --deployment   Run against a specific Convex deployment reference
   --yes, -y      Skip confirmation prompts
 
 Examples:
-  npx tsx scripts/mock-data.ts seed
-  npx tsx scripts/mock-data.ts seed --leads 50 --events 25
-  npx tsx scripts/mock-data.ts clear --yes
-  npx tsx scripts/mock-data.ts reset -l 30 -e 15 -y
+  npx tsx scripts/mock-data.ts seed --email swiftwareco@gmail.com
+  npx tsx scripts/mock-data.ts seed --email swiftwareco@gmail.com --leads 50 --events 25
+  npx tsx scripts/mock-data.ts seed-all --leads 20 --events 10 --yes
+  npx tsx scripts/mock-data.ts reset-all --prod --yes
+  npx tsx scripts/mock-data.ts clear --email swiftwareco@gmail.com --yes
+  npx tsx scripts/mock-data.ts reset --email swiftwareco@gmail.com -l 30 -e 15 -y
+  npx tsx scripts/mock-data.ts reset-all -l 30 -e 15 -y
 `);
 }
 
-function runConvexAction(action: string, args: Record<string, unknown>): void {
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function runConvexAction(
+  action: string,
+  args: Record<string, unknown>,
+  options: Options,
+): void {
   const argsJson = JSON.stringify(args);
-  const command = `npx convex run devtools/mockData:${action} --no-push -- '${argsJson}'`;
+  const targetArgs = options.prod
+    ? " --prod"
+    : options.deployment
+      ? ` --deployment ${shellQuote(options.deployment)}`
+      : "";
+  const command = `npx convex run${targetArgs} devtools/mockData:${action} --no-push -- ${shellQuote(argsJson)}`;
   
   try {
     const result = execSync(command, { 
@@ -148,9 +212,9 @@ function runConvexAction(action: string, args: Record<string, unknown>): void {
 }
 
 function seed(options: Options): void {
-  if (!options.userId) {
-    console.error("❌ Error: --user-id is required for seed/reset commands");
-    console.error("   Pass the Convex user ID that should own the seeded leads");
+  if (!options.userId && !options.userEmail) {
+    console.error("❌ Error: --email or --user-id is required for seed commands");
+    console.error("   The user must already exist in Convex via the Clerk webhook");
     process.exit(1);
   }
   console.log(`\n🌱 Seeding database with ${options.leads} leads and ${options.events} events...\n`);
@@ -158,32 +222,74 @@ function seed(options: Options): void {
     leads: options.leads,
     events: options.events,
     userId: options.userId,
-  });
+    userEmail: options.userEmail,
+  }, options);
   console.log("\n✅ Seeding complete!");
 }
 
-function clear(options: Options): void {
+function seedAll(options: Options): void {
   if (!options.yes) {
-    console.log("\n⚠️  Warning: This will delete ALL leads and events from the database.");
+    console.log("\n⚠️  Warning: This will add seeded app data for every Clerk-synced Convex user.");
+    console.log(`   New data per user: ${options.leads} leads, ${options.events} events\n`);
+    console.log("   Run with --yes flag to skip this prompt.");
+    process.exit(0);
+  }
+
+  console.log(`\n🌱 Seeding all synced users with ${options.leads} leads and ${options.events} events each...\n`);
+  runConvexAction("seedAllData", {
+    leads: options.leads,
+    events: options.events,
+    confirm: true,
+  }, options);
+  console.log("\n✅ Bulk seeding complete!");
+}
+
+function clear(options: Options): void {
+  if (!options.userId && !options.userEmail) {
+    console.error("❌ Error: --email or --user-id is required for clear commands");
+    console.error("   This keeps clear/reset scoped to one Clerk-synced user");
+    process.exit(1);
+  }
+  if (!options.yes) {
+    console.log("\n⚠️  Warning: This will delete seeded app data for one user.");
     console.log("   This action cannot be undone.\n");
     console.log("   Run with --yes flag to skip this prompt.");
     process.exit(0);
   }
   
   console.log("\n🗑️  Clearing all mock data...\n");
-  runConvexAction("clearData", { confirm: true });
+  runConvexAction("clearData", {
+    confirm: true,
+    userId: options.userId,
+    userEmail: options.userEmail,
+  }, options);
   console.log("\n✅ Clear complete!");
 }
 
+function clearAll(options: Options): void {
+  if (!options.yes) {
+    console.log("\n⚠️  Warning: This will delete seeded app data for every Clerk-synced Convex user.");
+    console.log("   This action cannot be undone.\n");
+    console.log("   Run with --yes flag to skip this prompt.");
+    process.exit(0);
+  }
+
+  console.log("\n🗑️  Clearing seeded app data for all synced users...\n");
+  runConvexAction("clearAllUsersData", {
+    confirm: true,
+  }, options);
+  console.log("\n✅ Bulk clear complete!");
+}
+
 function reset(options: Options): void {
-  if (!options.userId) {
-    console.error("❌ Error: --user-id is required for seed/reset commands");
-    console.error("   Pass the Convex user ID that should own the seeded leads");
+  if (!options.userId && !options.userEmail) {
+    console.error("❌ Error: --email or --user-id is required for reset commands");
+    console.error("   The user must already exist in Convex via the Clerk webhook");
     process.exit(1);
   }
   if (!options.yes) {
-    console.log("\n⚠️  Warning: This will delete ALL existing leads and events,");
-    console.log("   then create new mock data.");
+    console.log("\n⚠️  Warning: This will delete seeded app data for one user,");
+    console.log("   then create new mock data for that same user.");
     console.log(`   New data: ${options.leads} leads, ${options.events} events\n`);
     console.log("   Run with --yes flag to skip this prompt.");
     process.exit(0);
@@ -195,8 +301,27 @@ function reset(options: Options): void {
     events: options.events,
     confirm: true,
     userId: options.userId,
-  });
+    userEmail: options.userEmail,
+  }, options);
   console.log("\n✅ Reset complete!");
+}
+
+function resetAll(options: Options): void {
+  if (!options.yes) {
+    console.log("\n⚠️  Warning: This will delete seeded app data for every Clerk-synced Convex user,");
+    console.log("   then create new mock data for each of them.");
+    console.log(`   New data per user: ${options.leads} leads, ${options.events} events\n`);
+    console.log("   Run with --yes flag to skip this prompt.");
+    process.exit(0);
+  }
+
+  console.log(`\n🔄 Resetting all synced users with ${options.leads} leads and ${options.events} events each...\n`);
+  runConvexAction("resetAllData", {
+    leads: options.leads,
+    events: options.events,
+    confirm: true,
+  }, options);
+  console.log("\n✅ Bulk reset complete!");
 }
 
 // Main
@@ -206,11 +331,20 @@ switch (command) {
   case "seed":
     seed(options);
     break;
+  case "seed-all":
+    seedAll(options);
+    break;
   case "clear":
     clear(options);
     break;
+  case "clear-all":
+    clearAll(options);
+    break;
   case "reset":
     reset(options);
+    break;
+  case "reset-all":
+    resetAll(options);
     break;
   case "help":
   default:

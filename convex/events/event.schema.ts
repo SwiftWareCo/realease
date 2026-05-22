@@ -28,8 +28,13 @@ export const eventsTable = defineTable({
         })
     ),
     is_completed: v.boolean(),
+    created_by_user_id: v.optional(v.id('users')),
     created_at: v.number(),
 })
     .index('by_start_time', ['start_time'])
     .index('by_lead_id', ['lead_id'])
-    .index('by_event_type', ['event_type']);
+    .index('by_event_type', ['event_type'])
+    .index('by_created_by_user_id_and_start_time', [
+        'created_by_user_id',
+        'start_time',
+    ]);
