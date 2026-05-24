@@ -12,8 +12,8 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { DashboardSkeleton } from "./DashboardSkeleton";
 import {
     formatDateHumanReadable,
     formatDateTimeHumanReadable,
@@ -90,38 +90,37 @@ function formatDue(timestamp: number | null) {
 
 function priorityClass(priority: WorkItem["priority"]) {
     if (priority === "urgent") {
-        return "border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-200";
+        return "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]";
     }
     if (priority === "high") {
-        return "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-200";
+        return "border-[color:var(--status-attention)]/30 bg-[color:var(--status-attention)]/10 text-[color:var(--status-attention)]";
     }
     if (priority === "normal") {
-        return "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-200";
+        return "border-[color:var(--status-info)]/30 bg-[color:var(--status-info)]/10 text-[color:var(--status-info)]";
     }
-    return "border-border bg-muted/60 text-muted-foreground";
+    return "border-border bg-muted/60 text-muted-foreground dark:bg-muted/40";
 }
 
 function priorityRailClass(priority: WorkItem["priority"]) {
     if (priority === "urgent") {
-        return "border-l-red-500";
+        return "border-l-[color:var(--status-urgent)]";
     }
     if (priority === "high") {
-        return "border-l-amber-500";
+        return "border-l-[color:var(--status-attention)]";
     }
     if (priority === "normal") {
-        return "border-l-sky-500";
+        return "border-l-[color:var(--status-info)]";
     }
     return "border-l-border";
 }
 
 function interactionClass(tone: "amber" | "blue" | "emerald" | "red" | "violet" = "blue") {
     const tones = {
-        amber: "hover:border-amber-500/35 hover:bg-amber-500/10 dark:hover:bg-amber-500/10",
-        blue: "hover:border-sky-500/35 hover:bg-sky-500/10 dark:hover:bg-sky-500/10",
-        emerald:
-            "hover:border-emerald-500/35 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/10",
-        red: "hover:border-red-500/35 hover:bg-red-500/10 dark:hover:bg-red-500/10",
-        violet: "hover:border-violet-500/35 hover:bg-violet-500/10 dark:hover:bg-violet-500/10",
+        amber: "hover:bg-[color:var(--status-attention)]/10",
+        blue: "hover:bg-[color:var(--status-info)]/10",
+        emerald: "hover:bg-[color:var(--status-good)]/10",
+        red: "hover:bg-[color:var(--status-urgent)]/10",
+        violet: "hover:bg-[color:var(--status-special)]/10",
     };
 
     return cn(
@@ -133,7 +132,7 @@ function interactionClass(tone: "amber" | "blue" | "emerald" | "red" | "violet" 
 
 function workTone(kind: WorkItem["kind"]) {
     if (kind === "callback" || kind === "campaign_problem") {
-        return kind === "callback" ? "red" : "amber";
+        return "red";
     }
     if (kind === "qualified_handoff") {
         return "emerald";
@@ -146,13 +145,13 @@ function workTone(kind: WorkItem["kind"]) {
 
 function eventBadgeClass(eventType: ScheduleItem["eventType"]) {
     if (eventType === "showing" || eventType === "open_house") {
-        return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200";
+        return "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]";
     }
     if (eventType === "call" || eventType === "follow_up") {
-        return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200";
+        return "border-[color:var(--status-attention)]/30 bg-[color:var(--status-attention)]/10 text-[color:var(--status-attention)]";
     }
     if (eventType === "meeting") {
-        return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-200";
+        return "border-[color:var(--status-info)]/30 bg-[color:var(--status-info)]/10 text-[color:var(--status-info)]";
     }
     return "border-border bg-muted/60 text-muted-foreground";
 }
@@ -163,7 +162,7 @@ function workKindConfig(kind: WorkItem["kind"]) {
             label: "Callback",
             Icon: Phone,
             className:
-                "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-200",
+                "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
         };
     }
     if (kind === "qualified_handoff") {
@@ -171,7 +170,7 @@ function workKindConfig(kind: WorkItem["kind"]) {
             label: "Handoff",
             Icon: Handshake,
             className:
-                "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
+                "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
         };
     }
     if (kind === "campaign_problem") {
@@ -179,7 +178,7 @@ function workKindConfig(kind: WorkItem["kind"]) {
             label: "Issue",
             Icon: AlertTriangle,
             className:
-                "border-orange-500/25 bg-orange-500/10 text-orange-700 dark:text-orange-200",
+                "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
         };
     }
     if (kind === "pipeline_gap") {
@@ -187,7 +186,7 @@ function workKindConfig(kind: WorkItem["kind"]) {
             label: "Pipeline",
             Icon: Route,
             className:
-                "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-200",
+                "border-[color:var(--status-special)]/30 bg-[color:var(--status-special)]/10 text-[color:var(--status-special)]",
         };
     }
     if (kind === "calendar_event") {
@@ -195,48 +194,29 @@ function workKindConfig(kind: WorkItem["kind"]) {
             label: "Calendar",
             Icon: CalendarDays,
             className:
-                "border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-200",
+                "border-[color:var(--status-info)]/30 bg-[color:var(--status-info)]/10 text-[color:var(--status-info)]",
         };
     }
     return {
         label: "Lead",
         Icon: UserRound,
         className:
-            "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-200",
+            "border-[color:var(--status-info)]/30 bg-[color:var(--status-info)]/10 text-[color:var(--status-info)]",
     };
-}
-
-function DashboardSkeleton() {
-    return (
-        <div className="h-[calc(100vh-64px)] overflow-hidden bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--muted)/0.22))] px-4 py-4 md:px-6">
-            <div className="mx-auto flex h-full max-w-[1600px] flex-col gap-4">
-                <div className="grid flex-shrink-0 gap-4 border-b border-border/60 pb-4 xl:grid-cols-[minmax(260px,1fr)_230px_minmax(520px,620px)]">
-                    <div className="space-y-3">
-                        <Skeleton className="h-4 w-44" />
-                        <Skeleton className="h-9 w-56" />
-                        <Skeleton className="h-14 w-full max-w-[520px] rounded-2xl" />
-                    </div>
-                    <Skeleton className="h-[118px] rounded-2xl" />
-                    <Skeleton className="h-[118px] rounded-2xl" />
-                </div>
-                <Skeleton className="min-h-0 flex-1 rounded-2xl" />
-            </div>
-        </div>
-    );
 }
 
 function CompactQuote() {
     return (
-        <div className="relative mt-3 overflow-hidden rounded-2xl border border-primary/20 bg-primary/5 px-3 py-3">
+        <div className="mt-4 max-w-xl">
             <Quote
-                className="absolute -right-2 -top-2 h-12 w-12 text-primary/10"
+                className="h-4 w-4 text-muted-foreground"
                 aria-hidden="true"
             />
-            <p className="relative line-clamp-2 font-serif text-sm italic leading-5 text-foreground">
-                &ldquo;{DAILY_QUOTE.text}&rdquo;
+            <p className="mt-2 line-clamp-2 font-serif text-sm italic leading-6 text-foreground/85">
+                {DAILY_QUOTE.text}
             </p>
-            <p className="relative mt-1 text-xs font-medium text-muted-foreground">
-                {DAILY_QUOTE.author}
+            <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                — {DAILY_QUOTE.author}
             </p>
         </div>
     );
@@ -252,13 +232,13 @@ function MiniClock() {
     const hourDeg = (hours % 12) * 30 + minutes * 0.5;
 
     return (
-        <div className="flex items-center gap-4 rounded-2xl border border-border/60 bg-card/60 px-4 py-3">
+        <div className="mt-2 flex items-center gap-4">
             <div
                 className="relative h-[72px] w-[72px] shrink-0"
                 role="img"
                 aria-label={`Current time: ${formatTimeTo12HourWithMinutes(time)}`}
             >
-                <div className="absolute inset-0 rounded-full border border-primary/30 bg-background shadow-inner">
+                <div className="absolute inset-0 rounded-full border border-primary/50 bg-popover shadow-inner">
                     {[...Array(12)].map((_, index) => (
                         <div
                             key={index}
@@ -304,10 +284,7 @@ function MiniClock() {
                 </div>
             </div>
             <div className="min-w-0">
-                <p className="text-xs font-medium text-muted-foreground">
-                    Local time
-                </p>
-                <p className="mt-1 font-mono text-xl font-semibold tabular-nums text-foreground">
+                <p className="font-mono text-xl font-semibold tabular-nums text-foreground">
                     {formatTimeTo12HourWithMinutes(time)}
                 </p>
                 <p className="mt-1 truncate text-xs text-muted-foreground">
@@ -330,14 +307,14 @@ function TopMetric({
     tone?: "default" | "urgent" | "good";
 }) {
     return (
-        <div className="flex min-w-0 flex-col items-center justify-center border-l border-border/60 px-4 text-center first:border-l-0">
+        <div className="flex min-w-0 flex-col justify-center rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/45">
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <div className="mt-1 flex items-baseline justify-center gap-2">
+            <div className="mt-1 flex items-baseline gap-2">
                 <p
                     className={cn(
                         "text-2xl font-semibold tabular-nums tracking-tight",
-                        tone === "urgent" && "text-amber-600 dark:text-amber-300",
-                        tone === "good" && "text-emerald-600 dark:text-emerald-300",
+                        tone === "urgent" && "text-[color:var(--status-attention)]",
+                        tone === "good" && "text-[color:var(--status-good)]",
                     )}
                 >
                     {value}
@@ -353,20 +330,33 @@ function CockpitColumn({
     description,
     icon: Icon,
     action,
+    variant = "quiet",
     children,
 }: {
     title: string;
     description: string;
     icon: LucideIcon;
     action?: React.ReactNode;
+    variant?: "action" | "quiet" | "review";
     children: React.ReactNode;
 }) {
     return (
-        <section className="flex min-h-0 flex-col">
-            <header className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <section
+            className={cn(
+                "flex min-h-[360px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm xl:min-h-0",
+                variant === "action" && "border-t-2 border-t-primary",
+            )}
+        >
+            <header className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
                 <div className="min-w-0">
-                    <p className="flex items-center gap-2 text-sm font-semibold">
-                        <Icon className="h-4 w-4 text-primary" />
+                    <p className="flex items-center gap-2 font-serif text-sm font-semibold italic">
+                        <Icon
+                            className={cn(
+                                "h-4 w-4 text-primary",
+                                variant === "action" &&
+                                    "drop-shadow-[0_0_6px_hsl(var(--primary)/0.45)]",
+                            )}
+                        />
                         {title}
                     </p>
                     <p className="mt-1 truncate text-xs text-muted-foreground">
@@ -386,21 +376,21 @@ function WorkQueueColumn({ items }: { items: WorkItem[] }) {
     if (items.length === 0) {
         return (
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center px-6 text-center">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/25 dark:bg-accent/60 dark:text-accent-foreground dark:ring-accent-foreground/25">
                     <CheckCircle2 className="h-5 w-5" />
                 </div>
                 <h2 className="mt-4 text-lg font-semibold">
                     No urgent work right now
                 </h2>
                 <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                    New leads, callbacks, campaign issues, and calendar commitments will appear here.
+                    New leads, callbacks, follow-ups, and calendar commitments will appear here.
                 </p>
             </div>
         );
     }
 
     return (
-        <ol>
+        <ol className="divide-y divide-border">
             {items.map((item) => {
                 const config = workKindConfig(item.kind);
                 const Icon = config.Icon;
@@ -409,7 +399,7 @@ function WorkQueueColumn({ items }: { items: WorkItem[] }) {
                         <Link
                             href={item.href}
                             className={cn(
-                                "group block border-l-2 border-b border-r border-r-transparent border-border/50 px-4 py-3 last:border-b-0",
+                                "group block border-l-2 px-4 py-3.5",
                                 priorityRailClass(item.priority),
                                 interactionClass(workTone(item.kind)),
                             )}
@@ -418,7 +408,7 @@ function WorkQueueColumn({ items }: { items: WorkItem[] }) {
                                 <Badge
                                     variant="outline"
                                     className={cn(
-                                        "rounded-md capitalize",
+                                        "rounded-sm capitalize",
                                         config.className,
                                     )}
                                 >
@@ -428,7 +418,7 @@ function WorkQueueColumn({ items }: { items: WorkItem[] }) {
                                 <Badge
                                     variant="outline"
                                     className={cn(
-                                        "rounded-md capitalize",
+                                        "rounded-sm capitalize",
                                         priorityClass(item.priority),
                                     )}
                                 >
@@ -449,7 +439,7 @@ function WorkQueueColumn({ items }: { items: WorkItem[] }) {
                                         {item.description}
                                     </p>
                                 </div>
-                                <span className="mt-0.5 shrink-0 text-xs font-medium text-primary transition-transform duration-200 group-hover:translate-x-0.5">
+                                <span className="mt-0.5 shrink-0 text-xs font-semibold text-primary transition-transform duration-200 group-hover:translate-x-0.5">
                                     {item.actionLabel}
                                 </span>
                             </div>
@@ -485,18 +475,18 @@ function CalendarColumn({ items }: { items: ScheduleItem[] }) {
     }
 
     return (
-        <div className="px-4 py-3">
-            <div className="relative space-y-1 pl-4 before:absolute before:inset-y-2 before:left-1 before:w-px before:bg-border">
+        <div className="px-4 py-4">
+            <div className="relative space-y-2 pl-4 before:absolute before:inset-y-2 before:left-1 before:w-px before:bg-border/80">
                 {items.map((event) => (
                     <Link
                         key={event._id}
                         href={event.href}
                         className={cn(
-                            "group relative block rounded-lg border border-transparent px-3 py-2.5",
+                            "group relative block rounded-md px-3 py-2.5",
                             interactionClass("blue"),
                         )}
                     >
-                        <span className="absolute left-[-0.85rem] top-4 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
+                        <span className="absolute left-[-0.85rem] top-4 h-2.5 w-2.5 rounded-full border-2 border-card bg-[color:var(--status-info)]" />
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <p className="truncate text-sm font-semibold">
@@ -509,7 +499,7 @@ function CalendarColumn({ items }: { items: ScheduleItem[] }) {
                             <Badge
                                 variant="outline"
                                 className={cn(
-                                    "rounded-md capitalize",
+                                    "rounded-sm capitalize",
                                     eventBadgeClass(event.eventType),
                                 )}
                             >
@@ -543,24 +533,24 @@ function outreachGroupTone(
 ) {
     if (group === "callbacks") {
         return {
-            badge: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200",
+            badge: "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
             hover: "red" as const,
         };
     }
     if (group === "handoffs") {
         return {
-            badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
+            badge: "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
             hover: "emerald" as const,
         };
     }
     if (group === "issues") {
         return {
-            badge: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200",
-            hover: "amber" as const,
+            badge: "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
+            hover: "red" as const,
         };
     }
     return {
-        badge: "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-200",
+        badge: "border-[color:var(--status-special)]/30 bg-[color:var(--status-special)]/10 text-[color:var(--status-special)]",
         hover: "violet" as const,
     };
 }
@@ -578,7 +568,7 @@ function OutreachReviewPanel({
             count: dashboard.outreach.problems,
             description: "Failed calls, wrong numbers, scheduler errors",
             items: outreachItems.filter((item) => item.kind === "campaign_problem"),
-            defaultOpen: false,
+            defaultOpen: dashboard.outreach.problems > 0,
         },
         {
             id: "callbacks" as const,
@@ -590,9 +580,9 @@ function OutreachReviewPanel({
         },
         {
             id: "handoffs" as const,
-            title: "Interested leads",
+            title: "AI handoffs",
             count: dashboard.outreach.interested,
-            description: "Outreach found someone ready for you",
+            description: "Interested leads found by outreach",
             items: outreachItems.filter(
                 (item) => item.kind === "qualified_handoff" && !isPauseItem(item),
             ),
@@ -609,10 +599,10 @@ function OutreachReviewPanel({
     ];
 
     return (
-        <aside className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/75 shadow-sm backdrop-blur xl:h-full xl:min-h-0">
-            <header className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <aside className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm xl:h-full xl:min-h-0">
+            <header className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
                 <div className="min-w-0">
-                    <h2 className="flex items-center gap-2 text-base font-semibold">
+                    <h2 className="flex items-center gap-2 font-serif text-base font-semibold italic">
                         <Radio className="h-4 w-4 text-primary" />
                         Outreach review
                     </h2>
@@ -672,7 +662,7 @@ function OutreachBucket({
     return (
         <Collapsible
             defaultOpen={group.defaultOpen}
-            className="overflow-hidden rounded-xl border border-border/60 bg-background/35"
+            className="overflow-hidden rounded-lg border border-border/60 bg-muted/25"
         >
             <CollapsibleTrigger
                 className={cn(
@@ -685,7 +675,7 @@ function OutreachBucket({
                         <p className="text-sm font-semibold">{group.title}</p>
                         <Badge
                             variant="outline"
-                            className={cn("rounded-md", tone.badge)}
+                            className={cn("rounded-sm", tone.badge)}
                         >
                             {group.count}
                         </Badge>
@@ -696,19 +686,19 @@ function OutreachBucket({
                 </div>
                 <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
-            <CollapsibleContent className="border-t border-border/60">
+            <CollapsibleContent className="border-t border-border/40">
                 {group.items.length === 0 ? (
                     <p className="px-3 py-3 text-xs text-muted-foreground">
                         No visible queue items in this bucket.
                     </p>
                 ) : (
-                    <div className="divide-y divide-border/60">
+                    <div className="divide-y divide-border">
                         {group.items.slice(0, 5).map((item) => (
                             <Link
                                 key={item.id}
                                 href={item.href}
                                 className={cn(
-                                    "group/item block border border-transparent px-3 py-3",
+                                    "group/item block px-3 py-3",
                                     interactionClass(tone.hover),
                                 )}
                             >
@@ -744,7 +734,7 @@ function CampaignReviewRow({ campaign }: { campaign: CampaignRollup }) {
         <Link
             href={campaign.href}
             className={cn(
-                "group block rounded-xl border border-border/60 bg-background/35 px-3 py-3",
+                "group block rounded-lg border border-border/60 bg-muted/30 px-3 py-3",
                 interactionClass(needsAttention > 0 ? "amber" : "emerald"),
             )}
         >
@@ -760,10 +750,10 @@ function CampaignReviewRow({ campaign }: { campaign: CampaignRollup }) {
                 <Badge
                     variant="outline"
                     className={cn(
-                        "rounded-md capitalize",
+                        "rounded-sm capitalize",
                         needsAttention > 0
-                            ? "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-200"
-                            : "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
+                            ? "border-[color:var(--status-attention)]/30 bg-[color:var(--status-attention)]/10 text-[color:var(--status-attention)]"
+                            : "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
                     )}
                 >
                     {needsAttention > 0 ? `${needsAttention} review` : campaign.status}
@@ -775,47 +765,40 @@ function CampaignReviewRow({ campaign }: { campaign: CampaignRollup }) {
 
 function TodayCockpit({ dashboard }: { dashboard: DashboardData }) {
     return (
-        <section className="flex min-h-[720px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/75 shadow-sm backdrop-blur xl:h-full xl:min-h-0">
-            <header className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
-                <div>
-                    <h2 className="text-base font-semibold">Today cockpit</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        What to do and where to be.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2">
+        <section className="grid min-h-[760px] gap-5 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)] xl:gap-6">
+            <CockpitColumn
+                title="Do now"
+                description={`${dashboard.workQueue.length} dated actions`}
+                icon={ListChecks}
+                variant="action"
+                action={
                     <Button asChild variant="ghost" size="sm">
                         <Link href="/leads/network">
                             Leads
                             <ChevronRight className="h-4 w-4" />
                         </Link>
                     </Button>
+                }
+            >
+                <WorkQueueColumn items={dashboard.workQueue} />
+            </CockpitColumn>
+
+            <CockpitColumn
+                title="Calendar"
+                description="Appointments and follow-ups"
+                icon={CalendarDays}
+                variant="quiet"
+                action={
                     <Button asChild variant="ghost" size="sm">
                         <Link href="/calendar">
                             Calendar
                             <ChevronRight className="h-4 w-4" />
                         </Link>
                     </Button>
-                </div>
-            </header>
-
-            <div className="grid min-h-0 flex-1 divide-y divide-border/60 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] xl:divide-x xl:divide-y-0">
-                <CockpitColumn
-                    title="Do now"
-                    description={`${dashboard.workQueue.length} ranked actions`}
-                    icon={ListChecks}
-                >
-                    <WorkQueueColumn items={dashboard.workQueue} />
-                </CockpitColumn>
-
-                <CockpitColumn
-                    title="Calendar"
-                    description="Appointments and follow-ups"
-                    icon={CalendarDays}
-                >
-                    <CalendarColumn items={dashboard.schedule} />
-                </CockpitColumn>
-            </div>
+                }
+            >
+                <CalendarColumn items={dashboard.schedule} />
+            </CockpitColumn>
         </section>
     );
 }
@@ -828,19 +811,31 @@ export function OperationalDashboard() {
     }
 
     return (
-        <div className="h-[calc(100vh-64px)] overflow-hidden bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--muted)/0.22))] text-foreground">
-            <div className="mx-auto flex h-full max-w-[1600px] flex-col gap-4 px-4 py-4 md:px-6">
-                <header className="grid flex-shrink-0 gap-4 border-b border-border/60 pb-4 xl:grid-cols-[minmax(260px,1fr)_230px_minmax(520px,620px)] xl:items-stretch">
+        <div className="h-[calc(100vh-64px)] overflow-hidden bg-[radial-gradient(at_top_left,hsl(var(--primary)/0.06),transparent_50%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))] text-foreground">
+            <div className="mx-auto flex h-full max-w-[1600px] flex-col gap-5 px-4 py-4 md:px-6">
+                <header className="grid flex-shrink-0 gap-6 pb-1 xl:grid-cols-[minmax(260px,1fr)_230px_minmax(520px,620px)] xl:items-stretch">
                     <div className="min-w-0">
-                        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+                        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                            Today
+                        </p>
+                        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-balance md:text-3xl">
                             Dashboard
                         </h1>
                         <CompactQuote />
                     </div>
 
-                    <MiniClock />
+                    <div>
+                        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                            Now
+                        </p>
+                        <MiniClock />
+                    </div>
 
-                    <div className="grid gap-y-3 rounded-2xl border border-border/60 bg-card/60 py-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                            At a glance
+                        </p>
+                        <div className="mt-2 grid gap-1 rounded-xl border border-border/60 bg-card/40 p-2 sm:grid-cols-2 xl:grid-cols-4">
                         <TopMetric
                             label="Due today"
                             value={dashboard.overview.dueTodayCount}
@@ -871,11 +866,12 @@ export function OperationalDashboard() {
                             hint="uncontacted"
                             tone="good"
                         />
+                        </div>
                     </div>
                 </header>
 
                 <main className="min-h-0 flex-1 overflow-y-auto pr-1 xl:overflow-hidden">
-                    <div className="grid min-h-[1120px] gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div className="grid min-h-[1120px] gap-6 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
                         <TodayCockpit dashboard={dashboard} />
                         <OutreachReviewPanel dashboard={dashboard} />
                     </div>

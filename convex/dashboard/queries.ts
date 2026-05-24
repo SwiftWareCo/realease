@@ -208,6 +208,18 @@ function sortWorkItems(items: WorkItem[]) {
     });
 }
 
+function isDoNowAction(item: WorkItem) {
+    if (item.dueAt === null) {
+        return false;
+    }
+
+    return (
+        item.kind === "new_lead" ||
+        item.kind === "callback" ||
+        item.kind === "calendar_event"
+    );
+}
+
 export const getDashboardHome = query({
     args: {},
     handler: async (ctx) => {
@@ -569,13 +581,14 @@ export const getDashboardHome = query({
         }
 
         const sortedItems = sortWorkItems(Array.from(itemsById.values()));
+        const doNowItems = sortedItems.filter(isDoNowAction);
         const pipelineGaps = sortedItems
             .filter((item) => item.kind === "pipeline_gap")
             .slice(0, 5);
-        const workQueue = sortedItems.slice(0, 12);
-        const outreachReviewItems = sortedItems
-            .filter((item) => item.source === "outreach")
-            .slice(0, 20);
+        const workQueue = doNowItems.slice(0, 12);
+        const outreachReviewItems = sortedItems.filter(
+            (item) => item.source === "outreach",
+        );
         const newLeads = leads.filter((lead) => lead.status === "new").length;
         const qualifiedLeads = leads.filter(
             (lead) => lead.status === "qualified",
@@ -604,13 +617,13 @@ export const getDashboardHome = query({
         return {
             generatedAt: now,
             overview: {
-                urgentCount: sortedItems.filter(
+                urgentCount: doNowItems.filter(
                     (item) => item.priority === "urgent",
                 ).length,
-                highPriorityCount: sortedItems.filter(
+                highPriorityCount: doNowItems.filter(
                     (item) => item.priority === "high",
                 ).length,
-                dueTodayCount: sortedItems.filter(
+                dueTodayCount: doNowItems.filter(
                     (item) => item.dueAt !== null && item.dueAt < tomorrowStart,
                 ).length,
                 newLeads,

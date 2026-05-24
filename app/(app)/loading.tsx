@@ -1,5 +1,5 @@
-import { InsightsPageSkeleton } from "./insights/components/InsightsPageSkeleton";
+import { DashboardSkeleton } from "./homepage/components/DashboardSkeleton";
 
 export default function Loading() {
-    return <InsightsPageSkeleton />;
+    return <DashboardSkeleton />;
 }
