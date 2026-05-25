@@ -122,20 +122,20 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
     if (lead === undefined) {
         return (
             <div className="space-y-6">
-                <Skeleton className="h-10 w-64 bg-slate-800/70" />
-                <Skeleton className="h-[220px] rounded-3xl bg-slate-800/70" />
-                <Skeleton className="h-[420px] rounded-3xl bg-slate-800/70" />
+                <Skeleton className="h-10 w-64 bg-muted" />
+                <Skeleton className="h-[220px] rounded-3xl bg-muted" />
+                <Skeleton className="h-[420px] rounded-3xl bg-muted" />
             </div>
         );
     }
 
     if (lead === null) {
         return (
-            <div className="rounded-3xl border border-slate-800 bg-[#111a2e] p-10 text-center">
-                <p className="text-slate-300">Lead not found</p>
+            <div className="rounded-3xl border border-border bg-card p-10 text-center">
+                <p className="text-foreground/70">Lead not found</p>
                 <Button
                     asChild
-                    className="mt-4 bg-[#ffb08a] text-[#211108] hover:bg-[#ffc2a3]"
+                    className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                     <Link href="/leads/network">
                         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -218,25 +218,25 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
 
     return (
         <>
-            <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden text-slate-100">
-                <header className="border-b border-slate-800/90 pb-4">
+            <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden text-foreground">
+                <header className="border-b border-border pb-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                                 CRM {'>'} Active Lead
                             </div>
                             <div className="mt-2 flex flex-wrap items-center gap-2.5">
-                                <h1 className="text-4xl font-semibold tracking-[-0.06em] text-white md:text-5xl">
+                                <h1 className="text-4xl font-semibold tracking-[-0.06em] text-foreground md:text-5xl">
                                     {lead.name}
                                 </h1>
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <Badge className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200">
+                                    <Badge className="rounded-full border border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--status-good)]">
                                         {lead.intent}
                                     </Badge>
-                                    <Badge className="rounded-full border border-orange-400/35 bg-orange-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-200">
+                                    <Badge className="rounded-full border border-[color:var(--status-special)]/30 bg-[color:var(--status-special)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--status-special)]">
                                         {tier}
                                     </Badge>
-                                    <Badge className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
+                                    <Badge className="rounded-full border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                         {formatStatus(lead.status)}
                                     </Badge>
                                 </div>
@@ -246,7 +246,7 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                             <Button
                                 variant="ghost"
                                 asChild
-                                className="h-11 rounded-xl text-slate-300 hover:bg-slate-900/60 hover:text-slate-100"
+                                className="h-11 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
                             >
                                 <Link href="/leads/network">
                                     <ArrowLeft className="mr-2 h-4 w-4" />
@@ -255,14 +255,14 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                             </Button>
                             <Button
                                 variant="outline"
-                                className="h-11 rounded-xl border-slate-700 bg-[#0d1a34] px-5 text-slate-100 hover:bg-[#132345]"
+                                className="h-11 rounded-xl border-border bg-muted px-5 text-foreground hover:bg-accent"
                                 onClick={() => setIsEditOpen(true)}
                             >
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Edit Profile
                             </Button>
                             <Button
-                                className="h-11 rounded-xl bg-[#ffb08a] px-5 font-semibold text-[#2d170d] hover:bg-[#ffc3a5]"
+                                className="h-11 rounded-xl bg-primary px-5 font-semibold text-primary-foreground hover:bg-primary/90"
                                 onClick={() => setIsContactSheetOpen(true)}
                             >
                                 <PhoneCall className="mr-2 h-4 w-4" />
@@ -273,108 +273,108 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                 </header>
 
                 <section className="grid min-h-0 flex-1 gap-6 overflow-hidden xl:grid-cols-[minmax(0,1fr)_320px] xl:grid-rows-[auto_minmax(0,1fr)]">
-                    <article className="rounded-3xl border border-slate-800 bg-[#111a33]/95 p-5 xl:col-start-1 xl:row-start-1">
+                    <article className="rounded-3xl border border-border bg-card p-5 xl:col-start-1 xl:row-start-1">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                            <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                                 Contact & Core Information
                             </h2>
-                            <div className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(74,222,128,0.9)]" />
+                            <div className="h-2.5 w-2.5 rounded-full bg-[color:var(--status-good)] shadow-[0_0_14px_color-mix(in_oklab,var(--status-good)_70%,transparent)]" />
                         </div>
                         <div className="mt-4 grid gap-4 md:grid-cols-2">
                             <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                                     Email Address
                                 </p>
-                                <p className="mt-2 flex items-center gap-2 text-sm text-slate-100">
-                                    <Mail className="h-4 w-4 text-slate-500" />
+                                <p className="mt-2 flex items-center gap-2 text-sm text-foreground">
+                                    <Mail className="h-4 w-4 text-muted-foreground" />
                                     {lead.email ?? 'Not provided'}
                                 </p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                                     Phone Number
                                 </p>
-                                <p className="mt-2 flex items-center gap-2 text-sm text-slate-100">
-                                    <Phone className="h-4 w-4 text-slate-500" />
+                                <p className="mt-2 flex items-center gap-2 text-sm text-foreground">
+                                    <Phone className="h-4 w-4 text-muted-foreground" />
                                     {lead.phone}
                                 </p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                                     Property Address
                                 </p>
-                                <p className="mt-2 flex items-start gap-2 text-sm text-slate-100">
-                                    <MapPin className="mt-0.5 h-4 w-4 text-slate-500" />
+                                <p className="mt-2 flex items-start gap-2 text-sm text-foreground">
+                                    <MapPin className="mt-0.5 h-4 w-4 text-muted-foreground" />
                                     <span>{lead.property_address ?? 'Not specified'}</span>
                                 </p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                                     Lead Source
                                 </p>
-                                <p className="mt-2 text-sm text-slate-100">
+                                <p className="mt-2 text-sm text-foreground">
                                     {formatOrigin(lead.source)}
                                 </p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                                     Timeline
                                 </p>
                                 <div className="mt-2 flex items-center gap-3">
-                                    <div className="h-1.5 w-[110px] overflow-hidden rounded-full bg-slate-800">
+                                    <div className="h-1.5 w-[110px] overflow-hidden rounded-full bg-muted">
                                         <div
-                                            className="h-full rounded-full bg-[#ffb08a]"
+                                            className="h-full rounded-full bg-primary"
                                             style={{
                                                 width: `${Math.max(8, Math.min(100, lead.urgency_score ?? 0))}%`,
                                             }}
                                         />
                                     </div>
-                                    <span className="text-xs text-[#ffb08a]">
+                                    <span className="text-xs text-primary">
                                         {formatTimeline(lead.timeline)}
                                     </span>
                                 </div>
                             </div>
                             <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                                     Budget Bracket
                                 </p>
-                                <p className="mt-2 text-lg font-semibold tracking-[-0.02em] text-slate-50">
+                                <p className="mt-2 text-lg font-semibold tracking-[-0.02em] text-foreground">
                                     {formatCurrencyRange(lead)}
                                 </p>
                             </div>
                         </div>
                     </article>
 
-                    <article className="rounded-3xl border border-slate-800 bg-[#111a33]/95 p-4 xl:col-start-2 xl:row-start-1">
-                        <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                    <article className="rounded-3xl border border-border bg-card p-4 xl:col-start-2 xl:row-start-1">
+                        <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                             Verified Dossier
                         </h2>
                         <div className="mt-4 space-y-2.5">
-                            <div className="flex items-center gap-3 rounded-xl bg-[#0b1429] px-3 py-2.5">
-                                <FileText className="h-4 w-4 text-emerald-300" />
+                            <div className="flex items-center gap-3 rounded-xl bg-muted px-3 py-2.5">
+                                <FileText className="h-4 w-4 text-[color:var(--status-good)]" />
                                 <div>
-                                    <p className="text-sm text-slate-100">Lead Profile</p>
-                                    <p className="text-[11px] text-slate-500">
+                                    <p className="text-sm text-foreground">Lead Profile</p>
+                                    <p className="text-[11px] text-muted-foreground">
                                         {formatStatus(lead.status)} / {lead.intent}
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 rounded-xl bg-[#0b1429] px-3 py-2.5">
-                                <FileText className="h-4 w-4 text-emerald-300" />
+                            <div className="flex items-center gap-3 rounded-xl bg-muted px-3 py-2.5">
+                                <FileText className="h-4 w-4 text-[color:var(--status-good)]" />
                                 <div>
-                                    <p className="text-sm text-slate-100">Source Record</p>
-                                    <p className="text-[11px] text-slate-500">
+                                    <p className="text-sm text-foreground">Source Record</p>
+                                    <p className="text-[11px] text-muted-foreground">
                                         {formatOrigin(lead.source)}
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 rounded-xl bg-[#0b1429] px-3 py-2.5">
-                                <FileText className="h-4 w-4 text-emerald-300" />
+                            <div className="flex items-center gap-3 rounded-xl bg-muted px-3 py-2.5">
+                                <FileText className="h-4 w-4 text-[color:var(--status-good)]" />
                                 <div>
-                                    <p className="text-sm text-slate-100">
+                                    <p className="text-sm text-foreground">
                                         Communication Compliance
                                     </p>
-                                    <p className="text-[11px] text-slate-500">
+                                    <p className="text-[11px] text-muted-foreground">
                                         {hasComplianceBlock
                                             ? 'Restricted'
                                             : 'Clear to contact'}
@@ -384,9 +384,9 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                         </div>
                     </article>
 
-                    <article className="order-3 flex min-h-0 flex-col rounded-3xl border border-slate-800 bg-[#111a33]/95 p-5 xl:col-start-1 xl:row-start-2 xl:order-none">
+                    <article className="order-3 flex min-h-0 flex-col rounded-3xl border border-border bg-card p-5 xl:col-start-1 xl:row-start-2 xl:order-none">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                            <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                                 Client Notes
                             </h2>
                             <Button
@@ -394,7 +394,7 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setIsAddNoteOpen(true)}
-                                className="h-7 rounded-lg border-slate-700 bg-[#0b1429] px-2.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-300 hover:bg-[#132345] hover:text-emerald-200"
+                                className="h-7 rounded-lg border-border bg-muted px-2.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--status-good)] hover:bg-accent"
                             >
                                 Add Entry
                                 <Plus className="ml-1.5 h-3.5 w-3.5" />
@@ -405,36 +405,36 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                                 noteItems.map((note) => (
                                     <div
                                         key={note._id}
-                                        className="rounded-2xl border border-emerald-400/25 bg-[#0d162d] p-4"
+                                        className="rounded-2xl border border-[color:var(--status-good)]/30 bg-muted p-4"
                                     >
-                                        <p className="text-[11px] uppercase tracking-[0.16em] text-emerald-300">
+                                        <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--status-good)]">
                                             Added {formatCreatedAt(note.created_at)}
                                         </p>
-                                        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-6 text-slate-200">
+                                        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-6 text-foreground/80">
                                             {note.body}
                                         </p>
                                     </div>
                                 ))
                             ) : (
-                                <div className="rounded-2xl border border-dashed border-slate-700 p-5 text-sm text-slate-500">
+                                <div className="rounded-2xl border border-dashed border-border p-5 text-sm text-muted-foreground">
                                     No notes yet.
                                 </div>
                             )}
                         </div>
                     </article>
 
-                    <article className="order-4 flex min-h-0 flex-col rounded-3xl border border-slate-800 bg-[#111a33]/95 p-4 xl:col-start-2 xl:row-start-2 xl:order-none">
+                    <article className="order-4 flex min-h-0 flex-col rounded-3xl border border-border bg-card p-4 xl:col-start-2 xl:row-start-2 xl:order-none">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                            <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                                 Engagement Log
                             </h2>
-                            <span className="text-[11px] text-slate-500">
+                            <span className="text-[11px] text-muted-foreground">
                                 {historyItems.length} interactions
                             </span>
                         </div>
                         <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
                             {historyItems.length === 0 ? (
-                                <div className="rounded-xl border border-dashed border-slate-700 px-4 py-5 text-sm text-slate-500">
+                                <div className="rounded-xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
                                     No communication history yet.
                                 </div>
                             ) : (
@@ -454,18 +454,18 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                                         return (
                                             <VerticalTimelineItem
                                                 key={item.id}
-                                                contentClassName="rounded-xl border border-slate-800 bg-[#091225] px-3 py-3"
-                                                markerClassName="border-[#0b1429] bg-[#091121]"
-                                                markerInnerClassName="bg-emerald-300"
+                                                contentClassName="rounded-xl border border-border bg-muted px-3 py-3"
+                                                markerClassName="border-border bg-background"
+                                                markerInnerClassName="bg-[color:var(--status-good)]"
                                             >
                                                 <div className="min-w-0 space-y-2">
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         {item.type === 'call' ? (
-                                                            <PhoneCall className="h-4 w-4 text-[#ffb08a]" />
+                                                            <PhoneCall className="h-4 w-4 text-primary" />
                                                         ) : (
-                                                            <MessageSquare className="h-4 w-4 text-emerald-300" />
+                                                            <MessageSquare className="h-4 w-4 text-[color:var(--status-good)]" />
                                                         )}
-                                                        <span className="text-sm font-semibold text-slate-100">
+                                                        <span className="text-sm font-semibold text-foreground">
                                                             {item.type === 'call'
                                                                 ? 'Call'
                                                                 : 'SMS'}
@@ -473,12 +473,12 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                                                         {item.type === 'sms' ? (
                                                             item.direction ===
                                                             'inbound' ? (
-                                                                <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                                                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                                                                     <ArrowDownLeft className="h-3 w-3" />{' '}
                                                                     Inbound
                                                                 </span>
                                                             ) : (
-                                                                <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                                                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                                                                     <ArrowUpRight className="h-3 w-3" />{' '}
                                                                     Outbound
                                                                 </span>
@@ -486,7 +486,7 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                                                         ) : null}
                                                     </div>
                                                     <div className="flex flex-wrap items-center justify-between gap-2">
-                                                        <p className="text-xs text-slate-500">
+                                                        <p className="text-xs text-muted-foreground">
                                                             {formatHistoryTimestamp(
                                                                 item.timestamp,
                                                             )}
@@ -497,7 +497,7 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                                                                     asChild
                                                                     variant="ghost"
                                                                     size="sm"
-                                                                    className="h-7 px-2 text-xs text-emerald-300 hover:bg-emerald-400/10 hover:text-emerald-200"
+                                                                    className="h-7 px-2 text-xs text-[color:var(--status-good)] hover:bg-[color:var(--status-good)]/10"
                                                                 >
                                                                     <Link
                                                                         href={
@@ -508,12 +508,12 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                                                                     </Link>
                                                                 </Button>
                                                             ) : (
-                                                                <span className="text-xs text-slate-500">
+                                                                <span className="text-xs text-muted-foreground">
                                                                     No report link
                                                                 </span>
                                                             )
                                                         ) : (
-                                                            <span className="text-xs text-slate-500">
+                                                            <span className="text-xs text-muted-foreground">
                                                                 SMS record
                                                             </span>
                                                         )}
@@ -545,15 +545,15 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                     }
                 }}
             >
-                <DialogContent className="border-slate-800 bg-[#071025] text-slate-100 sm:max-w-[520px]">
+                <DialogContent className="border-border bg-background text-foreground sm:max-w-[520px]">
                     <DialogHeader>
                         <DialogTitle>Add Note</DialogTitle>
-                        <DialogDescription className="text-slate-400">
+                        <DialogDescription className="text-muted-foreground">
                             Add a timestamped note to {lead.name}.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-2">
-                        <Label htmlFor="lead-note-body" className="text-slate-300">
+                        <Label htmlFor="lead-note-body" className="text-foreground/80">
                             Note
                         </Label>
                         <Textarea
@@ -561,10 +561,10 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                             value={noteBody}
                             onChange={(event) => setNoteBody(event.target.value)}
                             placeholder="Capture context, objections, or follow-up details..."
-                            className="min-h-[140px] border-slate-700 bg-[#0e1731] text-slate-100 placeholder:text-slate-500 focus-visible:ring-slate-500"
+                            className="min-h-[140px] border-border bg-card text-foreground placeholder:text-muted-foreground focus-visible:ring-ring"
                             maxLength={2000}
                         />
-                        <p className="text-right text-xs text-slate-500">
+                        <p className="text-right text-xs text-muted-foreground">
                             {noteBody.length}/2000
                         </p>
                     </div>
@@ -572,7 +572,7 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                         <Button
                             type="button"
                             variant="ghost"
-                            className="text-slate-400 hover:bg-slate-900/60 hover:text-slate-100"
+                            className="text-muted-foreground hover:bg-muted hover:text-foreground"
                             onClick={() => setIsAddNoteOpen(false)}
                             disabled={isSavingNote}
                         >
@@ -582,7 +582,7 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                             type="button"
                             onClick={handleAddNote}
                             disabled={isSavingNote || !normalizedNoteBody}
-                            className="bg-[#ffb08a] font-semibold text-[#2d170d] hover:bg-[#ffc3a5]"
+                            className="bg-primary font-semibold text-primary-foreground hover:bg-primary/90"
                         >
                             {isSavingNote ? 'Adding...' : 'Add note'}
                         </Button>
@@ -592,24 +592,24 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
 
             <Sheet open={isContactSheetOpen} onOpenChange={setIsContactSheetOpen}>
                 <SheetContent
-                    className="w-full max-w-[500px] border-l-slate-800 bg-[#071025] p-0 text-slate-100 sm:max-w-[500px]"
+                    className="w-full max-w-[500px] border-l-border bg-background p-0 text-foreground sm:max-w-[500px]"
                     side="right"
                 >
-                    <SheetHeader className="border-b border-slate-800 px-6 py-5 text-left">
-                        <SheetTitle className="text-xl text-slate-100">
+                    <SheetHeader className="border-b border-border px-6 py-5 text-left">
+                        <SheetTitle className="text-xl text-foreground">
                             Contact Lead
                         </SheetTitle>
-                        <SheetDescription className="text-slate-400">
+                        <SheetDescription className="text-muted-foreground">
                             Send a direct text message without selecting a campaign.
                         </SheetDescription>
-                        <p className="text-sm text-slate-300">
+                        <p className="text-sm text-foreground/80">
                             {lead.name} • {lead.phone}
                         </p>
                     </SheetHeader>
 
                     <div className="space-y-5 px-6 py-5">
                         <div className="space-y-2">
-                            <Label htmlFor="message" className="text-slate-300">
+                            <Label htmlFor="message" className="text-foreground/80">
                                 Message
                             </Label>
                             <Textarea
@@ -617,10 +617,10 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                                 value={messageBody}
                                 onChange={(event) => setMessageBody(event.target.value)}
                                 placeholder="Write an SMS message..."
-                                className="min-h-[140px] border-slate-700 bg-[#0e1731] text-slate-100 placeholder:text-slate-500 focus-visible:ring-slate-500"
+                                className="min-h-[140px] border-border bg-card text-foreground placeholder:text-muted-foreground focus-visible:ring-ring"
                                 maxLength={1200}
                             />
-                            <div className="flex items-center justify-between text-xs text-slate-500">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
                                 <span>
                                     {hasComplianceBlock
                                         ? 'This lead is currently blocked from SMS.'
@@ -631,12 +631,12 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                         </div>
 
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                                 Recent Outreach
                             </h3>
                             <div className="mt-2 max-h-[280px] overflow-y-auto pr-1">
                                 {historyPreview.length === 0 ? (
-                                    <div className="rounded-lg border border-dashed border-slate-700 px-3 py-3 text-xs text-slate-500">
+                                    <div className="rounded-lg border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
                                         No communication history yet.
                                     </div>
                                 ) : (
@@ -644,16 +644,16 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                                         {historyPreview.map((item) => (
                                             <VerticalTimelineItem
                                                 key={`sheet-${item.id}`}
-                                                contentClassName="rounded-lg border border-slate-800 bg-[#0b1429] px-3 py-2.5"
-                                                markerClassName="border-[#071025] bg-[#091121]"
-                                                markerInnerClassName="bg-[#ffb08a]"
+                                                contentClassName="rounded-lg border border-border bg-muted px-3 py-2.5"
+                                                markerClassName="border-border bg-background"
+                                                markerInnerClassName="bg-primary"
                                             >
-                                                <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                                                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                                                     <span className="inline-flex items-center gap-1">
                                                         {item.type === 'call' ? (
-                                                            <PhoneCall className="h-3.5 w-3.5 text-[#ffb08a]" />
+                                                            <PhoneCall className="h-3.5 w-3.5 text-primary" />
                                                         ) : (
-                                                            <MessageSquare className="h-3.5 w-3.5 text-emerald-300" />
+                                                            <MessageSquare className="h-3.5 w-3.5 text-[color:var(--status-good)]" />
                                                         )}
                                                         {item.type === 'call'
                                                             ? 'Call'
@@ -665,7 +665,7 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                                                         )}
                                                     </span>
                                                 </div>
-                                                <p className="mt-1 line-clamp-2 text-sm text-slate-300">
+                                                <p className="mt-1 line-clamp-2 text-sm text-foreground/80">
                                                     {item.summary ??
                                                         item.status ??
                                                         'No details'}
@@ -678,9 +678,9 @@ export function LeadProfile({ leadId }: LeadProfileProps) {
                         </div>
                     </div>
 
-                    <div className="mt-auto border-t border-slate-800 px-6 py-4">
+                    <div className="mt-auto border-t border-border px-6 py-4">
                         <Button
-                            className="h-11 w-full rounded-xl bg-[#ffb08a] font-semibold text-[#2d170d] hover:bg-[#ffc3a5]"
+                            className="h-11 w-full rounded-xl bg-primary font-semibold text-primary-foreground hover:bg-primary/90"
                             onClick={handleSendMessage}
                             disabled={
                                 isSendingMessage ||

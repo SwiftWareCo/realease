@@ -126,8 +126,9 @@ realty/
 
 ## Authentication (Clerk + Convex)
 
-- **Middleware**: use `proxy.ts` (Next.js 16) with `clerkMiddleware` and the standard matcher.
-- **Client auth state**: use `useConvexAuth` and `<Authenticated>/<Unauthenticated>` from `convex/react` (not Clerk UI helpers) when gating Convex data.
+- **Middleware**: `proxy.ts` (Next.js 16) uses `clerkMiddleware` with `auth.protect()` on every non-public route — unauthenticated users are redirected before any `(app)/*` page renders. This is the single source of truth for route protection.
+- **Client auth state**: do not wrap `(app)/*` children in `<Authenticated>/<AuthLoading>/<Unauthenticated>` from `convex/react`. Middleware already gates access, and `useQuery` returns `undefined` during the Convex/Clerk JWT handshake — each page handles its own loading state inline. Use `useConvexAuth` directly only when a component genuinely needs to branch on auth status.
+- **Loading UI**: render a centered `Loader2` spinner while `useQuery === undefined`. See `OperationalDashboard.tsx` and `app/(app)/loading.tsx` for the pattern.
 - **User sync**: Clerk webhooks POST to `convex/http.ts` and upsert/delete in the `users` table.
 
 ## Common Patterns

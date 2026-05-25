@@ -48,8 +48,8 @@ export function CampaignStatusBadge({
     className?: string;
 }) {
     const tone = {
-        active: "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-        paused: "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-200",
+        active: "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
+        paused: "border-[color:var(--status-attention)]/30 bg-[color:var(--status-attention)]/10 text-[color:var(--status-attention)]",
         draft: "border-border bg-muted text-muted-foreground",
         completed: "border-primary/30 bg-primary/10 text-primary",
         archived: "border-border bg-muted/60 text-muted-foreground",
@@ -107,7 +107,7 @@ export function CampaignMetricTile({
                 accent === "primary" &&
                     "border-primary/25 bg-primary/10",
                 accent === "success" &&
-                    "border-emerald-500/20 bg-emerald-500/10",
+                    "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10",
                 accent === "default" && "border-border/60 bg-card",
             )}
         >
@@ -170,7 +170,7 @@ export function VerticalTimeline({
         <div className={cn("relative", className)}>
             <div
                 aria-hidden="true"
-                className="absolute left-2 top-0 bottom-0 w-px -translate-x-1/2 bg-slate-700/80"
+                className="absolute left-2 top-0 bottom-0 w-px -translate-x-1/2 bg-border"
             />
             <div className="space-y-3">{children}</div>
         </div>
@@ -201,7 +201,7 @@ export function VerticalTimelineItem({
             <span
                 aria-hidden="true"
                 className={cn(
-                    "absolute left-0 top-3 flex h-4 w-4 items-center justify-center rounded-full border border-slate-700 bg-[#091121]",
+                    "absolute left-0 top-3 flex h-4 w-4 items-center justify-center rounded-full border border-border bg-background",
                     markerClassName,
                     markerTopClassName,
                 )}
@@ -209,7 +209,7 @@ export function VerticalTimelineItem({
                 {markerInner ?? (
                     <span
                         className={cn(
-                            "h-1.5 w-1.5 rounded-full bg-slate-500",
+                            "h-1.5 w-1.5 rounded-full bg-muted-foreground",
                             markerInnerClassName,
                         )}
                     />

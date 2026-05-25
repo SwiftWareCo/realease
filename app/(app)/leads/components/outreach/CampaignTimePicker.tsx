@@ -103,15 +103,15 @@ export function CampaignTimePicker({
                 onClick={() => handleOpenChange(true)}
                 disabled={disabled}
                 className={cn(
-                    "flex w-full cursor-pointer items-center justify-between rounded-[1.15rem] border border-white/10 bg-[#111827]/85 px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-primary/40 hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60",
+                    "flex w-full cursor-pointer items-center justify-between rounded-[1.15rem] border border-border bg-card px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-primary/40 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60",
                     className,
                 )}
             >
                 <div>
-                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
                         {label}
                     </p>
-                    <p className="mt-1 text-lg font-semibold text-slate-50">
+                    <p className="mt-1 text-lg font-semibold text-foreground">
                         {formatMinutesFromMidnightTo12Hour(value)}
                     </p>
                 </div>
@@ -121,20 +121,20 @@ export function CampaignTimePicker({
             </button>
 
             <Dialog open={open} onOpenChange={handleOpenChange}>
-                <DialogContent className="overflow-hidden border-white/10 bg-[#0a1220] p-0 text-slate-50 sm:max-w-[420px]">
-                    <DialogHeader className="border-b border-white/10 bg-[linear-gradient(180deg,rgba(22,32,51,0.96),rgba(10,18,32,0.96))] px-6 py-5 text-left">
+                <DialogContent className="overflow-hidden border-border bg-background p-0 text-foreground sm:max-w-[420px]">
+                    <DialogHeader className="border-b border-border bg-[linear-gradient(180deg,rgba(22,32,51,0.96),rgba(10,18,32,0.96))] px-6 py-5 text-left">
                         <DialogTitle className="text-xl font-semibold tracking-tight">
                             {label}
                         </DialogTitle>
-                        <DialogDescription className="text-slate-400">
+                        <DialogDescription className="text-muted-foreground">
                             Pick the hour first, then refine the exact minute.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-6 px-6 py-6">
-                        <div className="flex items-center justify-between gap-3 rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
+                        <div className="flex items-center justify-between gap-3 rounded-[1.2rem] border border-border bg-muted p-4">
                             <div>
-                                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">
+                                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
                                     Selected time
                                 </p>
                                 <div className="mt-2 flex items-end gap-2">
@@ -145,12 +145,12 @@ export function CampaignTimePicker({
                                             "cursor-pointer text-4xl font-semibold tracking-tight transition",
                                             stage === "hour"
                                                 ? "text-primary"
-                                                : "text-slate-100/85",
+                                                : "text-foreground/85",
                                         )}
                                     >
                                         {String(selectedHour12).padStart(2, "0")}
                                     </button>
-                                    <span className="pb-1 text-3xl text-slate-500">:</span>
+                                    <span className="pb-1 text-3xl text-muted-foreground">:</span>
                                     <button
                                         type="button"
                                         onClick={() => setStage("minute")}
@@ -158,7 +158,7 @@ export function CampaignTimePicker({
                                             "cursor-pointer text-4xl font-semibold tracking-tight transition",
                                             stage === "minute"
                                                 ? "text-primary"
-                                                : "text-slate-100/85",
+                                                : "text-foreground/85",
                                         )}
                                     >
                                         {String(draftMinute).padStart(2, "0")}
@@ -180,7 +180,7 @@ export function CampaignTimePicker({
                                             "cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium tracking-[0.2em] transition",
                                             meridiem === value
                                                 ? "border-primary/50 bg-primary text-primary-foreground"
-                                                : "border-white/10 bg-transparent text-slate-300 hover:border-white/20",
+                                                : "border-border bg-transparent text-foreground/80 hover:border-white/20",
                                         )}
                                     >
                                         {value}
@@ -189,13 +189,13 @@ export function CampaignTimePicker({
                             </div>
                         </div>
 
-                        <div className="rounded-[1.7rem] border border-white/10 bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.14),transparent_0,transparent_42%),linear-gradient(180deg,rgba(22,32,51,0.92),rgba(9,14,27,0.96))] p-5">
+                        <div className="rounded-[1.7rem] border border-border bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.14),transparent_0,transparent_42%),linear-gradient(180deg,rgba(22,32,51,0.92),rgba(9,14,27,0.96))] p-5">
                             <div className="mb-4 flex items-center justify-between">
                                 <div>
-                                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">
+                                    <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
                                         {stage === "hour" ? "Hour" : "Minute"}
                                     </p>
-                                    <p className="mt-1 text-sm text-slate-300">
+                                    <p className="mt-1 text-sm text-foreground/80">
                                         {stage === "hour"
                                             ? "Choose the hour on the dial."
                                             : "Choose the minute on the dial or switch back to the hour."}
@@ -214,7 +214,7 @@ export function CampaignTimePicker({
                                                 "cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition",
                                                 stage === item.key
                                                     ? "border-primary/40 bg-primary/15 text-primary"
-                                                    : "border-white/10 text-slate-400 hover:border-white/20 hover:text-slate-200",
+                                                    : "border-border text-muted-foreground hover:border-white/20 hover:text-foreground",
                                             )}
                                         >
                                             {item.label}
@@ -223,13 +223,13 @@ export function CampaignTimePicker({
                                 </div>
                             </div>
 
-                            <div className="relative mx-auto size-[290px] rounded-full border border-white/10 bg-[radial-gradient(circle,rgba(255,255,255,0.06),transparent_62%)]">
+                            <div className="relative mx-auto size-[290px] rounded-full border border-border bg-[radial-gradient(circle,rgba(255,255,255,0.06),transparent_62%)]">
                                 <div className="absolute left-1/2 top-1/2 h-[2px] w-[112px] origin-left rounded-full bg-primary/75"
                                     style={{
                                         transform: `translateY(-50%) rotate(${handAngle - 90}deg)`,
                                     }}
                                 />
-                                <div className="absolute left-1/2 top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-[#0a1220] bg-primary" />
+                                <div className="absolute left-1/2 top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-background bg-primary" />
 
                                 {stage === "hour"
                                     ? HOUR_VALUES.map((hourValue, index) => {
@@ -247,7 +247,7 @@ export function CampaignTimePicker({
                                                       "absolute flex size-11 cursor-pointer items-center justify-center rounded-full text-sm font-medium transition",
                                                       selected
                                                           ? "bg-primary text-primary-foreground shadow-[0_0_24px_rgba(251,191,36,0.45)]"
-                                                          : "text-slate-200 hover:bg-white/10",
+                                                          : "text-foreground hover:bg-accent",
                                                   )}
                                                   style={polarStyle(index, 12, 112)}
                                               >
@@ -267,7 +267,7 @@ export function CampaignTimePicker({
                                                       "absolute flex size-10 cursor-pointer items-center justify-center rounded-full text-xs font-medium transition",
                                                       selected
                                                           ? "bg-primary text-primary-foreground shadow-[0_0_18px_rgba(251,191,36,0.4)]"
-                                                          : "text-slate-300 hover:bg-white/10",
+                                                          : "text-foreground/80 hover:bg-accent",
                                                   )}
                                                   style={polarStyle(minute / 5, 12, 112)}
                                               >
@@ -279,15 +279,15 @@ export function CampaignTimePicker({
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-white/10 bg-[#0b1323] px-6 py-4">
-                        <p className="text-sm text-slate-400">
+                    <div className="flex items-center justify-between border-t border-border bg-card px-6 py-4">
+                        <p className="text-sm text-muted-foreground">
                             {formatMinutesFromMidnightTo12Hour(toMinutes(draftHour24, draftMinute))}
                         </p>
                         <div className="flex gap-2">
                             <Button
                                 type="button"
                                 variant="ghost"
-                                className="text-slate-300 hover:bg-white/10 hover:text-slate-50"
+                                className="text-foreground/80 hover:bg-accent hover:text-foreground"
                                 onClick={() => setOpen(false)}
                             >
                                 Cancel

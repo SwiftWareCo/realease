@@ -34,11 +34,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const sellerStages = [
-    { id: "pre_listing", label: "Pre-Listing", color: "bg-slate-500" },
-    { id: "on_market", label: "On Market", color: "bg-blue-500" },
-    { id: "offer_in", label: "Offer In", color: "bg-yellow-500" },
-    { id: "under_contract", label: "Under Contract", color: "bg-purple-500" },
-    { id: "sold", label: "Sold", color: "bg-green-500" },
+    { id: "pre_listing", label: "Pre-Listing", color: "bg-muted-foreground" },
+    { id: "on_market", label: "On Market", color: "bg-[color:var(--status-info)]" },
+    { id: "offer_in", label: "Offer In", color: "bg-[color:var(--status-attention)]" },
+    { id: "under_contract", label: "Under Contract", color: "bg-[color:var(--status-special)]" },
+    { id: "sold", label: "Sold", color: "bg-[color:var(--status-good)]" },
 ] as const;
 
 type SellerStage = "pre_listing" | "on_market" | "offer_in" | "under_contract" | "sold";
@@ -109,7 +109,7 @@ function SellerLeadCard({ lead, onOpenProfile }: SellerLeadCardProps) {
                         onOpenProfile(lead._id);
                     }}
                 >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-[color:var(--status-good)] flex items-center justify-center shrink-0">
                         <User className="h-4 w-4 text-white" />
                     </div>
                     <span className="font-semibold text-sm truncate">
@@ -120,7 +120,7 @@ function SellerLeadCard({ lead, onOpenProfile }: SellerLeadCardProps) {
 
             {/* Address */}
             <div className="flex items-start gap-2 text-sm text-muted-foreground mb-2">
-                <MapPin className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                <MapPin className="h-4 w-4 text-[color:var(--status-info)] shrink-0 mt-0.5" />
                 <span className="line-clamp-2">
                     {lead.property_address || "Address not set"}
                 </span>
@@ -129,14 +129,14 @@ function SellerLeadCard({ lead, onOpenProfile }: SellerLeadCardProps) {
             {/* Price and Days on Market */}
             <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-border/50">
                 <div className="flex items-center gap-1.5">
-                    <DollarSign className="h-4 w-4 text-green-500" />
+                    <DollarSign className="h-4 w-4 text-[color:var(--status-good)]" />
                     <span className="font-semibold text-sm">
                         {formatPrice(lead.list_price)}
                     </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <Clock className={`h-4 w-4 ${isLongOnMarket ? 'text-orange-500' : 'text-muted-foreground'}`} />
-                    <span className={`text-sm ${isLongOnMarket ? 'text-orange-500 font-medium' : 'text-muted-foreground'}`}>
+                    <Clock className={`h-4 w-4 ${isLongOnMarket ? 'text-[color:var(--status-attention)]' : 'text-muted-foreground'}`} />
+                    <span className={`text-sm ${isLongOnMarket ? 'text-[color:var(--status-attention)] font-medium' : 'text-muted-foreground'}`}>
                         {daysOnMarket}
                     </span>
                 </div>
@@ -321,7 +321,7 @@ export function SellerKanbanBoard() {
                     {activeLead ? (
                         <div className="bg-card border rounded-xl p-4 shadow-2xl rotate-3 opacity-95 w-72 backdrop-blur-sm">
                             <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                                <div className="w-8 h-8 rounded-full bg-[color:var(--status-good)] flex items-center justify-center">
                                     <User className="h-4 w-4 text-white" />
                                 </div>
                                 <span className="font-semibold text-sm">

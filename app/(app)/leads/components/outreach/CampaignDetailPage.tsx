@@ -36,15 +36,15 @@ import { cn } from "@/lib/utils";
 
 function DetailSkeleton() {
     return (
-        <div className="min-h-full bg-[#091121] p-6 md:p-8">
+        <div className="min-h-full bg-background p-6 md:p-8">
             <div className="mx-auto max-w-[1260px] space-y-5">
-                <Skeleton className="h-20 rounded-2xl bg-slate-800/70" />
+                <Skeleton className="h-20 rounded-2xl bg-muted" />
                 <div className="grid gap-4 md:grid-cols-4">
                     {Array.from({ length: 4 }).map((_, index) => (
-                        <Skeleton key={index} className="h-32 rounded-2xl bg-slate-800/70" />
+                        <Skeleton key={index} className="h-32 rounded-2xl bg-muted" />
                     ))}
                 </div>
-                <Skeleton className="h-[640px] rounded-2xl bg-slate-800/70" />
+                <Skeleton className="h-[640px] rounded-2xl bg-muted" />
             </div>
         </div>
     );
@@ -78,11 +78,11 @@ function formatCallType(status: string) {
 }
 
 function leadStateTone(state: string) {
-    if (state === "eligible" || state === "cooldown") return "text-emerald-300";
-    if (state === "queued" || state === "in_progress") return "text-amber-200";
-    if (state === "paused_for_realtor") return "text-orange-200";
-    if (state === "done" || state === "terminal_blocked") return "text-slate-400";
-    return "text-slate-300";
+    if (state === "eligible" || state === "cooldown") return "text-[color:var(--status-good)]";
+    if (state === "queued" || state === "in_progress") return "text-[color:var(--status-attention)]";
+    if (state === "paused_for_realtor") return "text-[color:var(--status-special)]";
+    if (state === "done" || state === "terminal_blocked") return "text-muted-foreground";
+    return "text-foreground/70";
 }
 
 function formatStateLabel(state: string) {
@@ -93,43 +93,43 @@ function outcomeTone(outcome: string | null | undefined) {
     switch (outcome) {
         case "connected_interested":
         case "callback_requested":
-            return "text-[#ffb08a]";
+            return "text-primary";
         case "connected_not_interested":
         case "do_not_call":
         case "wrong_number":
         case "failed":
-            return "text-rose-300";
+            return "text-[color:var(--status-urgent)]";
         case "voicemail_left":
         case "no_answer":
-            return "text-slate-300";
+            return "text-foreground/70";
         default:
-            return "text-slate-500";
+            return "text-muted-foreground";
     }
 }
 
 function RuntimeFact({ label, value, icon }: { label: string; value: string; icon: ReactNode }) {
     return (
         <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">{label}</p>
-            <div className="mt-2 flex items-center gap-2 text-xs font-medium text-slate-200">
-                <span className="text-[#ffad86]">{icon}</span>
+            <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">{label}</p>
+            <div className="mt-2 flex items-center gap-2 text-xs font-medium text-foreground">
+                <span className="text-primary">{icon}</span>
                 <span className="truncate">{value}</span>
             </div>
         </div>
     );
 }
 
-function MetricTile({ label, value, hint, accent = "emerald" }: { label: string; value: string; hint: string; accent?: "emerald" | "peach" | "slate" }) {
+function MetricTile({ label, value, hint, accent = "good" }: { label: string; value: string; hint: string; accent?: "good" | "primary" | "muted" }) {
     return (
-        <Card className="rounded-2xl border border-slate-800 bg-[#111a2e] shadow-none">
+        <Card className="rounded-2xl border border-border bg-card shadow-none">
             <CardContent className="p-5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">{label}</p>
                 <div className="mt-5 flex items-baseline gap-2">
-                    <p className={cn("text-3xl font-semibold tracking-[-0.04em]", accent === "peach" ? "text-[#ffad86]" : "text-slate-50")}>{value}</p>
-                    <span className={cn("text-[11px] font-semibold", accent === "emerald" ? "text-emerald-300" : accent === "peach" ? "text-[#ffad86]" : "text-slate-500")}>{hint}</span>
+                    <p className={cn("text-3xl font-semibold tracking-[-0.04em]", accent === "primary" ? "text-primary" : "text-foreground")}>{value}</p>
+                    <span className={cn("text-[11px] font-semibold", accent === "good" ? "text-[color:var(--status-good)]" : accent === "primary" ? "text-primary" : "text-muted-foreground")}>{hint}</span>
                 </div>
-                <div className="mt-5 h-1 rounded-full bg-slate-800">
-                    <div className={cn("h-full rounded-full", accent === "peach" ? "w-2/5 bg-[#ffad86]" : accent === "emerald" ? "w-3/4 bg-emerald-400" : "w-1/2 bg-slate-500")} />
+                <div className="mt-5 h-1 rounded-full bg-muted">
+                    <div className={cn("h-full rounded-full", accent === "primary" ? "w-2/5 bg-primary" : accent === "good" ? "w-3/4 bg-[color:var(--status-good)]" : "w-1/2 bg-muted-foreground")} />
                 </div>
             </CardContent>
         </Card>
@@ -222,25 +222,25 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
     };
 
     return (
-        <div className="min-h-full bg-[#091121] px-4 py-5 text-slate-100 md:px-7 md:py-6">
+        <div className="min-h-full bg-background px-4 py-5 text-foreground md:px-7 md:py-6">
             <div className="mx-auto max-w-[1260px] space-y-5">
                 <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <Link
                             href="/leads/outreach"
-                            className="inline-flex items-center gap-2 text-[11px] font-semibold text-slate-500 transition hover:text-slate-200"
+                            className="inline-flex items-center gap-2 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
                         >
                             <ArrowLeft className="h-3.5 w-3.5" />
                             Back to Dashboard
                         </Link>
-                        <div className="mt-5 flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                        <div className="mt-5 flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                             <CampaignStatusBadge status={data.campaign.status} />
                             <span>Started {formatDateTimeHumanReadable(data.campaign.createdAt)}</span>
                         </div>
-                        <h1 className="mt-2 text-4xl font-semibold tracking-[-0.06em] text-white md:text-5xl">
+                        <h1 className="mt-2 text-4xl font-semibold tracking-[-0.06em] text-foreground md:text-5xl">
                             {data.campaign.name}
                         </h1>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                             {data.campaign.description ?? data.campaign.campaignFocus?.goal ?? "Targeting high-intent leads for timely AI-assisted outreach and follow-up handoffs."}
                         </p>
                     </div>
@@ -248,7 +248,7 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                         <Button
                             type="button"
                             variant="outline"
-                            className="h-12 rounded-lg border-slate-700 bg-[#172033] px-7 text-slate-100 hover:bg-[#1d2940]"
+                            className="h-12 rounded-lg border-border bg-muted px-7 text-foreground hover:bg-accent"
                             onClick={handleToggleStatus}
                             disabled={isUpdatingStatus}
                         >
@@ -264,7 +264,7 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                                 </>
                             )}
                         </Button>
-                        <Button asChild className="h-12 rounded-lg bg-[#ffad86] px-7 font-semibold text-[#24140d] hover:bg-[#ffbd9d]">
+                        <Button asChild className="h-12 rounded-lg bg-primary px-7 font-semibold text-primary-foreground hover:bg-primary/90">
                             <Link href={`/leads/outreach/${data.campaign._id}/edit`}>
                                 <Pencil className="h-4 w-4" />
                                 Edit Workflow
@@ -276,17 +276,17 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                 <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <MetricTile label="Total Calls Made" value={formatCompactNumber(totalCalls)} hint={`${data.summary.queued + data.summary.in_progress} active`} />
                     <MetricTile label="Successful Connections" value={formatCompactNumber(connectedCount)} hint={`${successRate}% rate`} />
-                    <MetricTile label="Meetings Booked" value={formatCompactNumber(meetingsBooked)} hint="High" accent="peach" />
-                    <MetricTile label="Avg. Call Duration" value={formatDuration(averageDuration)} hint="" accent="slate" />
+                    <MetricTile label="Meetings Booked" value={formatCompactNumber(meetingsBooked)} hint="High" accent="primary" />
+                    <MetricTile label="Avg. Call Duration" value={formatDuration(averageDuration)} hint="" accent="muted" />
                 </section>
 
-                <Card className="rounded-2xl border border-slate-800 bg-[#111a2e] shadow-none">
+                <Card className="rounded-2xl border border-border bg-card shadow-none">
                     <CardContent className="p-5 md:p-6">
                         <div className="flex items-center gap-3">
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ffad86]/15 text-[#ffad86]">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-primary">
                                 <Sparkles className="h-4 w-4" />
                             </span>
-                            <h2 className="text-sm font-semibold text-slate-100">Campaign Runtime Rules</h2>
+                            <h2 className="text-sm font-semibold text-foreground">Campaign Runtime Rules</h2>
                         </div>
                         <div className="mt-6 grid gap-5 md:grid-cols-4">
                             <RuntimeFact label="Calling Window" value={windowLabel} icon={<CalendarDays className="h-3.5 w-3.5" />} />
@@ -298,20 +298,20 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                 </Card>
 
                 <section className="grid gap-5 xl:grid-cols-[315px_minmax(0,1fr)]">
-                    <Card className="rounded-2xl border border-slate-800 bg-[#111a2e] shadow-none">
+                    <Card className="rounded-2xl border border-border bg-card shadow-none">
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
-                                <h2 className="text-xs font-bold uppercase tracking-[0.22em] text-slate-300">Contacted Leads</h2>
+                                <h2 className="text-xs font-bold uppercase tracking-[0.22em] text-foreground/80">Contacted Leads</h2>
                                 <Button
                                     type="button"
                                     size="sm"
-                                    className="h-7 rounded-md bg-[#ffad86] px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[#24140d] hover:bg-[#ffbd9d]"
+                                    className="h-7 rounded-md bg-primary px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-primary-foreground hover:bg-primary/90"
                                     onClick={() => setIsAssignDialogOpen(true)}
                                 >
                                     Add
                                 </Button>
                             </div>
-                            <div className="mt-3 rounded-md bg-[#27324a] px-3 py-2 text-xs text-slate-500">Search leads...</div>
+                            <div className="mt-3 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">Search leads...</div>
                             <div className="mt-3 space-y-1.5">
                                 {data.campaignLeads.length > 0 ? (
                                     data.campaignLeads.slice(0, 12).map((lead) => {
@@ -323,13 +323,13 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                                                 onClick={() => setSelectedLeadId(lead.leadId)}
                                                 className={cn(
                                                     "w-full rounded-xl px-3 py-2.5 text-left transition",
-                                                    selected ? "bg-[#17233a]" : "hover:bg-[#172033]",
+                                                    selected ? "bg-accent" : "hover:bg-muted/60",
                                                 )}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div className="min-w-0">
-                                                        <p className="truncate text-sm font-semibold text-slate-100">{lead.leadName}</p>
-                                                        <p className="mt-1 truncate text-[11px] text-slate-500">{lead.leadPhone}</p>
+                                                        <p className="truncate text-sm font-semibold text-foreground">{lead.leadName}</p>
+                                                        <p className="mt-1 truncate text-[11px] text-muted-foreground">{lead.leadPhone}</p>
                                                     </div>
                                                     <span className={cn("text-[9px] font-bold uppercase tracking-[0.14em]", leadStateTone(lead.campaignState))}>
                                                         {lead.campaignState.replaceAll("_", " ")}
@@ -339,27 +339,27 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                                         );
                                     })
                                 ) : (
-                                    <div className="rounded-xl border border-dashed border-slate-700 px-4 py-8 text-center text-xs text-slate-500">No leads assigned yet.</div>
+                                    <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-xs text-muted-foreground">No leads assigned yet.</div>
                                 )}
                             </div>
                         </CardContent>
                     </Card>
 
-                    <Card className="rounded-2xl border border-slate-800 bg-[#111a2e] shadow-none">
+                    <Card className="rounded-2xl border border-border bg-card shadow-none">
                         <CardContent className="p-5">
                             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                 <div>
-                                    <h2 className="text-sm font-semibold text-slate-100">
+                                    <h2 className="text-sm font-semibold text-foreground">
                                         Log: {selectedLead?.leadName ?? "No lead selected"}
                                     </h2>
-                                    <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                                    <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                                         Viewing interactions for selected lead
                                     </p>
                                 </div>
-                                <div className="grid min-w-0 grid-cols-2 gap-x-6 gap-y-4 text-[10px] uppercase tracking-[0.18em] text-slate-500 md:grid-cols-[70px_minmax(150px,1.15fr)_minmax(120px,0.8fr)_minmax(140px,1fr)] lg:min-w-[560px]">
+                                <div className="grid min-w-0 grid-cols-2 gap-x-6 gap-y-4 text-[10px] uppercase tracking-[0.18em] text-muted-foreground md:grid-cols-[70px_minmax(150px,1.15fr)_minmax(120px,0.8fr)_minmax(140px,1fr)] lg:min-w-[560px]">
                                     <div className="min-w-0">
                                         <p>Attempts</p>
-                                        <strong className="mt-2 block text-sm text-slate-200">
+                                        <strong className="mt-2 block text-sm text-foreground">
                                             {selectedLead?.attempts ?? 0}
                                         </strong>
                                     </div>
@@ -370,7 +370,7 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                                                 "mt-2 block max-w-[180px] whitespace-normal break-words text-sm leading-4 tracking-[0.14em]",
                                                 selectedLead
                                                     ? leadStateTone(selectedLead.campaignState)
-                                                    : "text-slate-400",
+                                                    : "text-muted-foreground",
                                             )}
                                         >
                                             {selectedLead
@@ -382,13 +382,13 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                                     </div>
                                     <div className="min-w-0">
                                         <p>Last Status</p>
-                                        <strong className="mt-2 block truncate text-sm tracking-[0.12em] text-slate-200">
+                                        <strong className="mt-2 block truncate text-sm tracking-[0.12em] text-foreground">
                                             {selectedLead?.latestCallStatus ?? "-"}
                                         </strong>
                                     </div>
                                     <div className="min-w-0">
                                         <p>Last Outcome</p>
-                                        <strong className="mt-2 block max-w-[170px] whitespace-normal break-words text-sm leading-4 tracking-[0.14em] text-[#ffad86]">
+                                        <strong className="mt-2 block max-w-[170px] whitespace-normal break-words text-sm leading-4 tracking-[0.14em] text-primary">
                                             {selectedLead?.latestOutcome
                                                 ? getOutreachOutcomeLabel(
                                                       selectedLead.latestOutcome,
@@ -399,14 +399,14 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                                 </div>
                             </div>
 
-                            <div className="mt-8 grid grid-cols-[110px_90px_110px_minmax(150px,0.8fr)_minmax(220px,1.4fr)] gap-5 border-b border-slate-800 pb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 max-lg:hidden">
+                            <div className="mt-8 grid grid-cols-[110px_90px_110px_minmax(150px,0.8fr)_minmax(220px,1.4fr)] gap-5 border-b border-border pb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground max-lg:hidden">
                                 <span>Date/Time</span>
                                 <span>Type</span>
                                 <span>Status</span>
                                 <span>Outcome</span>
                                 <span>AI Summary</span>
                             </div>
-                            <div className="divide-y divide-slate-800/80">
+                            <div className="divide-y divide-border/60">
                                 {selectedLeadCalls.length > 0 ? (
                                     selectedLeadCalls.map((call) => (
                                         <button
@@ -417,20 +417,20 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                                                     router.push(`/leads/outreach/${data.campaign._id}/calls/${call.callId}`);
                                                 })
                                             }
-                                            className="grid w-full gap-3 py-4 text-left transition hover:bg-[#172033] lg:grid-cols-[110px_90px_110px_minmax(150px,0.8fr)_minmax(220px,1.4fr)] lg:gap-5 lg:px-2"
+                                            className="grid w-full gap-3 py-4 text-left transition hover:bg-muted/60 lg:grid-cols-[110px_90px_110px_minmax(150px,0.8fr)_minmax(220px,1.4fr)] lg:gap-5 lg:px-2"
                                         >
-                                            <div className="whitespace-normal text-xs leading-5 text-slate-400">
+                                            <div className="whitespace-normal text-xs leading-5 text-muted-foreground">
                                                 {formatDateTimeHumanReadable(
                                                     call.initiatedAt,
                                                 )}
                                             </div>
-                                            <div className="text-xs leading-5 text-slate-300">
+                                            <div className="text-xs leading-5 text-foreground/70">
                                                 {formatCallType(call.callStatus)}
                                             </div>
                                             <div>
                                                 <Badge
                                                     variant="outline"
-                                                    className="rounded-full border-emerald-500/20 bg-emerald-500/10 px-2 py-0 text-[9px] uppercase tracking-[0.14em] text-emerald-300"
+                                                    className="rounded-full border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 px-2 py-0 text-[9px] uppercase tracking-[0.14em] text-[color:var(--status-good)]"
                                                 >
                                                     {call.callStatus}
                                                 </Badge>
@@ -447,7 +447,7 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                                                       )
                                                     : "-"}
                                             </div>
-                                            <div className="line-clamp-2 text-xs leading-5 text-slate-500">
+                                            <div className="line-clamp-2 text-xs leading-5 text-muted-foreground">
                                                 {call.summary ??
                                                     call.errorMessage ??
                                                     "Open report for details."}
@@ -455,7 +455,7 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                                         </button>
                                     ))
                                 ) : (
-                                    <div className="py-14 text-center text-sm text-slate-500">No interaction log for this lead yet.</div>
+                                    <div className="py-14 text-center text-sm text-muted-foreground">No interaction log for this lead yet.</div>
                                 )}
                             </div>
                         </CardContent>
@@ -468,7 +468,7 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }) {
                 type="button"
                 aria-label="Add leads"
                 onClick={() => setIsAssignDialogOpen(true)}
-                className="fixed bottom-8 right-8 flex h-14 w-14 items-center justify-center rounded-full bg-[#ffad86] text-[#24140d] shadow-2xl shadow-black/40 transition hover:bg-[#ffbd9d]"
+                className="fixed bottom-8 right-8 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-2xl shadow-black/40 transition hover:bg-primary/90"
             >
                 <Plus className="h-6 w-6" />
             </button>

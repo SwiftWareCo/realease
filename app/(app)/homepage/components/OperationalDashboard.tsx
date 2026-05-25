@@ -13,7 +13,6 @@ import {
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { DashboardSkeleton } from "./DashboardSkeleton";
 import {
     formatDateHumanReadable,
     formatDateTimeHumanReadable,
@@ -29,6 +28,7 @@ import {
     Clock3,
     Handshake,
     ListChecks,
+    Loader2,
     MapPin,
     Phone,
     Quote,
@@ -354,7 +354,7 @@ function CockpitColumn({
                             className={cn(
                                 "h-4 w-4 text-primary",
                                 variant === "action" &&
-                                    "drop-shadow-[0_0_6px_hsl(var(--primary)/0.45)]",
+                                    "drop-shadow-[0_0_6px_color-mix(in_oklab,var(--primary)_45%,transparent)]",
                             )}
                         />
                         {title}
@@ -807,11 +807,15 @@ export function OperationalDashboard() {
     const dashboard = useQuery(api.dashboard.queries.getDashboardHome, {});
 
     if (dashboard === undefined) {
-        return <DashboardSkeleton />;
+        return (
+            <div className="flex h-[calc(100vh-64px)] items-center justify-center bg-background">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+        );
     }
 
     return (
-        <div className="h-[calc(100vh-64px)] overflow-hidden bg-[radial-gradient(at_top_left,hsl(var(--primary)/0.06),transparent_50%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))] text-foreground">
+        <div className="h-[calc(100vh-64px)] overflow-hidden bg-background text-foreground">
             <div className="mx-auto flex h-full max-w-[1600px] flex-col gap-5 px-4 py-4 md:px-6">
                 <header className="grid flex-shrink-0 gap-6 pb-1 xl:grid-cols-[minmax(260px,1fr)_230px_minmax(520px,620px)] xl:items-stretch">
                     <div className="min-w-0">
