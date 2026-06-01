@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, IBM_Plex_Mono, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./providers/ThemeProvider";
+import { ConvexClientProvider } from "./providers/ConvexClientProvider";
 import { ClerkProvider } from "@clerk/nextjs";
 
 const inter = Inter({
@@ -36,14 +37,16 @@ export default function RootLayout({
                 className={`${inter.variable} ${ibmPlexMono.variable} ${sourceSerif4.variable} h-svh overflow-hidden antialiased`}
             >
                 <ClerkProvider afterSignOutUrl={"/"}>
-                    <ThemeProvider
-                        attribute="class"
-                        defaultTheme="system"
-                        enableSystem
-                        disableTransitionOnChange
-                    >
-                        {children}
-                    </ThemeProvider>
+                    <ConvexClientProvider>
+                        <ThemeProvider
+                            attribute="class"
+                            defaultTheme="system"
+                            enableSystem
+                            disableTransitionOnChange
+                        >
+                            {children}
+                        </ThemeProvider>
+                    </ConvexClientProvider>
                 </ClerkProvider>
             </body>
         </html>

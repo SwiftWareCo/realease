@@ -1,4 +1,7 @@
-import { ConvexClientProvider } from "../providers/ConvexClientProvider";
+"use client";
+
+import { RedirectToSignIn } from "@clerk/nextjs";
+import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
 import { Sidebar } from "../../components/layout/Sidebar";
 import { TopBar } from "../../components/layout/TopBar";
 import { Toaster } from "@/components/ui/sonner";
@@ -6,7 +9,12 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
-        <ConvexClientProvider>
+        <>
+            <AuthLoading>{null}</AuthLoading>
+            <Unauthenticated>
+                <RedirectToSignIn />
+            </Unauthenticated>
+            <Authenticated>
             <SidebarProvider
                 defaultOpen={false}
                 className="h-svh overflow-hidden"
@@ -20,6 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarInset>
             </SidebarProvider>
             <Toaster richColors position="top-right" />
-        </ConvexClientProvider>
+            </Authenticated>
+        </>
     );
 }
