@@ -16,6 +16,7 @@ import {
     outreachSmsMessagesTable,
     outreachWebhookEventsTable,
 } from "./outreach/outreach.schema";
+import { tasksTable } from "./tasks/task.schema";
 
 export default defineSchema({
     events: eventsTable,
@@ -32,4 +33,5 @@ export default defineSchema({
     outreachCampaignLeadStates: outreachCampaignLeadStatesTable,
     outreachWebhookEvents: outreachWebhookEventsTable,
     outreachSmsMessages: outreachSmsMessagesTable,
+    tasks: tasksTable,
 });

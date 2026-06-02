@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,16 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
     formatDateHumanReadable,
@@ -31,12 +42,14 @@ import {
     Loader2,
     MapPin,
     Phone,
+    Plus,
     Quote,
     Radio,
     Route,
     UserRound,
     type LucideIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 
 type DashboardData = FunctionReturnType<
     typeof api.dashboard.queries.getDashboardHome
@@ -157,6 +170,14 @@ function eventBadgeClass(eventType: ScheduleItem["eventType"]) {
 }
 
 function workKindConfig(kind: WorkItem["kind"]) {
+    if (kind === "manual_task") {
+        return {
+            label: "Task",
+            Icon: ListChecks,
+            className:
+                "border-border bg-muted/60 text-muted-foreground dark:bg-muted/40",
+        };
+    }
     if (kind === "callback") {
         return {
             label: "Callback",
@@ -372,7 +393,13 @@ function CockpitColumn({
     );
 }
 
-function WorkQueueColumn({ items }: { items: WorkItem[] }) {
+function WorkQueueColumn({
+    items,
+    onDismissTask,
+}: {
+    items: WorkItem[];
+    onDismissTask: (taskId: Id<"tasks">) => void;
+}) {
     if (items.length === 0) {
         return (
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center px-6 text-center">
@@ -394,74 +421,206 @@ function WorkQueueColumn({ items }: { items: WorkItem[] }) {
             {items.map((item) => {
                 const config = workKindConfig(item.kind);
                 const Icon = config.Icon;
-                return (
-                    <li key={item.id}>
-                        <Link
-                            href={item.href}
-                            className={cn(
-                                "group block border-l-2 px-4 py-3.5",
-                                priorityRailClass(item.priority),
-                                interactionClass(workTone(item.kind)),
-                            )}
-                        >
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Badge
-                                    variant="outline"
-                                    className={cn(
-                                        "rounded-sm capitalize",
-                                        config.className,
-                                    )}
-                                >
-                                    <Icon className="h-3 w-3" />
-                                    {config.label}
-                                </Badge>
-                                <Badge
-                                    variant="outline"
-                                    className={cn(
-                                        "rounded-sm capitalize",
-                                        priorityClass(item.priority),
-                                    )}
-                                >
-                                    {item.priority}
-                                </Badge>
-                                {item.lead ? (
-                                    <span className="truncate text-xs text-muted-foreground">
-                                        {item.lead.intent} lead
-                                    </span>
-                                ) : null}
+                const content = (
+                    <>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                                variant="outline"
+                                className={cn(
+                                    "rounded-sm capitalize",
+                                    config.className,
+                                )}
+                            >
+                                <Icon className="h-3 w-3" />
+                                {config.label}
+                            </Badge>
+                            <Badge
+                                variant="outline"
+                                className={cn(
+                                    "rounded-sm capitalize",
+                                    priorityClass(item.priority),
+                                )}
+                            >
+                                {item.priority}
+                            </Badge>
+                            {item.lead ? (
+                                <span className="truncate text-xs text-muted-foreground">
+                                    {item.lead.intent} lead
+                                </span>
+                            ) : null}
+                        </div>
+                        <div className="mt-2 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <h3 className="truncate text-sm font-semibold text-foreground">
+                                    {item.title}
+                                </h3>
+                                <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">
+                                    {item.description}
+                                </p>
                             </div>
-                            <div className="mt-2 flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <h3 className="truncate text-sm font-semibold text-foreground">
-                                        {item.title}
-                                    </h3>
-                                    <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">
-                                        {item.description}
-                                    </p>
-                                </div>
+                            {item.task ? (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 shrink-0 px-2 text-xs"
+                                    onClick={() => onDismissTask(item.task!._id)}
+                                >
+                                    Dismiss
+                                </Button>
+                            ) : (
                                 <span className="mt-0.5 shrink-0 text-xs font-semibold text-primary transition-transform duration-200 group-hover:translate-x-0.5">
                                     {item.actionLabel}
                                 </span>
-                            </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                <span className="inline-flex items-center gap-1">
-                                    <Clock3 className="h-3.5 w-3.5" />
-                                    {formatDue(item.dueAt)}
-                                </span>
-                                {item.campaign ? (
-                                    <span className="inline-flex min-w-0 items-center gap-1">
-                                        <Radio className="h-3.5 w-3.5" />
-                                        <span className="truncate">
-                                            {item.campaign.name}
-                                        </span>
+                            )}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1">
+                                <Clock3 className="h-3.5 w-3.5" />
+                                {formatDue(item.dueAt)}
+                            </span>
+                            {item.campaign ? (
+                                <span className="inline-flex min-w-0 items-center gap-1">
+                                    <Radio className="h-3.5 w-3.5" />
+                                    <span className="truncate">
+                                        {item.campaign.name}
                                     </span>
-                                ) : null}
+                                </span>
+                            ) : null}
+                        </div>
+                    </>
+                );
+
+                return (
+                    <li key={item.id}>
+                        {item.task ? (
+                            <div
+                                className={cn(
+                                    "group block border-l-2 px-4 py-3.5",
+                                    priorityRailClass(item.priority),
+                                )}
+                            >
+                                {content}
                             </div>
-                        </Link>
+                        ) : (
+                            <Link
+                                href={item.href}
+                                className={cn(
+                                    "group block border-l-2 px-4 py-3.5",
+                                    priorityRailClass(item.priority),
+                                    interactionClass(workTone(item.kind)),
+                                )}
+                            >
+                                {content}
+                            </Link>
+                        )}
                     </li>
                 );
             })}
         </ol>
+    );
+}
+
+function CreateTaskDialog({
+    open,
+    onOpenChange,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const createTask = useMutation(api.tasks.mutations.createTask);
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [dueAt, setDueAt] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+
+    const resetForm = () => {
+        setTitle("");
+        setDescription("");
+        setDueAt("");
+    };
+
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const trimmedTitle = title.trim();
+        if (!trimmedTitle) {
+            return;
+        }
+
+        try {
+            setIsSaving(true);
+            await createTask({
+                title: trimmedTitle,
+                description: description.trim() || undefined,
+                due_at: dueAt ? new Date(dueAt).getTime() : undefined,
+            });
+            toast.success("Task created");
+            resetForm();
+            onOpenChange(false);
+        } catch (error) {
+            console.error("Failed to create task:", error);
+            toast.error("Failed to create task");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[460px]">
+                <DialogHeader>
+                    <DialogTitle>Create task</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="task-title">Title</Label>
+                        <Input
+                            id="task-title"
+                            value={title}
+                            onChange={(event) => setTitle(event.target.value)}
+                            placeholder="Follow up with lender"
+                            required
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="task-due">Due date and time</Label>
+                        <Input
+                            id="task-due"
+                            type="datetime-local"
+                            value={dueAt}
+                            onChange={(event) => setDueAt(event.target.value)}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="task-description">Description</Label>
+                        <Textarea
+                            id="task-description"
+                            value={description}
+                            onChange={(event) =>
+                                setDescription(event.target.value)
+                            }
+                            placeholder="Add any context that helps later"
+                            rows={3}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={!title.trim() || isSaving}
+                        >
+                            {isSaving ? "Creating..." : "Create task"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -476,7 +635,7 @@ function CalendarColumn({ items }: { items: ScheduleItem[] }) {
 
     return (
         <div className="px-4 py-4">
-            <div className="relative space-y-2 pl-4 before:absolute before:inset-y-2 before:left-1 before:w-px before:bg-border/80">
+            <div className="relative space-y-2 pl-6 before:absolute before:inset-y-2 before:left-3 before:w-px before:bg-border/80">
                 {items.map((event) => (
                     <Link
                         key={event._id}
@@ -486,7 +645,7 @@ function CalendarColumn({ items }: { items: ScheduleItem[] }) {
                             interactionClass("blue"),
                         )}
                     >
-                        <span className="absolute left-[-0.85rem] top-4 h-2.5 w-2.5 rounded-full border-2 border-card bg-[color:var(--status-info)]" />
+                        <span className="absolute left-[-1.0625rem] top-4 h-2.5 w-2.5 rounded-full border-2 border-card bg-[color:var(--status-info)]" />
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <p className="truncate text-sm font-semibold">
@@ -563,20 +722,20 @@ function OutreachReviewPanel({
     const outreachItems = dashboard.outreachReviewItems;
     const groups = [
         {
+            id: "callbacks" as const,
+            title: "Callbacks",
+            count: dashboard.outreach.callbacks,
+            description: "People who asked to be called back",
+            items: outreachItems.filter((item) => item.kind === "callback"),
+            defaultOpen: dashboard.outreach.callbacks > 0,
+        },
+        {
             id: "issues" as const,
             title: "Issues",
             count: dashboard.outreach.problems,
             description: "Failed calls, wrong numbers, scheduler errors",
             items: outreachItems.filter((item) => item.kind === "campaign_problem"),
             defaultOpen: dashboard.outreach.problems > 0,
-        },
-        {
-            id: "callbacks" as const,
-            title: "Callbacks",
-            count: dashboard.outreach.callbacks,
-            description: "People who asked to be called back",
-            items: outreachItems.filter((item) => item.kind === "callback"),
-            defaultOpen: false,
         },
         {
             id: "handoffs" as const,
@@ -604,10 +763,10 @@ function OutreachReviewPanel({
                 <div className="min-w-0">
                     <h2 className="flex items-center gap-2 font-serif text-base font-semibold italic">
                         <Radio className="h-4 w-4 text-primary" />
-                        Outreach review
+                        Campaign outcomes
                     </h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                        Why campaign work needs you
+                        Campaign results that need review
                     </p>
                 </div>
                 <Button asChild variant="ghost" size="sm">
@@ -763,28 +922,37 @@ function CampaignReviewRow({ campaign }: { campaign: CampaignRollup }) {
     );
 }
 
-function TodayCockpit({ dashboard }: { dashboard: DashboardData }) {
+function TodayCockpit({
+    dashboard,
+    onAddTask,
+    onDismissTask,
+}: {
+    dashboard: DashboardData;
+    onAddTask: () => void;
+    onDismissTask: (taskId: Id<"tasks">) => void;
+}) {
     return (
         <section className="grid min-h-[760px] gap-5 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)] xl:gap-6">
             <CockpitColumn
-                title="Do now"
-                description={`${dashboard.workQueue.length} dated actions`}
+                title="Tasks"
+                description={`${dashboard.workQueue.length} open items`}
                 icon={ListChecks}
                 variant="action"
                 action={
-                    <Button asChild variant="ghost" size="sm">
-                        <Link href="/leads/network">
-                            Leads
-                            <ChevronRight className="h-4 w-4" />
-                        </Link>
+                    <Button variant="ghost" size="sm" onClick={onAddTask}>
+                        <Plus className="h-4 w-4" />
+                        New task
                     </Button>
                 }
             >
-                <WorkQueueColumn items={dashboard.workQueue} />
+                <WorkQueueColumn
+                    items={dashboard.workQueue}
+                    onDismissTask={onDismissTask}
+                />
             </CockpitColumn>
 
             <CockpitColumn
-                title="Calendar"
+                title="Upcoming events"
                 description="Appointments and follow-ups"
                 icon={CalendarDays}
                 variant="quiet"
@@ -805,6 +973,18 @@ function TodayCockpit({ dashboard }: { dashboard: DashboardData }) {
 
 export function OperationalDashboard() {
     const dashboard = useQuery(api.dashboard.queries.getDashboardHome, {});
+    const dismissTask = useMutation(api.tasks.mutations.dismissTask);
+    const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+
+    const handleDismissTask = async (taskId: Id<"tasks">) => {
+        try {
+            await dismissTask({ id: taskId });
+            toast.success("Task dismissed");
+        } catch (error) {
+            console.error("Failed to dismiss task:", error);
+            toast.error("Failed to dismiss task");
+        }
+    };
 
     if (dashboard === undefined) {
         return (
@@ -876,11 +1056,19 @@ export function OperationalDashboard() {
 
                 <main className="min-h-0 flex-1 overflow-y-auto pr-1 xl:overflow-hidden">
                     <div className="grid min-h-[1120px] gap-6 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
-                        <TodayCockpit dashboard={dashboard} />
+                        <TodayCockpit
+                            dashboard={dashboard}
+                            onAddTask={() => setIsTaskDialogOpen(true)}
+                            onDismissTask={handleDismissTask}
+                        />
                         <OutreachReviewPanel dashboard={dashboard} />
                     </div>
                 </main>
             </div>
+            <CreateTaskDialog
+                open={isTaskDialogOpen}
+                onOpenChange={setIsTaskDialogOpen}
+            />
         </div>
     );
 }

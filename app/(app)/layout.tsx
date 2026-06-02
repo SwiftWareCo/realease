@@ -15,19 +15,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <RedirectToSignIn />
             </Unauthenticated>
             <Authenticated>
-            <SidebarProvider
-                defaultOpen={false}
-                className="h-svh overflow-hidden"
-            >
-                <Sidebar />
-                <SidebarInset className="min-h-0">
-                    <TopBar />
-                    <main className="flex-1 min-h-0 overflow-y-auto">
-                        {children}
-                    </main>
-                </SidebarInset>
-            </SidebarProvider>
-            <Toaster richColors position="top-right" />
+                <SidebarProvider
+                    defaultOpen={false}
+                    className="h-svh overflow-hidden"
+                >
+                    <Sidebar />
+                    <SidebarInset className="min-h-0">
+                        <TopBar />
+                        <main className="flex-1 min-h-0 overflow-y-auto">
+                            {children}
+                        </main>
+                    </SidebarInset>
+                </SidebarProvider>
+                <Toaster richColors position="top-right" />
             </Authenticated>
         </>
     );

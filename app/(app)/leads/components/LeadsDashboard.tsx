@@ -24,10 +24,8 @@ import { LeadsStatCards } from "./LeadsStatCards";
 import { LeadsEngineRow } from "./LeadsEngineRow";
 import { useRouter } from "next/navigation";
 import {
-    deriveTier,
     formatOrigin,
     getOriginIcon,
-    getTierColor,
     parseMarket,
 } from "./leads-ui";
 
@@ -35,6 +33,8 @@ type StatusFilter = "all" | "new" | "contacted" | "qualified";
 type IntentFilter = "all" | "buyer" | "seller" | "investor";
 type DateFilter = "any" | "today" | "7d" | "30d" | "90d";
 type ScoreFilter = "any" | "80" | "65" | "50";
+type SortKey = "lead" | "score" | "source" | "status" | "date" | "tags";
+type SortDirection = "asc" | "desc";
 
 const normalizeLabel = (value: string) =>
     value
@@ -53,17 +53,28 @@ const formatCreatedAt = (timestamp: number) =>
         year: "numeric",
     });
 
+const quietBadgeClass = "border-border bg-muted/55 text-muted-foreground";
+
 const intentConfig = {
-    buyer: "border-sky-500/30 bg-sky-500/10 text-sky-200",
-    seller: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
-    investor: "border-violet-500/30 bg-violet-500/10 text-violet-200",
+    buyer: quietBadgeClass,
+    seller: quietBadgeClass,
+    investor: quietBadgeClass,
 } as const;
 
 const statusConfig = {
-    new: "border-blue-500/30 bg-blue-500/10 text-blue-200",
-    contacted: "border-amber-500/30 bg-amber-500/10 text-amber-200",
-    qualified: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+    new: quietBadgeClass,
+    contacted: quietBadgeClass,
+    qualified: quietBadgeClass,
 } as const;
+
+const sortableColumns: { key: SortKey; label: string }[] = [
+    { key: "lead", label: "Lead" },
+    { key: "score", label: "AI Score" },
+    { key: "source", label: "Source" },
+    { key: "status", label: "Status" },
+    { key: "date", label: "Date Added" },
+    { key: "tags", label: "Tags" },
+];
 
 export function LeadsDashboard() {
     const router = useRouter();
@@ -77,7 +88,10 @@ export function LeadsDashboard() {
     const [dateFilter, setDateFilter] = useState<DateFilter>("any");
     const [scoreFilter, setScoreFilter] = useState<ScoreFilter>("any");
     const [search, setSearch] = useState("");
-    const [sortByScore, setSortByScore] = useState(false);
+    const [sort, setSort] = useState<{
+        key: SortKey;
+        direction: SortDirection;
+    }>({ key: "date", direction: "desc" });
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
 
@@ -168,17 +182,34 @@ export function LeadsDashboard() {
                 return haystack.includes(searchValue);
             })
             .sort((a, b) => {
-                if (sortByScore) {
-                    return (b.urgency_score ?? 0) - (a.urgency_score ?? 0);
+                let result = 0;
+                if (sort.key === "lead") {
+                    result = a.name.localeCompare(b.name);
+                } else if (sort.key === "score") {
+                    result = (a.urgency_score ?? 0) - (b.urgency_score ?? 0);
+                } else if (sort.key === "source") {
+                    result = formatOrigin(a.source).localeCompare(
+                        formatOrigin(b.source),
+                    );
+                } else if (sort.key === "status") {
+                    result = a.status.localeCompare(b.status);
+                } else if (sort.key === "tags") {
+                    result = (a.tags ?? []).join(", ").localeCompare(
+                        (b.tags ?? []).join(", "),
+                    );
+                } else {
+                    result =
+                        (a.created_at ?? a._creationTime) -
+                        (b.created_at ?? b._creationTime);
                 }
-                return (b.created_at ?? b._creationTime) - (a.created_at ?? a._creationTime);
+                return sort.direction === "asc" ? result : -result;
             });
     }, [
         allLeads,
         dateFilter,
         intentFilter,
         now,
-        sortByScore,
+        sort,
         scoreFilter,
         search,
         sourceFilter,
@@ -198,6 +229,21 @@ export function LeadsDashboard() {
 
     const openLeadProfile = (leadId: string) => {
         router.push(`/leads/${leadId}`);
+    };
+
+    const handleSort = (key: SortKey) => {
+        setSort((current) => {
+            if (current.key === key) {
+                return {
+                    key,
+                    direction: current.direction === "asc" ? "desc" : "asc",
+                };
+            }
+            return {
+                key,
+                direction: key === "lead" || key === "source" ? "asc" : "desc",
+            };
+        });
     };
 
     if (allLeads === undefined) {
@@ -280,15 +326,6 @@ export function LeadsDashboard() {
                                     {activeFilterCount}
                                 </span>
                             )}
-                        </Button>
-                        <Button
-                            variant={sortByScore ? "default" : "outline"}
-                            size="sm"
-                            className="h-8 gap-1.5 px-2.5 text-xs"
-                            onClick={() => setSortByScore((current) => !current)}
-                        >
-                            <ArrowUpDown className="h-3.5 w-3.5" />
-                            Sort by AI Score
                         </Button>
                         <Button
                             size="sm"
@@ -412,19 +449,30 @@ export function LeadsDashboard() {
                                 </colgroup>
                                 <TableHeader className="sticky top-0 z-20 border-b border-border/60 bg-muted/95 backdrop-blur supports-[backdrop-filter]:bg-muted/80">
                                     <TableRow className="border-0 hover:bg-transparent">
-                                        {[
-                                            "Lead",
-                                            "AI Score",
-                                            "Source",
-                                            "Status",
-                                            "Date Added",
-                                            "Tags",
-                                        ].map((label) => (
+                                        {sortableColumns.map((column) => (
                                             <TableHead
-                                                key={label}
-                                                className="h-11 px-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
+                                                key={column.key}
+                                                className="h-11 px-2"
                                             >
-                                                {label}
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+                                                    onClick={() =>
+                                                        handleSort(column.key)
+                                                    }
+                                                >
+                                                    {column.label}
+                                                    <ArrowUpDown
+                                                        className={cn(
+                                                            "h-3.5 w-3.5",
+                                                            sort.key === column.key
+                                                                ? "text-foreground"
+                                                                : "text-muted-foreground/50",
+                                                        )}
+                                                    />
+                                                </Button>
                                             </TableHead>
                                         ))}
                                     </TableRow>
@@ -435,8 +483,6 @@ export function LeadsDashboard() {
                                             0,
                                             Math.min(100, lead.urgency_score ?? 0),
                                         );
-                                        const tier = deriveTier(lead);
-                                        const tierColor = getTierColor(tier);
                                         const market = parseMarket(lead);
                                         const origin = formatOrigin(lead.source);
                                         const tags = lead.tags ?? [];
@@ -464,18 +510,12 @@ export function LeadsDashboard() {
                                             >
                                                 <TableCell className="relative py-4 pl-4 pr-4">
                                                     <span
-                                                        className={cn(
-                                                            "absolute left-0 top-1/2 h-10 w-1 -translate-y-1/2 rounded-full",
-                                                            tierColor.accent,
-                                                        )}
+                                                        className="absolute left-0 top-1/2 h-10 w-1 -translate-y-1/2 rounded-full bg-border"
                                                         aria-hidden
                                                     />
                                                     <div className="flex min-w-0 items-center gap-3 pl-3">
                                                         <div
-                                                            className={cn(
-                                                                "flex h-10 w-10 flex-none items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground ring-1 ring-border",
-                                                                tierColor.glow,
-                                                            )}
+                                                            className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground ring-1 ring-border"
                                                         >
                                                             {initial}
                                                         </div>
@@ -511,10 +551,7 @@ export function LeadsDashboard() {
                                                         </span>
                                                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                                                             <div
-                                                                className={cn(
-                                                                    "h-full rounded-full transition-all",
-                                                                    tierColor.bar,
-                                                                )}
+                                                                className="h-full rounded-full bg-muted-foreground/50 transition-all"
                                                                 style={{
                                                                     width: `${score}%`,
                                                                 }}

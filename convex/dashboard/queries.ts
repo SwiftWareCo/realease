@@ -7,8 +7,9 @@ import {
 } from "../outreach/counters";
 
 type Priority = "urgent" | "high" | "normal" | "low";
-type WorkSource = "lead" | "outreach" | "pipeline" | "calendar";
+type WorkSource = "lead" | "outreach" | "pipeline" | "calendar" | "task";
 type WorkKind =
+    | "manual_task"
     | "new_lead"
     | "callback"
     | "qualified_handoff"
@@ -43,6 +44,10 @@ type WorkItem = {
         outcome: Doc<"outreachCalls">["outcome"] | null;
         status: Doc<"outreachCalls">["call_status"];
         initiatedAt: number;
+    } | null;
+    task: {
+        _id: Id<"tasks">;
+        status: Doc<"tasks">["status"];
     } | null;
 };
 
@@ -105,6 +110,13 @@ function callContext(call: Doc<"outreachCalls">): WorkItem["call"] {
         outcome: call.outcome ?? null,
         status: call.call_status,
         initiatedAt: call.initiated_at,
+    };
+}
+
+function taskContext(task: Doc<"tasks">): WorkItem["task"] {
+    return {
+        _id: task._id,
+        status: task.status,
     };
 }
 
@@ -209,14 +221,16 @@ function sortWorkItems(items: WorkItem[]) {
 }
 
 function isDoNowAction(item: WorkItem) {
+    if (item.kind === "manual_task") {
+        return true;
+    }
+
     if (item.dueAt === null) {
         return false;
     }
-
     return (
         item.kind === "new_lead" ||
-        item.kind === "callback" ||
-        item.kind === "calendar_event"
+        item.kind === "callback"
     );
 }
 
@@ -234,6 +248,7 @@ export const getDashboardHome = query({
             campaigns,
             ownedEvents,
             legacyEventCandidates,
+            manualTasks,
         ] = await Promise.all([
                 ctx.db
                     .query("leads")
@@ -266,6 +281,13 @@ export const getDashboardHome = query({
                     )
                     .order("asc")
                     .take(30),
+                ctx.db
+                    .query("tasks")
+                    .withIndex("by_created_by_user_id_and_status_and_due_at", (q) =>
+                        q.eq("created_by_user_id", userId).eq("status", "open"),
+                    )
+                    .order("asc")
+                    .take(50),
             ]);
 
         const leadsById = new Map(leads.map((lead) => [String(lead._id), lead]));
@@ -394,6 +416,7 @@ export const getDashboardHome = query({
                             lead: leadContext(lead),
                             campaign: campaignContext(campaign),
                             call: callContext(call),
+                            task: null,
                         });
                     } else if (call.outcome === "connected_interested") {
                         putWorkItem(itemsById, {
@@ -411,6 +434,7 @@ export const getDashboardHome = query({
                             lead: leadContext(lead),
                             campaign: campaignContext(campaign),
                             call: callContext(call),
+                            task: null,
                         });
                     } else if (
                         call.call_status === "failed" ||
@@ -432,6 +456,7 @@ export const getDashboardHome = query({
                             lead: leadContext(lead),
                             campaign: campaignContext(campaign),
                             call: callContext(call),
+                            task: null,
                         });
                     }
                 }
@@ -457,6 +482,7 @@ export const getDashboardHome = query({
                         lead: leadContext(lead),
                         campaign: campaignContext(campaign),
                         call: null,
+                        task: null,
                     });
                 }
 
@@ -479,6 +505,7 @@ export const getDashboardHome = query({
                         lead: leadContext(lead),
                         campaign: campaignContext(campaign),
                         call: null,
+                        task: null,
                     });
                 }
 
@@ -515,6 +542,7 @@ export const getDashboardHome = query({
                     lead: leadContext(lead),
                     campaign: null,
                     call: null,
+                    task: null,
                 });
             }
 
@@ -533,8 +561,29 @@ export const getDashboardHome = query({
                     lead: leadContext(lead),
                     campaign: null,
                     call: null,
+                    task: null,
                 });
             }
+        }
+
+        for (const task of manualTasks) {
+            putWorkItem(itemsById, {
+                id: `manual-task:${task._id}`,
+                kind: "manual_task",
+                source: "task",
+                priority: task.due_at !== undefined && task.due_at <= now
+                    ? "high"
+                    : "normal",
+                title: task.title,
+                description: task.description ?? "Manual task",
+                dueAt: task.due_at ?? null,
+                href: "/",
+                actionLabel: "Task",
+                lead: null,
+                campaign: null,
+                call: null,
+                task: taskContext(task),
+            });
         }
 
         const visibleEvents = events
@@ -553,7 +602,7 @@ export const getDashboardHome = query({
                     startTime: event.start_time,
                     endTime: event.end_time,
                     location: event.location ?? null,
-                    href: event.lead_id ? leadHref(event.lead_id) : "/calendar",
+                    href: `/calendar?eventId=${event._id}`,
                     lead: leadContext(
                         lead?.created_by_user_id === userId ? lead : null,
                     ),
@@ -577,6 +626,7 @@ export const getDashboardHome = query({
                 lead: event.lead,
                 campaign: null,
                 call: null,
+                task: null,
             });
         }
 

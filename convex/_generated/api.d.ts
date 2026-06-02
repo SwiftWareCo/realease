@@ -53,6 +53,7 @@ import type * as outreach_phone from "../outreach/phone.js";
 import type * as outreach_queries from "../outreach/queries.js";
 import type * as outreach_runtimeSummary from "../outreach/runtimeSummary.js";
 import type * as outreach_templates from "../outreach/templates.js";
+import type * as tasks_mutations from "../tasks/mutations.js";
 import type * as twilio_twilio from "../twilio/twilio.js";
 import type * as users from "../users.js";
 import type * as users_mutations from "../users/mutations.js";
@@ -109,6 +110,7 @@ declare const fullApi: ApiFromModules<{
   "outreach/queries": typeof outreach_queries;
   "outreach/runtimeSummary": typeof outreach_runtimeSummary;
   "outreach/templates": typeof outreach_templates;
+  "tasks/mutations": typeof tasks_mutations;
   "twilio/twilio": typeof twilio_twilio;
   users: typeof users;
   "users/mutations": typeof users_mutations;
