@@ -686,9 +686,6 @@ export const getDashboardHome = query({
             schedule,
             outreach: {
                 ...outreachSummary,
-                campaigns: campaignRollups
-                    .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
-                    .slice(0, 4),
             },
             pipelineGaps,
         };

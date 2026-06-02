@@ -59,7 +59,6 @@ type DashboardData = FunctionReturnType<
 >;
 type WorkItem = DashboardData["workQueue"][number];
 type ScheduleItem = DashboardData["schedule"][number];
-type CampaignRollup = DashboardData["outreach"]["campaigns"][number];
 
 const DAILY_QUOTE = {
     text: "The best time to buy a home was 10 years ago. The second best time is now.",
@@ -157,10 +156,10 @@ function interactionClass(tone: "amber" | "blue" | "emerald" | "red" | "violet" 
 }
 
 function workTone(kind: WorkItem["kind"]) {
-    if (kind === "callback" || kind === "campaign_problem") {
+    if (kind === "campaign_problem") {
         return "red";
     }
-    if (kind === "qualified_handoff") {
+    if (kind === "callback" || kind === "qualified_handoff") {
         return "emerald";
     }
     if (kind === "pipeline_gap") {
@@ -193,15 +192,15 @@ function workKindConfig(kind: WorkItem["kind"]) {
     }
     if (kind === "callback") {
         return {
-            label: "Callback",
+            label: "Follow-up",
             Icon: Phone,
             className:
-                "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
+                "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
         };
     }
     if (kind === "qualified_handoff") {
         return {
-            label: "Handoff",
+            label: "Follow-up",
             Icon: Handshake,
             className:
                 "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
@@ -823,44 +822,38 @@ function isPauseItem(item: WorkItem) {
     return item.kind === "qualified_handoff" && /pause/i.test(item.title);
 }
 
-type OutcomeFilter = "all" | "callbacks" | "issues" | "handoffs" | "paused";
+type OutcomeFilter = "all" | "followups" | "issues" | "paused";
 
 function outcomeFilterForItem(item: WorkItem): Exclude<OutcomeFilter, "all"> {
-    if (item.kind === "callback") {
-        return "callbacks";
-    }
     if (item.kind === "campaign_problem") {
         return "issues";
     }
     if (isPauseItem(item)) {
         return "paused";
     }
-    return "handoffs";
+    return "followups";
 }
 
 function outcomeLabel(item: WorkItem) {
     const filter = outcomeFilterForItem(item);
-    if (filter === "callbacks") {
-        return "Callback";
-    }
     if (filter === "issues") {
         return "Issue";
     }
     if (filter === "paused") {
         return "Paused";
     }
-    return "Handoff";
+    return "Follow-up";
 }
 
 function outcomeTone(item: WorkItem) {
     const filter = outcomeFilterForItem(item);
-    if (filter === "issues" || filter === "callbacks") {
+    if (filter === "issues") {
         return {
             badge: "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
             hover: "red" as const,
         };
     }
-    if (filter === "handoffs") {
+    if (filter === "followups") {
         return {
             badge: "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
             hover: "emerald" as const,
@@ -872,9 +865,26 @@ function outcomeTone(item: WorkItem) {
     };
 }
 
+function reviewTitle(item: WorkItem) {
+    const filter = outcomeFilterForItem(item);
+    if (filter === "followups" && item.lead) {
+        return `Follow up with ${item.lead.name}`;
+    }
+    return item.title;
+}
+
+function reviewDescription(item: WorkItem) {
+    if (outcomeFilterForItem(item) !== "followups") {
+        return item.description;
+    }
+    return item.description.replace(/\bcallbacks?\b/gi, "follow-up");
+}
+
 function OutreachReviewPanel({ dashboard }: { dashboard: DashboardData }) {
     const outreachItems = dashboard.outreachReviewItems;
     const [filter, setFilter] = useState<OutcomeFilter>("all");
+    const followUpCount =
+        dashboard.outreach.callbacks + dashboard.outreach.interested;
     const filters: { id: OutcomeFilter; label: string; count: number }[] = [
         {
             id: "all",
@@ -882,19 +892,14 @@ function OutreachReviewPanel({ dashboard }: { dashboard: DashboardData }) {
             count: dashboard.overview.campaignReviewCount,
         },
         {
-            id: "callbacks",
-            label: "Callbacks",
-            count: dashboard.outreach.callbacks,
+            id: "followups",
+            label: "Follow-ups",
+            count: followUpCount,
         },
         {
             id: "issues",
             label: "Issues",
             count: dashboard.outreach.problems,
-        },
-        {
-            id: "handoffs",
-            label: "Handoffs",
-            count: dashboard.outreach.interested,
         },
         {
             id: "paused",
@@ -913,10 +918,10 @@ function OutreachReviewPanel({ dashboard }: { dashboard: DashboardData }) {
                 <div className="min-w-0">
                     <h2 className="flex items-center gap-2 font-serif text-base font-semibold italic">
                         <Radio className="h-4 w-4 text-primary" />
-                        Campaign outcomes
+                        Review inbox
                     </h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                        One review inbox for campaign decisions
+                        Follow-ups, issues, and paused outreach
                     </p>
                 </div>
                 <Button asChild variant="ghost" size="sm">
@@ -950,7 +955,7 @@ function OutreachReviewPanel({ dashboard }: { dashboard: DashboardData }) {
             <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-gutter:stable]">
                 {visibleItems.length === 0 ? (
                     <div className="flex min-h-[180px] items-center rounded-lg border border-dashed border-border/70 px-4 text-sm text-muted-foreground">
-                        No campaign outcomes in this view.
+                        No review items in this view.
                     </div>
                 ) : (
                     <div className="divide-y divide-border overflow-hidden rounded-lg border border-border/60 bg-muted/20">
@@ -984,86 +989,31 @@ function OutreachReviewPanel({ dashboard }: { dashboard: DashboardData }) {
                                                 ) : null}
                                             </div>
                                             <p className="mt-2 line-clamp-1 text-sm font-semibold">
-                                                {item.title}
+                                                {reviewTitle(item)}
                                             </p>
                                             <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                                                {item.description}
+                                                {reviewDescription(item)}
                                             </p>
                                         </div>
                                         <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
                                     </div>
                                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                         <span>{formatDue(item.dueAt)}</span>
-                                        {item.campaign ? (
-                                            <span className="truncate">
-                                                {item.campaign.name}
-                                            </span>
-                                        ) : null}
+                                        <span className="font-semibold text-primary">
+                                            Open
+                                        </span>
                                     </div>
                                 </Link>
                             );
                         })}
                     </div>
                 )}
-
-                {dashboard.outreach.campaigns.length > 0 ? (
-                    <div className="mt-3 border-t border-border/60 pt-3">
-                        <p className="px-1 text-xs font-medium text-muted-foreground">
-                            Campaigns
-                        </p>
-                        <div className="mt-2 space-y-2">
-                            {dashboard.outreach.campaigns.map((campaign) => (
-                                <CampaignReviewRow
-                                    key={campaign.campaignId}
-                                    campaign={campaign}
-                                />
-                            ))}
-                        </div>
-                    </div>
-                ) : null}
             </div>
         </aside>
     );
 }
 
-function CampaignReviewRow({ campaign }: { campaign: CampaignRollup }) {
-    const needsAttention =
-        campaign.callbacks + campaign.pausedForReview + campaign.problems;
-
-    return (
-        <Link
-            href={campaign.href}
-            className={cn(
-                "group block rounded-lg border border-border/60 bg-muted/30 px-3 py-3",
-                interactionClass(needsAttention > 0 ? "amber" : "emerald"),
-            )}
-        >
-            <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">
-                        {campaign.campaignName}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        {campaign.activeLeads} active leads
-                    </p>
-                </div>
-                <Badge
-                    variant="outline"
-                    className={cn(
-                        "rounded-sm capitalize",
-                        needsAttention > 0
-                            ? "border-[color:var(--status-attention)]/30 bg-[color:var(--status-attention)]/10 text-[color:var(--status-attention)]"
-                            : "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
-                    )}
-                >
-                    {needsAttention > 0 ? `${needsAttention} review` : campaign.status}
-                </Badge>
-            </div>
-        </Link>
-    );
-}
-
-function LeadQueueSheet({ dashboard }: { dashboard: DashboardData }) {
+function LeadQueueMetric({ dashboard }: { dashboard: DashboardData }) {
     const [settledPulse, setSettledPulse] = useState(false);
     const leadCount = dashboard.overview.newLeads;
     const visibleLeads = dashboard.leadQueue;
@@ -1078,46 +1028,38 @@ function LeadQueueSheet({ dashboard }: { dashboard: DashboardData }) {
 
     return (
         <Sheet>
-            <div className="fixed bottom-5 right-4 z-40 md:bottom-auto md:right-6 md:top-[6.5rem]">
-                <SheetTrigger asChild>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                            "relative h-auto min-w-[150px] overflow-visible rounded-xl border-primary/35 bg-card/95 px-3 py-2 text-left shadow-lg backdrop-blur transition-transform hover:-translate-y-0.5 hover:border-primary/55",
-                            leadCount > 0 &&
-                                "shadow-[0_18px_50px_-30px_color-mix(in_oklab,var(--primary)_80%,transparent)]",
-                        )}
-                    >
-                        {leadCount > 0 ? (
-                            <span
-                                className={cn(
-                                    "pointer-events-none absolute -inset-1 rounded-2xl border border-primary/35",
-                                    settledPulse
-                                        ? "[animation:lead-queue-soft-pulse_4s_ease-in-out_infinite]"
-                                        : "[animation:lead-queue-intro-pulse_1.15s_ease-out_infinite]",
-                                )}
-                                aria-hidden="true"
-                            />
-                        ) : null}
-                        <span className="relative flex items-center gap-2">
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/25">
-                                <UserRound className="h-4 w-4" />
-                            </span>
-                            <span className="min-w-0">
-                                <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                                    Lead queue
-                                </span>
-                                <span className="block whitespace-nowrap text-sm font-semibold">
-                                    {leadCount > 0
-                                        ? `${leadCount} need contact`
-                                        : "clear"}
-                                </span>
-                            </span>
+            <SheetTrigger asChild>
+                <button
+                    type="button"
+                    className={cn(
+                        "relative flex min-w-0 flex-col justify-center overflow-hidden rounded-lg px-3 py-2 text-left transition-[background-color,border-color,transform] duration-200 hover:bg-muted/45 active:translate-y-px",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                    )}
+                >
+                    {leadCount > 0 ? (
+                        <span
+                            className={cn(
+                                "pointer-events-none absolute inset-0 rounded-lg border border-[color:var(--status-good)]/35",
+                                settledPulse
+                                    ? "[animation:lead-queue-soft-pulse_4s_ease-in-out_infinite]"
+                                    : "[animation:lead-queue-intro-pulse_1.15s_ease-out_infinite]",
+                            )}
+                            aria-hidden="true"
+                        />
+                    ) : null}
+                    <span className="relative text-xs font-medium text-muted-foreground">
+                        New leads
+                    </span>
+                    <span className="relative mt-1 flex items-baseline gap-2">
+                        <span className="text-2xl font-semibold tabular-nums tracking-tight text-[color:var(--status-good)]">
+                            {leadCount}
                         </span>
-                    </Button>
-                </SheetTrigger>
-            </div>
+                        <span className="truncate text-xs text-muted-foreground">
+                            need contact
+                        </span>
+                    </span>
+                </button>
+            </SheetTrigger>
 
             <SheetContent className="w-[min(92vw,540px)] gap-0 border-border bg-card p-0 sm:max-w-[540px]">
                 <SheetHeader className="border-b border-border px-5 py-4">
@@ -1332,7 +1274,7 @@ export function OperationalDashboard() {
                             <TopMetric
                                 label="Needs review"
                                 value={dashboard.overview.campaignReviewCount}
-                                hint="campaign"
+                                hint="outreach"
                                 tone="urgent"
                             />
                             <TopMetric
@@ -1340,17 +1282,10 @@ export function OperationalDashboard() {
                                 value={dashboard.overview.eventsToday}
                                 hint="calendar"
                             />
-                            <TopMetric
-                                label="New leads"
-                                value={dashboard.overview.newLeads}
-                                hint="need contact"
-                                tone="good"
-                            />
+                            <LeadQueueMetric dashboard={dashboard} />
                         </div>
                     </div>
                 </header>
-
-                <LeadQueueSheet dashboard={dashboard} />
 
                 <main className="min-h-0 flex-1 overflow-y-auto pr-1 xl:overflow-hidden">
                     <div className="grid min-h-[1120px] gap-6 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
