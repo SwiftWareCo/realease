@@ -220,20 +220,6 @@ function sortWorkItems(items: WorkItem[]) {
     });
 }
 
-function isDoNowAction(item: WorkItem) {
-    if (item.kind === "manual_task") {
-        return true;
-    }
-
-    if (item.dueAt === null) {
-        return false;
-    }
-    return (
-        item.kind === "new_lead" ||
-        item.kind === "callback"
-    );
-}
-
 export const getDashboardHome = query({
     args: {},
     handler: async (ctx) => {
@@ -631,14 +617,18 @@ export const getDashboardHome = query({
         }
 
         const sortedItems = sortWorkItems(Array.from(itemsById.values()));
-        const doNowItems = sortedItems.filter(isDoNowAction);
+        const personalTasks = sortedItems
+            .filter((item) => item.kind === "manual_task")
+            .slice(0, 12);
+        const leadQueue = sortedItems
+            .filter((item) => item.kind === "new_lead")
+            .slice(0, 12);
         const pipelineGaps = sortedItems
             .filter((item) => item.kind === "pipeline_gap")
             .slice(0, 5);
-        const workQueue = doNowItems.slice(0, 12);
         const outreachReviewItems = sortedItems.filter(
             (item) => item.source === "outreach",
-        );
+        ).slice(0, 18);
         const newLeads = leads.filter((lead) => lead.status === "new").length;
         const qualifiedLeads = leads.filter(
             (lead) => lead.status === "qualified",
@@ -663,19 +653,25 @@ export const getDashboardHome = query({
                 problems: 0,
             },
         );
+        const campaignReviewCount =
+            outreachSummary.callbacks +
+            outreachSummary.interested +
+            outreachSummary.pausedForReview +
+            outreachSummary.problems;
 
         return {
             generatedAt: now,
             overview: {
-                urgentCount: doNowItems.filter(
+                urgentCount: personalTasks.filter(
                     (item) => item.priority === "urgent",
                 ).length,
-                highPriorityCount: doNowItems.filter(
+                highPriorityCount: personalTasks.filter(
                     (item) => item.priority === "high",
                 ).length,
-                dueTodayCount: doNowItems.filter(
+                dueTodayCount: personalTasks.filter(
                     (item) => item.dueAt !== null && item.dueAt < tomorrowStart,
                 ).length,
+                campaignReviewCount,
                 newLeads,
                 qualifiedLeads,
                 eventsToday: schedule.filter(
@@ -684,7 +680,8 @@ export const getDashboardHome = query({
                         event.startTime < tomorrowStart,
                 ).length,
             },
-            workQueue,
+            workQueue: personalTasks,
+            leadQueue,
             outreachReviewItems,
             schedule,
             outreach: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { createElement, useMemo, useState } from "react";
+import { createElement, useEffect, useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
@@ -76,12 +76,17 @@ const sortableColumns: { key: SortKey; label: string }[] = [
     { key: "tags", label: "Tags" },
 ];
 
-export function LeadsDashboard() {
+export function LeadsDashboard({
+    initialStatus = "all",
+}: {
+    initialStatus?: StatusFilter;
+}) {
     const router = useRouter();
     const allLeads = useQuery(api.leads.queries.getAllLeads);
     const allTags = useQuery(api.leads.queries.getAllTags) ?? [];
     const [now] = useState(() => Date.now());
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+    const [statusFilter, setStatusFilter] =
+        useState<StatusFilter>(initialStatus);
     const [intentFilter, setIntentFilter] = useState<IntentFilter>("all");
     const [sourceFilter, setSourceFilter] = useState("all");
     const [tagFilter, setTagFilter] = useState("all");
@@ -94,6 +99,10 @@ export function LeadsDashboard() {
     }>({ key: "date", direction: "desc" });
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
+
+    useEffect(() => {
+        setStatusFilter(initialStatus);
+    }, [initialStatus]);
 
     const stats = useMemo(() => {
         if (!allLeads) {

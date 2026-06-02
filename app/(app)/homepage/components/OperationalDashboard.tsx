@@ -9,11 +9,6 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
     Dialog,
     DialogContent,
     DialogFooter,
@@ -22,6 +17,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
@@ -34,13 +37,13 @@ import {
     ArrowUpRight,
     CalendarDays,
     CheckCircle2,
-    ChevronDown,
     ChevronRight,
     Clock3,
     Handshake,
     ListChecks,
     Loader2,
     MapPin,
+    Pencil,
     Phone,
     Plus,
     Quote,
@@ -99,6 +102,16 @@ function formatDue(timestamp: number | null) {
         return `Tomorrow at ${time}`;
     }
     return `${formatDateHumanReadable(date)} at ${time}`;
+}
+
+function formatDateTimeLocal(timestamp: number | null) {
+    if (timestamp === null) {
+        return "";
+    }
+
+    const date = new Date(timestamp);
+    const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
 function priorityClass(priority: WorkItem["priority"]) {
@@ -395,9 +408,11 @@ function CockpitColumn({
 
 function WorkQueueColumn({
     items,
+    onEditTask,
     onDismissTask,
 }: {
     items: WorkItem[];
+    onEditTask: (item: WorkItem) => void;
     onDismissTask: (taskId: Id<"tasks">) => void;
 }) {
     if (items.length === 0) {
@@ -407,10 +422,10 @@ function WorkQueueColumn({
                     <CheckCircle2 className="h-5 w-5" />
                 </div>
                 <h2 className="mt-4 text-lg font-semibold">
-                    No urgent work right now
+                    No personal tasks right now
                 </h2>
                 <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                    New leads, callbacks, follow-ups, and calendar commitments will appear here.
+                    Tasks you create or accept from campaign review will appear here.
                 </p>
             </div>
         );
@@ -459,15 +474,27 @@ function WorkQueueColumn({
                                 </p>
                             </div>
                             {item.task ? (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 shrink-0 px-2 text-xs"
-                                    onClick={() => onDismissTask(item.task!._id)}
-                                >
-                                    Dismiss
-                                </Button>
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-2 text-xs"
+                                        onClick={() => onEditTask(item)}
+                                    >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                        Edit
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-2 text-xs"
+                                        onClick={() => onDismissTask(item.task!._id)}
+                                    >
+                                        Done
+                                    </Button>
+                                </div>
                             ) : (
                                 <span className="mt-0.5 shrink-0 text-xs font-semibold text-primary transition-transform duration-200 group-hover:translate-x-0.5">
                                     {item.actionLabel}
@@ -624,6 +651,115 @@ function CreateTaskDialog({
     );
 }
 
+function EditTaskDialog({
+    item,
+    onOpenChange,
+}: {
+    item: WorkItem | null;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const updateTask = useMutation(api.tasks.mutations.updateTask);
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [dueAt, setDueAt] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        if (!item) {
+            return;
+        }
+
+        setTitle(item.title);
+        setDescription(item.description === "Manual task" ? "" : item.description);
+        setDueAt(formatDateTimeLocal(item.dueAt));
+    }, [item]);
+
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!item?.task) {
+            return;
+        }
+
+        const trimmedTitle = title.trim();
+        if (!trimmedTitle) {
+            return;
+        }
+
+        try {
+            setIsSaving(true);
+            await updateTask({
+                id: item.task._id,
+                title: trimmedTitle,
+                description: description.trim() || undefined,
+                due_at: dueAt ? new Date(dueAt).getTime() : undefined,
+            });
+            toast.success("Task updated");
+            onOpenChange(false);
+        } catch (error) {
+            console.error("Failed to update task:", error);
+            toast.error("Failed to update task");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={item !== null} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[460px]">
+                <DialogHeader>
+                    <DialogTitle>Edit task</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-task-title">Title</Label>
+                        <Input
+                            id="edit-task-title"
+                            value={title}
+                            onChange={(event) => setTitle(event.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-task-due">Due date and time</Label>
+                        <Input
+                            id="edit-task-due"
+                            type="datetime-local"
+                            value={dueAt}
+                            onChange={(event) => setDueAt(event.target.value)}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-task-description">Description</Label>
+                        <Textarea
+                            id="edit-task-description"
+                            value={description}
+                            onChange={(event) =>
+                                setDescription(event.target.value)
+                            }
+                            rows={3}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={!title.trim() || isSaving}
+                        >
+                            {isSaving ? "Saving..." : "Save task"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function CalendarColumn({ items }: { items: ScheduleItem[] }) {
     if (items.length === 0) {
         return (
@@ -687,25 +823,47 @@ function isPauseItem(item: WorkItem) {
     return item.kind === "qualified_handoff" && /pause/i.test(item.title);
 }
 
-function outreachGroupTone(
-    group: "callbacks" | "handoffs" | "paused" | "issues",
-) {
-    if (group === "callbacks") {
+type OutcomeFilter = "all" | "callbacks" | "issues" | "handoffs" | "paused";
+
+function outcomeFilterForItem(item: WorkItem): Exclude<OutcomeFilter, "all"> {
+    if (item.kind === "callback") {
+        return "callbacks";
+    }
+    if (item.kind === "campaign_problem") {
+        return "issues";
+    }
+    if (isPauseItem(item)) {
+        return "paused";
+    }
+    return "handoffs";
+}
+
+function outcomeLabel(item: WorkItem) {
+    const filter = outcomeFilterForItem(item);
+    if (filter === "callbacks") {
+        return "Callback";
+    }
+    if (filter === "issues") {
+        return "Issue";
+    }
+    if (filter === "paused") {
+        return "Paused";
+    }
+    return "Handoff";
+}
+
+function outcomeTone(item: WorkItem) {
+    const filter = outcomeFilterForItem(item);
+    if (filter === "issues" || filter === "callbacks") {
         return {
             badge: "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
             hover: "red" as const,
         };
     }
-    if (group === "handoffs") {
+    if (filter === "handoffs") {
         return {
             badge: "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
             hover: "emerald" as const,
-        };
-    }
-    if (group === "issues") {
-        return {
-            badge: "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
-            hover: "red" as const,
         };
     }
     return {
@@ -714,48 +872,40 @@ function outreachGroupTone(
     };
 }
 
-function OutreachReviewPanel({
-    dashboard,
-}: {
-    dashboard: DashboardData;
-}) {
+function OutreachReviewPanel({ dashboard }: { dashboard: DashboardData }) {
     const outreachItems = dashboard.outreachReviewItems;
-    const groups = [
+    const [filter, setFilter] = useState<OutcomeFilter>("all");
+    const filters: { id: OutcomeFilter; label: string; count: number }[] = [
         {
-            id: "callbacks" as const,
-            title: "Callbacks",
+            id: "all",
+            label: "All",
+            count: dashboard.overview.campaignReviewCount,
+        },
+        {
+            id: "callbacks",
+            label: "Callbacks",
             count: dashboard.outreach.callbacks,
-            description: "People who asked to be called back",
-            items: outreachItems.filter((item) => item.kind === "callback"),
-            defaultOpen: dashboard.outreach.callbacks > 0,
         },
         {
-            id: "issues" as const,
-            title: "Issues",
+            id: "issues",
+            label: "Issues",
             count: dashboard.outreach.problems,
-            description: "Failed calls, wrong numbers, scheduler errors",
-            items: outreachItems.filter((item) => item.kind === "campaign_problem"),
-            defaultOpen: dashboard.outreach.problems > 0,
         },
         {
-            id: "handoffs" as const,
-            title: "AI handoffs",
+            id: "handoffs",
+            label: "Handoffs",
             count: dashboard.outreach.interested,
-            description: "Interested leads found by outreach",
-            items: outreachItems.filter(
-                (item) => item.kind === "qualified_handoff" && !isPauseItem(item),
-            ),
-            defaultOpen: false,
         },
         {
-            id: "paused" as const,
-            title: "Paused for review",
+            id: "paused",
+            label: "Paused",
             count: dashboard.outreach.pausedForReview,
-            description: "Campaigns stopped until you decide",
-            items: outreachItems.filter(isPauseItem),
-            defaultOpen: false,
         },
     ];
+    const visibleItems =
+        filter === "all"
+            ? outreachItems
+            : outreachItems.filter((item) => outcomeFilterForItem(item) === filter);
 
     return (
         <aside className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm xl:h-full xl:min-h-0">
@@ -766,7 +916,7 @@ function OutreachReviewPanel({
                         Campaign outcomes
                     </h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                        Campaign results that need review
+                        One review inbox for campaign decisions
                     </p>
                 </div>
                 <Button asChild variant="ghost" size="sm">
@@ -777,12 +927,84 @@ function OutreachReviewPanel({
                 </Button>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-gutter:stable]">
-                <div className="space-y-2">
-                    {groups.map((group) => (
-                        <OutreachBucket key={group.id} group={group} />
+            <div className="border-b border-border/60 px-3 py-2">
+                <div className="flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {filters.map((item) => (
+                        <Button
+                            key={item.id}
+                            type="button"
+                            variant={filter === item.id ? "secondary" : "ghost"}
+                            size="sm"
+                            className="h-8 shrink-0 gap-1.5 rounded-md px-2 text-xs"
+                            onClick={() => setFilter(item.id)}
+                        >
+                            {item.label}
+                            <span className="rounded-sm bg-background/70 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">
+                                {item.count}
+                            </span>
+                        </Button>
                     ))}
                 </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-gutter:stable]">
+                {visibleItems.length === 0 ? (
+                    <div className="flex min-h-[180px] items-center rounded-lg border border-dashed border-border/70 px-4 text-sm text-muted-foreground">
+                        No campaign outcomes in this view.
+                    </div>
+                ) : (
+                    <div className="divide-y divide-border overflow-hidden rounded-lg border border-border/60 bg-muted/20">
+                        {visibleItems.map((item) => {
+                            const tone = outcomeTone(item);
+                            return (
+                                <Link
+                                    key={item.id}
+                                    href={item.href}
+                                    className={cn(
+                                        "group block px-3 py-3",
+                                        interactionClass(tone.hover),
+                                    )}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "rounded-sm",
+                                                        tone.badge,
+                                                    )}
+                                                >
+                                                    {outcomeLabel(item)}
+                                                </Badge>
+                                                {item.lead ? (
+                                                    <span className="truncate text-xs text-muted-foreground">
+                                                        {item.lead.name}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <p className="mt-2 line-clamp-1 text-sm font-semibold">
+                                                {item.title}
+                                            </p>
+                                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                                {item.description}
+                                            </p>
+                                        </div>
+                                        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{formatDue(item.dueAt)}</span>
+                                        {item.campaign ? (
+                                            <span className="truncate">
+                                                {item.campaign.name}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                </Link>
+                            );
+                        })}
+                    </div>
+                )}
 
                 {dashboard.outreach.campaigns.length > 0 ? (
                     <div className="mt-3 border-t border-border/60 pt-3">
@@ -801,87 +1023,6 @@ function OutreachReviewPanel({
                 ) : null}
             </div>
         </aside>
-    );
-}
-
-function OutreachBucket({
-    group,
-}: {
-    group: {
-        id: "callbacks" | "handoffs" | "paused" | "issues";
-        title: string;
-        count: number;
-        description: string;
-        items: WorkItem[];
-        defaultOpen: boolean;
-    };
-}) {
-    const tone = outreachGroupTone(group.id);
-
-    return (
-        <Collapsible
-            defaultOpen={group.defaultOpen}
-            className="overflow-hidden rounded-lg border border-border/60 bg-muted/25"
-        >
-            <CollapsibleTrigger
-                className={cn(
-                    "group flex w-full items-center justify-between gap-3 px-3 py-3 text-left",
-                    interactionClass(tone.hover),
-                )}
-            >
-                <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold">{group.title}</p>
-                        <Badge
-                            variant="outline"
-                            className={cn("rounded-sm", tone.badge)}
-                        >
-                            {group.count}
-                        </Badge>
-                    </div>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {group.description}
-                    </p>
-                </div>
-                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="border-t border-border/40">
-                {group.items.length === 0 ? (
-                    <p className="px-3 py-3 text-xs text-muted-foreground">
-                        No visible queue items in this bucket.
-                    </p>
-                ) : (
-                    <div className="divide-y divide-border">
-                        {group.items.slice(0, 5).map((item) => (
-                            <Link
-                                key={item.id}
-                                href={item.href}
-                                className={cn(
-                                    "group/item block px-3 py-3",
-                                    interactionClass(tone.hover),
-                                )}
-                            >
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="line-clamp-1 text-sm font-semibold">
-                                            {item.title}
-                                        </p>
-                                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                                            {item.description}
-                                        </p>
-                                    </div>
-                                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-primary transition-transform group-hover/item:translate-x-0.5" />
-                                </div>
-                                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                    <span>{formatDue(item.dueAt)}</span>
-                                    {item.lead ? <span>{item.lead.name}</span> : null}
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                )}
-            </CollapsibleContent>
-        </Collapsible>
     );
 }
 
@@ -922,20 +1063,176 @@ function CampaignReviewRow({ campaign }: { campaign: CampaignRollup }) {
     );
 }
 
+function LeadQueueSheet({ dashboard }: { dashboard: DashboardData }) {
+    const [settledPulse, setSettledPulse] = useState(false);
+    const leadCount = dashboard.overview.newLeads;
+    const visibleLeads = dashboard.leadQueue;
+
+    useEffect(() => {
+        const id = window.setTimeout(() => {
+            setSettledPulse(true);
+        }, 5200);
+
+        return () => window.clearTimeout(id);
+    }, []);
+
+    return (
+        <Sheet>
+            <div className="fixed bottom-5 right-4 z-40 md:bottom-auto md:right-6 md:top-[6.5rem]">
+                <SheetTrigger asChild>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                            "relative h-auto min-w-[150px] overflow-visible rounded-xl border-primary/35 bg-card/95 px-3 py-2 text-left shadow-lg backdrop-blur transition-transform hover:-translate-y-0.5 hover:border-primary/55",
+                            leadCount > 0 &&
+                                "shadow-[0_18px_50px_-30px_color-mix(in_oklab,var(--primary)_80%,transparent)]",
+                        )}
+                    >
+                        {leadCount > 0 ? (
+                            <span
+                                className={cn(
+                                    "pointer-events-none absolute -inset-1 rounded-2xl border border-primary/35",
+                                    settledPulse
+                                        ? "[animation:lead-queue-soft-pulse_4s_ease-in-out_infinite]"
+                                        : "[animation:lead-queue-intro-pulse_1.15s_ease-out_infinite]",
+                                )}
+                                aria-hidden="true"
+                            />
+                        ) : null}
+                        <span className="relative flex items-center gap-2">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/25">
+                                <UserRound className="h-4 w-4" />
+                            </span>
+                            <span className="min-w-0">
+                                <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                    Lead queue
+                                </span>
+                                <span className="block whitespace-nowrap text-sm font-semibold">
+                                    {leadCount > 0
+                                        ? `${leadCount} need contact`
+                                        : "clear"}
+                                </span>
+                            </span>
+                        </span>
+                    </Button>
+                </SheetTrigger>
+            </div>
+
+            <SheetContent className="w-[min(92vw,540px)] gap-0 border-border bg-card p-0 sm:max-w-[540px]">
+                <SheetHeader className="border-b border-border px-5 py-4">
+                    <div className="flex items-start justify-between gap-8 pr-8">
+                        <div>
+                            <SheetTitle className="font-serif text-xl italic">
+                                Lead queue
+                            </SheetTitle>
+                            <SheetDescription>
+                                New leads waiting for first contact
+                            </SheetDescription>
+                        </div>
+                        <Badge
+                            variant="outline"
+                            className="rounded-sm border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]"
+                        >
+                            {leadCount} new
+                        </Badge>
+                    </div>
+                </SheetHeader>
+
+                <div className="border-b border-border/60 px-5 py-3">
+                    <Button asChild size="sm" className="w-full">
+                        <Link href="/leads/network?status=new">
+                            Open filtered lead list
+                            <ArrowUpRight className="h-4 w-4" />
+                        </Link>
+                    </Button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                    {visibleLeads.length === 0 ? (
+                        <div className="flex min-h-[240px] flex-col items-center justify-center rounded-xl border border-dashed border-border/70 px-6 text-center">
+                            <CheckCircle2 className="h-7 w-7 text-[color:var(--status-good)]" />
+                            <p className="mt-3 text-sm font-semibold">
+                                No new leads waiting
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                                Fresh inquiries will collect here before they become follow-ups or pipeline work.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {visibleLeads.map((lead) => (
+                                <Link
+                                    key={lead.id}
+                                    href={lead.href}
+                                    className={cn(
+                                        "group block rounded-xl border border-border/60 bg-muted/20 px-3 py-3",
+                                        interactionClass(
+                                            lead.priority === "high"
+                                                ? "amber"
+                                                : "blue",
+                                        ),
+                                    )}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "rounded-sm capitalize",
+                                                        priorityClass(lead.priority),
+                                                    )}
+                                                >
+                                                    {lead.priority}
+                                                </Badge>
+                                                {lead.lead ? (
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {lead.lead.intent} lead
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <p className="mt-2 truncate text-sm font-semibold">
+                                                {lead.lead?.name ?? lead.title}
+                                            </p>
+                                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                                {lead.description}
+                                            </p>
+                                        </div>
+                                        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                        <span>{formatDue(lead.dueAt)}</span>
+                                        <span className="font-semibold text-primary">
+                                            Open lead
+                                        </span>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </SheetContent>
+        </Sheet>
+    );
+}
+
 function TodayCockpit({
     dashboard,
     onAddTask,
+    onEditTask,
     onDismissTask,
 }: {
     dashboard: DashboardData;
     onAddTask: () => void;
+    onEditTask: (item: WorkItem) => void;
     onDismissTask: (taskId: Id<"tasks">) => void;
 }) {
     return (
         <section className="grid min-h-[760px] gap-5 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)] xl:gap-6">
             <CockpitColumn
                 title="Tasks"
-                description={`${dashboard.workQueue.length} open items`}
+                description={`${dashboard.workQueue.length} personal items`}
                 icon={ListChecks}
                 variant="action"
                 action={
@@ -947,6 +1244,7 @@ function TodayCockpit({
             >
                 <WorkQueueColumn
                     items={dashboard.workQueue}
+                    onEditTask={onEditTask}
                     onDismissTask={onDismissTask}
                 />
             </CockpitColumn>
@@ -975,11 +1273,12 @@ export function OperationalDashboard() {
     const dashboard = useQuery(api.dashboard.queries.getDashboardHome, {});
     const dismissTask = useMutation(api.tasks.mutations.dismissTask);
     const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+    const [editingTask, setEditingTask] = useState<WorkItem | null>(null);
 
     const handleDismissTask = async (taskId: Id<"tasks">) => {
         try {
             await dismissTask({ id: taskId });
-            toast.success("Task dismissed");
+            toast.success("Task done");
         } catch (error) {
             console.error("Failed to dismiss task:", error);
             toast.error("Failed to dismiss task");
@@ -995,7 +1294,7 @@ export function OperationalDashboard() {
     }
 
     return (
-        <div className="h-[calc(100vh-64px)] overflow-hidden bg-background text-foreground">
+        <div className="relative h-[calc(100vh-64px)] overflow-hidden bg-background text-foreground">
             <div className="mx-auto flex h-full max-w-[1600px] flex-col gap-5 px-4 py-4 md:px-6">
                 <header className="grid flex-shrink-0 gap-6 pb-1 xl:grid-cols-[minmax(260px,1fr)_230px_minmax(520px,620px)] xl:items-stretch">
                     <div className="min-w-0">
@@ -1020,45 +1319,45 @@ export function OperationalDashboard() {
                             At a glance
                         </p>
                         <div className="mt-2 grid gap-1 rounded-xl border border-border/60 bg-card/40 p-2 sm:grid-cols-2 xl:grid-cols-4">
-                        <TopMetric
-                            label="Due today"
-                            value={dashboard.overview.dueTodayCount}
-                            hint="queue items"
-                            tone={
-                                dashboard.overview.dueTodayCount > 0
-                                    ? "urgent"
-                                    : "default"
-                            }
-                        />
-                        <TopMetric
-                            label="High priority"
-                            value={
-                                dashboard.overview.urgentCount +
-                                dashboard.overview.highPriorityCount
-                            }
-                            hint="needs action"
-                            tone="urgent"
-                        />
-                        <TopMetric
-                            label="Events today"
-                            value={dashboard.overview.eventsToday}
-                            hint="calendar"
-                        />
-                        <TopMetric
-                            label="New leads"
-                            value={dashboard.overview.newLeads}
-                            hint="uncontacted"
-                            tone="good"
-                        />
+                            <TopMetric
+                                label="Due today"
+                                value={dashboard.overview.dueTodayCount}
+                                hint="tasks"
+                                tone={
+                                    dashboard.overview.dueTodayCount > 0
+                                        ? "urgent"
+                                        : "default"
+                                }
+                            />
+                            <TopMetric
+                                label="Needs review"
+                                value={dashboard.overview.campaignReviewCount}
+                                hint="campaign"
+                                tone="urgent"
+                            />
+                            <TopMetric
+                                label="Events today"
+                                value={dashboard.overview.eventsToday}
+                                hint="calendar"
+                            />
+                            <TopMetric
+                                label="New leads"
+                                value={dashboard.overview.newLeads}
+                                hint="need contact"
+                                tone="good"
+                            />
                         </div>
                     </div>
                 </header>
+
+                <LeadQueueSheet dashboard={dashboard} />
 
                 <main className="min-h-0 flex-1 overflow-y-auto pr-1 xl:overflow-hidden">
                     <div className="grid min-h-[1120px] gap-6 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
                         <TodayCockpit
                             dashboard={dashboard}
                             onAddTask={() => setIsTaskDialogOpen(true)}
+                            onEditTask={setEditingTask}
                             onDismissTask={handleDismissTask}
                         />
                         <OutreachReviewPanel dashboard={dashboard} />
@@ -1068,6 +1367,14 @@ export function OperationalDashboard() {
             <CreateTaskDialog
                 open={isTaskDialogOpen}
                 onOpenChange={setIsTaskDialogOpen}
+            />
+            <EditTaskDialog
+                item={editingTask}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEditingTask(null);
+                    }
+                }}
             />
         </div>
     );

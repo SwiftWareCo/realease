@@ -1,6 +1,23 @@
 import { LeadsDashboard } from "@/app/(app)/leads/components/LeadsDashboard";
 
-export default function NetworkPage() {
+type NetworkPageProps = {
+    searchParams?: Promise<{
+        status?: string | string[];
+    }>;
+};
+
+function readStatusFilter(status: string | string[] | undefined) {
+    const value = Array.isArray(status) ? status[0] : status;
+    if (value === "new" || value === "contacted" || value === "qualified") {
+        return value;
+    }
+    return "all";
+}
+
+export default async function NetworkPage({ searchParams }: NetworkPageProps) {
+    const params = searchParams ? await searchParams : undefined;
+    const initialStatus = readStatusFilter(params?.status);
+
     return (
         <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden bg-gradient-to-br from-background via-background to-muted/20">
             <div className="flex-shrink-0 px-6 pt-6 pb-4">
@@ -12,7 +29,7 @@ export default function NetworkPage() {
                 </p>
             </div>
             <div className="flex-1 min-h-0 px-6 pb-4 overflow-hidden">
-                <LeadsDashboard />
+                <LeadsDashboard initialStatus={initialStatus} />
             </div>
         </div>
     );
