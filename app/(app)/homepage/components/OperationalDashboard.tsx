@@ -818,18 +818,11 @@ function CalendarColumn({ items }: { items: ScheduleItem[] }) {
     );
 }
 
-function isPauseItem(item: WorkItem) {
-    return item.kind === "qualified_handoff" && /pause/i.test(item.title);
-}
-
-type OutcomeFilter = "all" | "followups" | "issues" | "paused";
+type OutcomeFilter = "all" | "followups" | "issues";
 
 function outcomeFilterForItem(item: WorkItem): Exclude<OutcomeFilter, "all"> {
     if (item.kind === "campaign_problem") {
         return "issues";
-    }
-    if (isPauseItem(item)) {
-        return "paused";
     }
     return "followups";
 }
@@ -838,9 +831,6 @@ function outcomeLabel(item: WorkItem) {
     const filter = outcomeFilterForItem(item);
     if (filter === "issues") {
         return "Issue";
-    }
-    if (filter === "paused") {
-        return "Paused";
     }
     return "Follow-up";
 }
@@ -860,8 +850,8 @@ function outcomeTone(item: WorkItem) {
         };
     }
     return {
-        badge: "border-[color:var(--status-special)]/30 bg-[color:var(--status-special)]/10 text-[color:var(--status-special)]",
-        hover: "violet" as const,
+        badge: "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
+        hover: "emerald" as const,
     };
 }
 
@@ -884,7 +874,9 @@ function OutreachReviewPanel({ dashboard }: { dashboard: DashboardData }) {
     const outreachItems = dashboard.outreachReviewItems;
     const [filter, setFilter] = useState<OutcomeFilter>("all");
     const followUpCount =
-        dashboard.outreach.callbacks + dashboard.outreach.interested;
+        dashboard.outreach.callbacks +
+        dashboard.outreach.interested +
+        dashboard.outreach.pausedForReview;
     const filters: { id: OutcomeFilter; label: string; count: number }[] = [
         {
             id: "all",
@@ -901,11 +893,6 @@ function OutreachReviewPanel({ dashboard }: { dashboard: DashboardData }) {
             label: "Issues",
             count: dashboard.outreach.problems,
         },
-        {
-            id: "paused",
-            label: "Paused",
-            count: dashboard.outreach.pausedForReview,
-        },
     ];
     const visibleItems =
         filter === "all"
@@ -921,7 +908,7 @@ function OutreachReviewPanel({ dashboard }: { dashboard: DashboardData }) {
                         Review inbox
                     </h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                        Follow-ups, issues, and paused outreach
+                        Follow-ups and outreach issues
                     </p>
                 </div>
                 <Button asChild variant="ghost" size="sm">
@@ -1021,7 +1008,7 @@ function LeadQueueMetric({ dashboard }: { dashboard: DashboardData }) {
     useEffect(() => {
         const id = window.setTimeout(() => {
             setSettledPulse(true);
-        }, 5200);
+        }, 3000);
 
         return () => window.clearTimeout(id);
     }, []);
@@ -1032,14 +1019,14 @@ function LeadQueueMetric({ dashboard }: { dashboard: DashboardData }) {
                 <button
                     type="button"
                     className={cn(
-                        "relative flex min-w-0 flex-col justify-center overflow-hidden rounded-lg px-3 py-2 text-left transition-[background-color,border-color,transform] duration-200 hover:bg-muted/45 active:translate-y-px",
+                        "relative flex min-w-0 flex-col justify-center overflow-visible rounded-lg px-3 py-2 text-left transition-[background-color,border-color,transform] duration-200 hover:bg-muted/45 active:translate-y-px",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                     )}
                 >
                     {leadCount > 0 ? (
                         <span
                             className={cn(
-                                "pointer-events-none absolute inset-0 rounded-lg border border-[color:var(--status-good)]/35",
+                                "pointer-events-none absolute -inset-1 rounded-xl border border-[color:var(--status-good)]/35",
                                 settledPulse
                                     ? "[animation:lead-queue-soft-pulse_4s_ease-in-out_infinite]"
                                     : "[animation:lead-queue-intro-pulse_1.15s_ease-out_infinite]",
