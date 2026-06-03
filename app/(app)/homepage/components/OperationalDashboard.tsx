@@ -604,7 +604,7 @@ function OutreachReviewPanel({
                 <div className="min-w-0">
                     <h2 className="flex items-center gap-2 font-serif text-base font-semibold italic">
                         <Radio className="h-4 w-4 text-primary" />
-                        Outreach review
+                        Campaign outcomes
                     </h2>
                     <p className="mt-1 text-xs text-muted-foreground">
                         Why campaign work needs you
@@ -767,7 +767,7 @@ function TodayCockpit({ dashboard }: { dashboard: DashboardData }) {
     return (
         <section className="grid min-h-[760px] gap-5 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)] xl:gap-6">
             <CockpitColumn
-                title="Do now"
+                title="Tasks"
                 description={`${dashboard.workQueue.length} dated actions`}
                 icon={ListChecks}
                 variant="action"
@@ -784,7 +784,7 @@ function TodayCockpit({ dashboard }: { dashboard: DashboardData }) {
             </CockpitColumn>
 
             <CockpitColumn
-                title="Calendar"
+                title="Upcoming events"
                 description="Appointments and follow-ups"
                 icon={CalendarDays}
                 variant="quiet"

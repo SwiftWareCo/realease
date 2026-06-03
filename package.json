@@ -3,7 +3,8 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
-        "dev": "convex dev --start 'pnpm exec next dev'",
+        "dev": "convex dev --start \"pnpm exec next dev\"",
+        "dev:amar": "concurrently \"convex dev\" \"pnpm exec next dev\"",
         "build": "next build",
         "start": "next start",
         "lint:types": "tsc --noEmit",
@@ -72,6 +73,7 @@
         "@types/node": "^20",
         "@types/react": "^19",
         "@types/react-dom": "^19",
+        "concurrently": "^10.0.3",
         "dotenv": "^17.2.3",
         "eslint": "^9",
         "eslint-config-next": "16.1.2",
