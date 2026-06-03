@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -11,6 +12,8 @@ import { SelectedDatePanel } from "./SelectedDatePanel";
 import type { EnrichedEvent } from "./event-types";
 
 export function EventsCalendar() {
+    const searchParams = useSearchParams();
+    const focusedEventId = searchParams.get("eventId") as Id<"events"> | null;
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -21,6 +24,7 @@ export function EventsCalendar() {
     const [editingEvent, setEditingEvent] = useState<EnrichedEvent | null>(
         null,
     );
+    const [handledEventId, setHandledEventId] = useState<string | null>(null);
 
     const startOfMonth = new Date(currentYear, currentMonth, 1);
     const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
@@ -35,7 +39,40 @@ export function EventsCalendar() {
         daysAhead: 30,
     }) as EnrichedEvent[] | undefined;
 
+    const focusedEvent = useQuery(
+        api.events.queries.getEventById,
+        focusedEventId ? { id: focusedEventId } : "skip",
+    ) as EnrichedEvent | null | undefined;
+
     const markCompleted = useMutation(api.events.mutations.markEventCompleted);
+
+    useEffect(() => {
+        if (
+            !focusedEventId ||
+            handledEventId === focusedEventId ||
+            focusedEvent === undefined
+        ) {
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            if (!focusedEvent) {
+                setHandledEventId(focusedEventId);
+                return;
+            }
+
+            const eventDate = new Date(focusedEvent.start_time);
+            setCurrentMonth(eventDate.getMonth());
+            setCurrentYear(eventDate.getFullYear());
+            setSelectedDate(eventDate);
+            setSelectedEventDate(eventDate);
+            setEditingEvent(focusedEvent);
+            setIsEventFormOpen(true);
+            setHandledEventId(focusedEventId);
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [focusedEvent, focusedEventId, handledEventId]);
 
     const eventsByDate = useMemo(() => {
         return (

@@ -1,17 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
     formatDateHumanReadable,
@@ -23,27 +37,28 @@ import {
     ArrowUpRight,
     CalendarDays,
     CheckCircle2,
-    ChevronDown,
     ChevronRight,
     Clock3,
     Handshake,
     ListChecks,
     Loader2,
     MapPin,
+    Pencil,
     Phone,
+    Plus,
     Quote,
     Radio,
     Route,
     UserRound,
     type LucideIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 
 type DashboardData = FunctionReturnType<
     typeof api.dashboard.queries.getDashboardHome
 >;
 type WorkItem = DashboardData["workQueue"][number];
 type ScheduleItem = DashboardData["schedule"][number];
-type CampaignRollup = DashboardData["outreach"]["campaigns"][number];
 
 const DAILY_QUOTE = {
     text: "The best time to buy a home was 10 years ago. The second best time is now.",
@@ -86,6 +101,16 @@ function formatDue(timestamp: number | null) {
         return `Tomorrow at ${time}`;
     }
     return `${formatDateHumanReadable(date)} at ${time}`;
+}
+
+function formatDateTimeLocal(timestamp: number | null) {
+    if (timestamp === null) {
+        return "";
+    }
+
+    const date = new Date(timestamp);
+    const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
 function priorityClass(priority: WorkItem["priority"]) {
@@ -131,10 +156,10 @@ function interactionClass(tone: "amber" | "blue" | "emerald" | "red" | "violet" 
 }
 
 function workTone(kind: WorkItem["kind"]) {
-    if (kind === "callback" || kind === "campaign_problem") {
+    if (kind === "campaign_problem") {
         return "red";
     }
-    if (kind === "qualified_handoff") {
+    if (kind === "callback" || kind === "qualified_handoff") {
         return "emerald";
     }
     if (kind === "pipeline_gap") {
@@ -157,17 +182,25 @@ function eventBadgeClass(eventType: ScheduleItem["eventType"]) {
 }
 
 function workKindConfig(kind: WorkItem["kind"]) {
+    if (kind === "manual_task") {
+        return {
+            label: "Task",
+            Icon: ListChecks,
+            className:
+                "border-border bg-muted/60 text-muted-foreground dark:bg-muted/40",
+        };
+    }
     if (kind === "callback") {
         return {
-            label: "Callback",
+            label: "Follow-up",
             Icon: Phone,
             className:
-                "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
+                "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
         };
     }
     if (kind === "qualified_handoff") {
         return {
-            label: "Handoff",
+            label: "Follow-up",
             Icon: Handshake,
             className:
                 "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
@@ -372,7 +405,15 @@ function CockpitColumn({
     );
 }
 
-function WorkQueueColumn({ items }: { items: WorkItem[] }) {
+function WorkQueueColumn({
+    items,
+    onEditTask,
+    onDismissTask,
+}: {
+    items: WorkItem[];
+    onEditTask: (item: WorkItem) => void;
+    onDismissTask: (taskId: Id<"tasks">) => void;
+}) {
     if (items.length === 0) {
         return (
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center px-6 text-center">
@@ -380,10 +421,10 @@ function WorkQueueColumn({ items }: { items: WorkItem[] }) {
                     <CheckCircle2 className="h-5 w-5" />
                 </div>
                 <h2 className="mt-4 text-lg font-semibold">
-                    No urgent work right now
+                    No personal tasks right now
                 </h2>
                 <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                    New leads, callbacks, follow-ups, and calendar commitments will appear here.
+                    Tasks you create or accept from campaign review will appear here.
                 </p>
             </div>
         );
@@ -394,74 +435,327 @@ function WorkQueueColumn({ items }: { items: WorkItem[] }) {
             {items.map((item) => {
                 const config = workKindConfig(item.kind);
                 const Icon = config.Icon;
-                return (
-                    <li key={item.id}>
-                        <Link
-                            href={item.href}
-                            className={cn(
-                                "group block border-l-2 px-4 py-3.5",
-                                priorityRailClass(item.priority),
-                                interactionClass(workTone(item.kind)),
-                            )}
-                        >
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Badge
-                                    variant="outline"
-                                    className={cn(
-                                        "rounded-sm capitalize",
-                                        config.className,
-                                    )}
-                                >
-                                    <Icon className="h-3 w-3" />
-                                    {config.label}
-                                </Badge>
-                                <Badge
-                                    variant="outline"
-                                    className={cn(
-                                        "rounded-sm capitalize",
-                                        priorityClass(item.priority),
-                                    )}
-                                >
-                                    {item.priority}
-                                </Badge>
-                                {item.lead ? (
-                                    <span className="truncate text-xs text-muted-foreground">
-                                        {item.lead.intent} lead
-                                    </span>
-                                ) : null}
+                const content = (
+                    <>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                                variant="outline"
+                                className={cn(
+                                    "rounded-sm capitalize",
+                                    config.className,
+                                )}
+                            >
+                                <Icon className="h-3 w-3" />
+                                {config.label}
+                            </Badge>
+                            <Badge
+                                variant="outline"
+                                className={cn(
+                                    "rounded-sm capitalize",
+                                    priorityClass(item.priority),
+                                )}
+                            >
+                                {item.priority}
+                            </Badge>
+                            {item.lead ? (
+                                <span className="truncate text-xs text-muted-foreground">
+                                    {item.lead.intent} lead
+                                </span>
+                            ) : null}
+                        </div>
+                        <div className="mt-2 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <h3 className="truncate text-sm font-semibold text-foreground">
+                                    {item.title}
+                                </h3>
+                                <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">
+                                    {item.description}
+                                </p>
                             </div>
-                            <div className="mt-2 flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <h3 className="truncate text-sm font-semibold text-foreground">
-                                        {item.title}
-                                    </h3>
-                                    <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">
-                                        {item.description}
-                                    </p>
+                            {item.task ? (
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-2 text-xs"
+                                        onClick={() => onEditTask(item)}
+                                    >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                        Edit
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-2 text-xs"
+                                        onClick={() => onDismissTask(item.task!._id)}
+                                    >
+                                        Done
+                                    </Button>
                                 </div>
+                            ) : (
                                 <span className="mt-0.5 shrink-0 text-xs font-semibold text-primary transition-transform duration-200 group-hover:translate-x-0.5">
                                     {item.actionLabel}
                                 </span>
-                            </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                <span className="inline-flex items-center gap-1">
-                                    <Clock3 className="h-3.5 w-3.5" />
-                                    {formatDue(item.dueAt)}
-                                </span>
-                                {item.campaign ? (
-                                    <span className="inline-flex min-w-0 items-center gap-1">
-                                        <Radio className="h-3.5 w-3.5" />
-                                        <span className="truncate">
-                                            {item.campaign.name}
-                                        </span>
+                            )}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1">
+                                <Clock3 className="h-3.5 w-3.5" />
+                                {formatDue(item.dueAt)}
+                            </span>
+                            {item.campaign ? (
+                                <span className="inline-flex min-w-0 items-center gap-1">
+                                    <Radio className="h-3.5 w-3.5" />
+                                    <span className="truncate">
+                                        {item.campaign.name}
                                     </span>
-                                ) : null}
+                                </span>
+                            ) : null}
+                        </div>
+                    </>
+                );
+
+                return (
+                    <li key={item.id}>
+                        {item.task ? (
+                            <div
+                                className={cn(
+                                    "group block border-l-2 px-4 py-3.5",
+                                    priorityRailClass(item.priority),
+                                )}
+                            >
+                                {content}
                             </div>
-                        </Link>
+                        ) : (
+                            <Link
+                                href={item.href}
+                                className={cn(
+                                    "group block border-l-2 px-4 py-3.5",
+                                    priorityRailClass(item.priority),
+                                    interactionClass(workTone(item.kind)),
+                                )}
+                            >
+                                {content}
+                            </Link>
+                        )}
                     </li>
                 );
             })}
         </ol>
+    );
+}
+
+function CreateTaskDialog({
+    open,
+    onOpenChange,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const createTask = useMutation(api.tasks.mutations.createTask);
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [dueAt, setDueAt] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+
+    const resetForm = () => {
+        setTitle("");
+        setDescription("");
+        setDueAt("");
+    };
+
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const trimmedTitle = title.trim();
+        if (!trimmedTitle) {
+            return;
+        }
+
+        try {
+            setIsSaving(true);
+            await createTask({
+                title: trimmedTitle,
+                description: description.trim() || undefined,
+                due_at: dueAt ? new Date(dueAt).getTime() : undefined,
+            });
+            toast.success("Task created");
+            resetForm();
+            onOpenChange(false);
+        } catch (error) {
+            console.error("Failed to create task:", error);
+            toast.error("Failed to create task");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[460px]">
+                <DialogHeader>
+                    <DialogTitle>Create task</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="task-title">Title</Label>
+                        <Input
+                            id="task-title"
+                            value={title}
+                            onChange={(event) => setTitle(event.target.value)}
+                            placeholder="Follow up with lender"
+                            required
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="task-due">Due date and time</Label>
+                        <Input
+                            id="task-due"
+                            type="datetime-local"
+                            value={dueAt}
+                            onChange={(event) => setDueAt(event.target.value)}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="task-description">Description</Label>
+                        <Textarea
+                            id="task-description"
+                            value={description}
+                            onChange={(event) =>
+                                setDescription(event.target.value)
+                            }
+                            placeholder="Add any context that helps later"
+                            rows={3}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={!title.trim() || isSaving}
+                        >
+                            {isSaving ? "Creating..." : "Create task"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function EditTaskDialog({
+    item,
+    onOpenChange,
+}: {
+    item: WorkItem | null;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const updateTask = useMutation(api.tasks.mutations.updateTask);
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [dueAt, setDueAt] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        if (!item) {
+            return;
+        }
+
+        setTitle(item.title);
+        setDescription(item.description === "Manual task" ? "" : item.description);
+        setDueAt(formatDateTimeLocal(item.dueAt));
+    }, [item]);
+
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!item?.task) {
+            return;
+        }
+
+        const trimmedTitle = title.trim();
+        if (!trimmedTitle) {
+            return;
+        }
+
+        try {
+            setIsSaving(true);
+            await updateTask({
+                id: item.task._id,
+                title: trimmedTitle,
+                description: description.trim() || undefined,
+                due_at: dueAt ? new Date(dueAt).getTime() : undefined,
+            });
+            toast.success("Task updated");
+            onOpenChange(false);
+        } catch (error) {
+            console.error("Failed to update task:", error);
+            toast.error("Failed to update task");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={item !== null} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[460px]">
+                <DialogHeader>
+                    <DialogTitle>Edit task</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-task-title">Title</Label>
+                        <Input
+                            id="edit-task-title"
+                            value={title}
+                            onChange={(event) => setTitle(event.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-task-due">Due date and time</Label>
+                        <Input
+                            id="edit-task-due"
+                            type="datetime-local"
+                            value={dueAt}
+                            onChange={(event) => setDueAt(event.target.value)}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-task-description">Description</Label>
+                        <Textarea
+                            id="edit-task-description"
+                            value={description}
+                            onChange={(event) =>
+                                setDescription(event.target.value)
+                            }
+                            rows={3}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={!title.trim() || isSaving}
+                        >
+                            {isSaving ? "Saving..." : "Save task"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -476,7 +770,7 @@ function CalendarColumn({ items }: { items: ScheduleItem[] }) {
 
     return (
         <div className="px-4 py-4">
-            <div className="relative space-y-2 pl-4 before:absolute before:inset-y-2 before:left-1 before:w-px before:bg-border/80">
+            <div className="relative space-y-2 pl-6 before:absolute before:inset-y-2 before:left-3 before:w-px before:bg-border/80">
                 {items.map((event) => (
                     <Link
                         key={event._id}
@@ -486,7 +780,7 @@ function CalendarColumn({ items }: { items: ScheduleItem[] }) {
                             interactionClass("blue"),
                         )}
                     >
-                        <span className="absolute left-[-0.85rem] top-4 h-2.5 w-2.5 rounded-full border-2 border-card bg-[color:var(--status-info)]" />
+                        <span className="absolute left-[-1.0625rem] top-4 h-2.5 w-2.5 rounded-full border-2 border-card bg-[color:var(--status-info)]" />
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <p className="truncate text-sm font-semibold">
@@ -524,79 +818,86 @@ function CalendarColumn({ items }: { items: ScheduleItem[] }) {
     );
 }
 
-function isPauseItem(item: WorkItem) {
-    return item.kind === "qualified_handoff" && /pause/i.test(item.title);
+type OutcomeFilter = "all" | "followups" | "issues";
+
+function outcomeFilterForItem(item: WorkItem): Exclude<OutcomeFilter, "all"> {
+    if (item.kind === "campaign_problem") {
+        return "issues";
+    }
+    return "followups";
 }
 
-function outreachGroupTone(
-    group: "callbacks" | "handoffs" | "paused" | "issues",
-) {
-    if (group === "callbacks") {
+function outcomeLabel(item: WorkItem) {
+    const filter = outcomeFilterForItem(item);
+    if (filter === "issues") {
+        return "Issue";
+    }
+    return "Follow-up";
+}
+
+function outcomeTone(item: WorkItem) {
+    const filter = outcomeFilterForItem(item);
+    if (filter === "issues") {
         return {
             badge: "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
             hover: "red" as const,
         };
     }
-    if (group === "handoffs") {
+    if (filter === "followups") {
         return {
             badge: "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
             hover: "emerald" as const,
         };
     }
-    if (group === "issues") {
-        return {
-            badge: "border-[color:var(--status-urgent)]/30 bg-[color:var(--status-urgent)]/10 text-[color:var(--status-urgent)]",
-            hover: "red" as const,
-        };
-    }
     return {
-        badge: "border-[color:var(--status-special)]/30 bg-[color:var(--status-special)]/10 text-[color:var(--status-special)]",
-        hover: "violet" as const,
+        badge: "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
+        hover: "emerald" as const,
     };
 }
 
-function OutreachReviewPanel({
-    dashboard,
-}: {
-    dashboard: DashboardData;
-}) {
+function reviewTitle(item: WorkItem) {
+    const filter = outcomeFilterForItem(item);
+    if (filter === "followups" && item.lead) {
+        return `Follow up with ${item.lead.name}`;
+    }
+    return item.title;
+}
+
+function reviewDescription(item: WorkItem) {
+    if (outcomeFilterForItem(item) !== "followups") {
+        return item.description;
+    }
+    return item.description.replace(/\bcallbacks?\b/gi, "follow-up");
+}
+
+function OutreachReviewPanel({ dashboard }: { dashboard: DashboardData }) {
     const outreachItems = dashboard.outreachReviewItems;
-    const groups = [
+    const [filter, setFilter] = useState<OutcomeFilter>("all");
+    const followUpCount =
+        dashboard.outreach.callbacks +
+        dashboard.outreach.interested +
+        dashboard.outreach.pausedForReview;
+    const filters: { id: OutcomeFilter; label: string; count: number }[] = [
         {
-            id: "issues" as const,
-            title: "Issues",
+            id: "all",
+            label: "All",
+            count: dashboard.overview.campaignReviewCount,
+        },
+        {
+            id: "followups",
+            label: "Follow-ups",
+            count: followUpCount,
+        },
+        {
+            id: "issues",
+            label: "Issues",
             count: dashboard.outreach.problems,
-            description: "Failed calls, wrong numbers, scheduler errors",
-            items: outreachItems.filter((item) => item.kind === "campaign_problem"),
-            defaultOpen: dashboard.outreach.problems > 0,
-        },
-        {
-            id: "callbacks" as const,
-            title: "Callbacks",
-            count: dashboard.outreach.callbacks,
-            description: "People who asked to be called back",
-            items: outreachItems.filter((item) => item.kind === "callback"),
-            defaultOpen: false,
-        },
-        {
-            id: "handoffs" as const,
-            title: "AI handoffs",
-            count: dashboard.outreach.interested,
-            description: "Interested leads found by outreach",
-            items: outreachItems.filter(
-                (item) => item.kind === "qualified_handoff" && !isPauseItem(item),
-            ),
-            defaultOpen: false,
-        },
-        {
-            id: "paused" as const,
-            title: "Paused for review",
-            count: dashboard.outreach.pausedForReview,
-            description: "Campaigns stopped until you decide",
-            items: outreachItems.filter(isPauseItem),
-            defaultOpen: false,
         },
     ];
+    const visibleItems =
+        filter === "all"
+            ? outreachItems
+            : outreachItems.filter((item) => outcomeFilterForItem(item) === filter);
 
     return (
         <aside className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm xl:h-full xl:min-h-0">
@@ -607,7 +908,7 @@ function OutreachReviewPanel({
                         Campaign outcomes
                     </h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                        Why campaign work needs you
+                        Follow-ups and outreach issues
                     </p>
                 </div>
                 <Button asChild variant="ghost" size="sm">
@@ -618,169 +919,263 @@ function OutreachReviewPanel({
                 </Button>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-gutter:stable]">
-                <div className="space-y-2">
-                    {groups.map((group) => (
-                        <OutreachBucket key={group.id} group={group} />
+            <div className="border-b border-border/60 px-3 py-2">
+                <div className="flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {filters.map((item) => (
+                        <Button
+                            key={item.id}
+                            type="button"
+                            variant={filter === item.id ? "secondary" : "ghost"}
+                            size="sm"
+                            className="h-8 shrink-0 gap-1.5 rounded-md px-2 text-xs"
+                            onClick={() => setFilter(item.id)}
+                        >
+                            {item.label}
+                            <span className="rounded-sm bg-background/70 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">
+                                {item.count}
+                            </span>
+                        </Button>
                     ))}
                 </div>
+            </div>
 
-                {dashboard.outreach.campaigns.length > 0 ? (
-                    <div className="mt-3 border-t border-border/60 pt-3">
-                        <p className="px-1 text-xs font-medium text-muted-foreground">
-                            Campaigns
-                        </p>
-                        <div className="mt-2 space-y-2">
-                            {dashboard.outreach.campaigns.map((campaign) => (
-                                <CampaignReviewRow
-                                    key={campaign.campaignId}
-                                    campaign={campaign}
-                                />
-                            ))}
-                        </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-gutter:stable]">
+                {visibleItems.length === 0 ? (
+                    <div className="flex min-h-[180px] items-center rounded-lg border border-dashed border-border/70 px-4 text-sm text-muted-foreground">
+                        No review items in this view.
                     </div>
-                ) : null}
+                ) : (
+                    <div className="divide-y divide-border overflow-hidden rounded-lg border border-border/60 bg-muted/20">
+                        {visibleItems.map((item) => {
+                            const tone = outcomeTone(item);
+                            return (
+                                <Link
+                                    key={item.id}
+                                    href={item.href}
+                                    className={cn(
+                                        "group block px-3 py-3",
+                                        interactionClass(tone.hover),
+                                    )}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "rounded-sm",
+                                                        tone.badge,
+                                                    )}
+                                                >
+                                                    {outcomeLabel(item)}
+                                                </Badge>
+                                                {item.lead ? (
+                                                    <span className="truncate text-xs text-muted-foreground">
+                                                        {item.lead.name}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <p className="mt-2 line-clamp-1 text-sm font-semibold">
+                                                {reviewTitle(item)}
+                                            </p>
+                                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                                {reviewDescription(item)}
+                                            </p>
+                                        </div>
+                                        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{formatDue(item.dueAt)}</span>
+                                        <span className="font-semibold text-primary">
+                                            Open
+                                        </span>
+                                    </div>
+                                </Link>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </aside>
     );
 }
 
-function OutreachBucket({
-    group,
-}: {
-    group: {
-        id: "callbacks" | "handoffs" | "paused" | "issues";
-        title: string;
-        count: number;
-        description: string;
-        items: WorkItem[];
-        defaultOpen: boolean;
-    };
-}) {
-    const tone = outreachGroupTone(group.id);
+function LeadQueueMetric({ dashboard }: { dashboard: DashboardData }) {
+    const [settledPulse, setSettledPulse] = useState(false);
+    const leadCount = dashboard.overview.newLeads;
+    const visibleLeads = dashboard.leadQueue;
+
+    useEffect(() => {
+        const id = window.setTimeout(() => {
+            setSettledPulse(true);
+        }, 3000);
+
+        return () => window.clearTimeout(id);
+    }, []);
 
     return (
-        <Collapsible
-            defaultOpen={group.defaultOpen}
-            className="overflow-hidden rounded-lg border border-border/60 bg-muted/25"
-        >
-            <CollapsibleTrigger
-                className={cn(
-                    "group flex w-full items-center justify-between gap-3 px-3 py-3 text-left",
-                    interactionClass(tone.hover),
-                )}
-            >
-                <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold">{group.title}</p>
-                        <Badge
-                            variant="outline"
-                            className={cn("rounded-sm", tone.badge)}
-                        >
-                            {group.count}
-                        </Badge>
-                    </div>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {group.description}
-                    </p>
-                </div>
-                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="border-t border-border/40">
-                {group.items.length === 0 ? (
-                    <p className="px-3 py-3 text-xs text-muted-foreground">
-                        No visible queue items in this bucket.
-                    </p>
-                ) : (
-                    <div className="divide-y divide-border">
-                        {group.items.slice(0, 5).map((item) => (
-                            <Link
-                                key={item.id}
-                                href={item.href}
-                                className={cn(
-                                    "group/item block px-3 py-3",
-                                    interactionClass(tone.hover),
-                                )}
-                            >
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="line-clamp-1 text-sm font-semibold">
-                                            {item.title}
-                                        </p>
-                                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                                            {item.description}
-                                        </p>
-                                    </div>
-                                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-primary transition-transform group-hover/item:translate-x-0.5" />
-                                </div>
-                                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                    <span>{formatDue(item.dueAt)}</span>
-                                    {item.lead ? <span>{item.lead.name}</span> : null}
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                )}
-            </CollapsibleContent>
-        </Collapsible>
-    );
-}
-
-function CampaignReviewRow({ campaign }: { campaign: CampaignRollup }) {
-    const needsAttention =
-        campaign.callbacks + campaign.pausedForReview + campaign.problems;
-
-    return (
-        <Link
-            href={campaign.href}
-            className={cn(
-                "group block rounded-lg border border-border/60 bg-muted/30 px-3 py-3",
-                interactionClass(needsAttention > 0 ? "amber" : "emerald"),
-            )}
-        >
-            <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">
-                        {campaign.campaignName}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        {campaign.activeLeads} active leads
-                    </p>
-                </div>
-                <Badge
-                    variant="outline"
+        <Sheet>
+            <SheetTrigger asChild>
+                <button
+                    type="button"
                     className={cn(
-                        "rounded-sm capitalize",
-                        needsAttention > 0
-                            ? "border-[color:var(--status-attention)]/30 bg-[color:var(--status-attention)]/10 text-[color:var(--status-attention)]"
-                            : "border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]",
+                        "relative flex min-w-0 flex-col justify-center overflow-visible rounded-lg px-3 py-2 text-left transition-[background-color,border-color,transform] duration-200 hover:bg-muted/45 active:translate-y-px",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                     )}
                 >
-                    {needsAttention > 0 ? `${needsAttention} review` : campaign.status}
-                </Badge>
-            </div>
-        </Link>
+                    {leadCount > 0 ? (
+                        <span
+                            className={cn(
+                                "pointer-events-none absolute -inset-1 rounded-xl border border-[color:var(--status-good)]/35",
+                                settledPulse
+                                    ? "[animation:lead-queue-soft-pulse_4s_ease-in-out_infinite]"
+                                    : "[animation:lead-queue-intro-pulse_1.15s_ease-out_infinite]",
+                            )}
+                            aria-hidden="true"
+                        />
+                    ) : null}
+                    <span className="relative text-xs font-medium text-muted-foreground">
+                        New leads
+                    </span>
+                    <span className="relative mt-1 flex items-baseline gap-2">
+                        <span className="text-2xl font-semibold tabular-nums tracking-tight text-[color:var(--status-good)]">
+                            {leadCount}
+                        </span>
+                        <span className="truncate text-xs text-muted-foreground">
+                            need contact
+                        </span>
+                    </span>
+                </button>
+            </SheetTrigger>
+
+            <SheetContent className="w-[min(92vw,540px)] gap-0 border-border bg-card p-0 sm:max-w-[540px]">
+                <SheetHeader className="border-b border-border px-5 py-4">
+                    <div className="flex items-start justify-between gap-8 pr-8">
+                        <div>
+                            <SheetTitle className="font-serif text-xl italic">
+                                Lead queue
+                            </SheetTitle>
+                            <SheetDescription>
+                                New leads waiting for first contact
+                            </SheetDescription>
+                        </div>
+                        <Badge
+                            variant="outline"
+                            className="rounded-sm border-[color:var(--status-good)]/30 bg-[color:var(--status-good)]/10 text-[color:var(--status-good)]"
+                        >
+                            {leadCount} new
+                        </Badge>
+                    </div>
+                </SheetHeader>
+
+                <div className="border-b border-border/60 px-5 py-3">
+                    <Button asChild size="sm" className="w-full">
+                        <Link href="/leads/network?status=new">
+                            Open filtered lead list
+                            <ArrowUpRight className="h-4 w-4" />
+                        </Link>
+                    </Button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                    {visibleLeads.length === 0 ? (
+                        <div className="flex min-h-[240px] flex-col items-center justify-center rounded-xl border border-dashed border-border/70 px-6 text-center">
+                            <CheckCircle2 className="h-7 w-7 text-[color:var(--status-good)]" />
+                            <p className="mt-3 text-sm font-semibold">
+                                No new leads waiting
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                                Fresh inquiries will collect here before they become follow-ups or pipeline work.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {visibleLeads.map((lead) => (
+                                <Link
+                                    key={lead.id}
+                                    href={lead.href}
+                                    className={cn(
+                                        "group block rounded-xl border border-border/60 bg-muted/20 px-3 py-3",
+                                        interactionClass(
+                                            lead.priority === "high"
+                                                ? "amber"
+                                                : "blue",
+                                        ),
+                                    )}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "rounded-sm capitalize",
+                                                        priorityClass(lead.priority),
+                                                    )}
+                                                >
+                                                    {lead.priority}
+                                                </Badge>
+                                                {lead.lead ? (
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {lead.lead.intent} lead
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <p className="mt-2 truncate text-sm font-semibold">
+                                                {lead.lead?.name ?? lead.title}
+                                            </p>
+                                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                                {lead.description}
+                                            </p>
+                                        </div>
+                                        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                        <span>{formatDue(lead.dueAt)}</span>
+                                        <span className="font-semibold text-primary">
+                                            Open lead
+                                        </span>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </SheetContent>
+        </Sheet>
     );
 }
 
-function TodayCockpit({ dashboard }: { dashboard: DashboardData }) {
+function TodayCockpit({
+    dashboard,
+    onAddTask,
+    onEditTask,
+    onDismissTask,
+}: {
+    dashboard: DashboardData;
+    onAddTask: () => void;
+    onEditTask: (item: WorkItem) => void;
+    onDismissTask: (taskId: Id<"tasks">) => void;
+}) {
     return (
         <section className="grid min-h-[760px] gap-5 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)] xl:gap-6">
             <CockpitColumn
-                title="Tasks"
+                title="Do now"
                 description={`${dashboard.workQueue.length} dated actions`}
                 icon={ListChecks}
                 variant="action"
                 action={
-                    <Button asChild variant="ghost" size="sm">
-                        <Link href="/leads/network">
-                            Leads
-                            <ChevronRight className="h-4 w-4" />
-                        </Link>
+                    <Button variant="ghost" size="sm" onClick={onAddTask}>
+                        <Plus className="h-4 w-4" />
+                        New task
                     </Button>
                 }
             >
-                <WorkQueueColumn items={dashboard.workQueue} />
+                <WorkQueueColumn
+                    items={dashboard.workQueue}
+                    onEditTask={onEditTask}
+                    onDismissTask={onDismissTask}
+                />
             </CockpitColumn>
 
             <CockpitColumn
@@ -805,6 +1200,19 @@ function TodayCockpit({ dashboard }: { dashboard: DashboardData }) {
 
 export function OperationalDashboard() {
     const dashboard = useQuery(api.dashboard.queries.getDashboardHome, {});
+    const dismissTask = useMutation(api.tasks.mutations.dismissTask);
+    const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+    const [editingTask, setEditingTask] = useState<WorkItem | null>(null);
+
+    const handleDismissTask = async (taskId: Id<"tasks">) => {
+        try {
+            await dismissTask({ id: taskId });
+            toast.success("Task done");
+        } catch (error) {
+            console.error("Failed to dismiss task:", error);
+            toast.error("Failed to dismiss task");
+        }
+    };
 
     if (dashboard === undefined) {
         return (
@@ -815,7 +1223,7 @@ export function OperationalDashboard() {
     }
 
     return (
-        <div className="h-[calc(100vh-64px)] overflow-hidden bg-background text-foreground">
+        <div className="relative h-[calc(100vh-64px)] overflow-hidden bg-background text-foreground">
             <div className="mx-auto flex h-full max-w-[1600px] flex-col gap-5 px-4 py-4 md:px-6">
                 <header className="grid flex-shrink-0 gap-6 pb-1 xl:grid-cols-[minmax(260px,1fr)_230px_minmax(520px,620px)] xl:items-stretch">
                     <div className="min-w-0">
@@ -840,47 +1248,56 @@ export function OperationalDashboard() {
                             At a glance
                         </p>
                         <div className="mt-2 grid gap-1 rounded-xl border border-border/60 bg-card/40 p-2 sm:grid-cols-2 xl:grid-cols-4">
-                        <TopMetric
-                            label="Due today"
-                            value={dashboard.overview.dueTodayCount}
-                            hint="queue items"
-                            tone={
-                                dashboard.overview.dueTodayCount > 0
-                                    ? "urgent"
-                                    : "default"
-                            }
-                        />
-                        <TopMetric
-                            label="High priority"
-                            value={
-                                dashboard.overview.urgentCount +
-                                dashboard.overview.highPriorityCount
-                            }
-                            hint="needs action"
-                            tone="urgent"
-                        />
-                        <TopMetric
-                            label="Events today"
-                            value={dashboard.overview.eventsToday}
-                            hint="calendar"
-                        />
-                        <TopMetric
-                            label="New leads"
-                            value={dashboard.overview.newLeads}
-                            hint="uncontacted"
-                            tone="good"
-                        />
+                            <TopMetric
+                                label="Due today"
+                                value={dashboard.overview.dueTodayCount}
+                                hint="tasks"
+                                tone={
+                                    dashboard.overview.dueTodayCount > 0
+                                        ? "urgent"
+                                        : "default"
+                                }
+                            />
+                            <TopMetric
+                                label="Needs review"
+                                value={dashboard.overview.campaignReviewCount}
+                                hint="outreach"
+                                tone="urgent"
+                            />
+                            <TopMetric
+                                label="Events today"
+                                value={dashboard.overview.eventsToday}
+                                hint="calendar"
+                            />
+                            <LeadQueueMetric dashboard={dashboard} />
                         </div>
                     </div>
                 </header>
 
                 <main className="min-h-0 flex-1 overflow-y-auto pr-1 xl:overflow-hidden">
                     <div className="grid min-h-[1120px] gap-6 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
-                        <TodayCockpit dashboard={dashboard} />
+                        <TodayCockpit
+                            dashboard={dashboard}
+                            onAddTask={() => setIsTaskDialogOpen(true)}
+                            onEditTask={setEditingTask}
+                            onDismissTask={handleDismissTask}
+                        />
                         <OutreachReviewPanel dashboard={dashboard} />
                     </div>
                 </main>
             </div>
+            <CreateTaskDialog
+                open={isTaskDialogOpen}
+                onOpenChange={setIsTaskDialogOpen}
+            />
+            <EditTaskDialog
+                item={editingTask}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEditingTask(null);
+                    }
+                }}
+            />
         </div>
     );
 }
